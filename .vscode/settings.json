@@ -1,0 +1,10 @@
+{
+    "dart.projectSearchPaths": [
+        "efactor_sdui_flutter/efactor_sdui"
+    ],
+    "dart.flutterSdkPath": "C:\\flutter\\flutter",
+    "cursor.cmdk.useThemedDiffBackground2": true,
+    "workbench.preferredDarkColorTheme": "Visual Studio Dark",
+    "workbench.preferredHighContrastLightColorTheme": "Default High Contrast",
+    "workbench.preferredLightColorTheme": "Cursor Dark High Contrast"
+}

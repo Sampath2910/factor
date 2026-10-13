@@ -1,0 +1,1487 @@
+{
+  "success": true,
+  "user_id": 707,
+  "pageId": "grid",
+  "routeId": "grid",
+  "schema_version": "3.0.0",
+  "gridApiUrl": "https://efactor.tech/v8/grid_api_creation.php",
+  "content": {
+    "id": "gridPage",
+    "routeId": "grid",
+    "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
+    "header": {
+      "title": "Grid",
+      "subtitle": "Your professional network space",
+      "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
+      "searchIconToken": "search",
+      "avatarInitial": "S",
+      "avatarColor": "#7c3aed"
+    },
+    "featureCards": [
+      {
+        "id": "professional-space",
+        "title": "Professional Space",
+        "subtitle": "Discover people, opportunities and grow your career.",
+        "iconToken": "user",
+        "image": "",
+        "imageUrl": "",
+        "url": "https://efactor.tech/index.php/grid",
+        "route": "https://efactor.tech/index.php/grid",
+        "color": "#5b6cff",
+        "gradientStart": "#dce4ff",
+        "gradientEnd": "#b7c4fb",
+        "textColor": "#312e81",
+        "actionId": "grid-open-professional-space"
+      },
+      {
+        "id": "circle-connect",
+        "title": "Circle Connect",
+        "subtitle": "Meaningful conversations. Stronger circles.",
+        "iconToken": "users",
+        "image": "",
+        "imageUrl": "",
+        "url": "https://efactor.tech/index.php/grid-chat",
+        "route": "https://efactor.tech/index.php/grid-chat",
+        "color": "#ea580c",
+        "gradientStart": "#ffe0cc",
+        "gradientEnd": "#f4b496",
+        "textColor": "#9a3412",
+        "actionId": "grid-open-circle-connect"
+      }
+    ],
+    "stats": [
+      {
+        "id": "professionals",
+        "label": "Professionals",
+        "value": 248
+      },
+      {
+        "id": "opportunities",
+        "label": "Opportunities",
+        "value": 36
+      },
+      {
+        "id": "active-circles",
+        "label": "Active Circles",
+        "value": 12
+      }
+    ],
+    "shareQr": {
+      "title": "Share Profile QR",
+      "subtitle": "Share your professional or circle profile with anyone.",
+      "iconToken": "grid",
+      "selectedMode": "professional",
+      "modes": [
+        {
+          "id": "professional",
+          "label": "Professional"
+        },
+        {
+          "id": "circle",
+          "label": "Circle"
+        }
+      ],
+      "qrCaption": "Scan to connect",
+      "qrPayload": "https://efactor.tech/grid/connect?mode=professional",
+      "qrImageUrl": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
+      "qrImageUrlTemplate": "https://efactor.tech/v8/qr_image.php?data={data}&mode={mode}&size=160",
+      "qrImageUrlsByMode": {
+        "professional": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
+        "circle": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dcircle&size=160&mode=circle"
+      },
+      "shareActionId": "grid-share-qr",
+      "selectModeActionId": "grid-select-qr-mode"
+    },
+    "exploring": {
+      "title": "Continue Exploring",
+      "seeAllLabel": "See all",
+      "seeAllActionId": "grid-see-all-exploring",
+      "items": [
+        {
+          "id": "find-talent",
+          "title": "Find Talent",
+          "subtitle": "People with skills you need",
+          "iconToken": "user",
+          "color": "#8b5cf6",
+          "actionId": "grid-open-find-talent"
+        },
+        {
+          "id": "join-circles",
+          "title": "Join Circles",
+          "subtitle": "Communities you'll love",
+          "iconToken": "users",
+          "color": "#14b8a6",
+          "actionId": "grid-open-join-circles"
+        }
+      ]
+    },
+    "quote": {
+      "text": "Connections turn potential into progress.",
+      "iconToken": "quote"
+    }
+  },
+  "schema": {
+    "schemaType": "server-driven-mobile-app",
+    "schemaVersion": "3.0.0",
+    "pageId": "grid",
+    "routeId": "grid",
+    "rootComponentId": "grid-page",
+    "replaceAppShell": false,
+    "reuseHostAppShell": true,
+    "keepHostBottomNavigation": true,
+    "route": {
+      "path": "/grid",
+      "pageId": "grid"
+    },
+    "appShell": {
+      "reuseHostShell": true,
+      "replaceOnNestedSchema": false,
+      "keepHostBottomNavigation": true,
+      "bottomNavigationFixed": true,
+      "bottomNavigationOutsidePageScroll": true,
+      "bottomNavigationPosition": "fixed",
+      "contentAvoidsBottomNavigation": true,
+      "reservedBottomInset": 108
+    },
+    "page": {
+      "id": "grid",
+      "routeId": "grid",
+      "rootComponentId": "grid-page",
+      "dataSourceId": "grid",
+      "presentationStates": {
+        "loadingComponentId": "grid-loading",
+        "emptyComponentId": "grid-empty",
+        "errorComponentId": "grid-error"
+      }
+    },
+    "components": {
+      "grid-feature-professional-space": {
+        "id": "grid-feature-professional-space",
+        "type": "featureCard",
+        "style": "softCard",
+        "title": "Professional Space",
+        "subtitle": "Discover people, opportunities and grow your career.",
+        "iconToken": "user",
+        "actionArrowIconToken": "chevron-right",
+        "image": null,
+        "imageUrl": null,
+        "color": "#5b6cff",
+        "gradientStart": "#dce4ff",
+        "gradientEnd": "#b7c4fb",
+        "textColor": "#312e81",
+        "url": "https://efactor.tech/index.php/grid",
+        "route": "https://efactor.tech/index.php/grid",
+        "openIn": "inAppWebView",
+        "webViewTitle": "Professional Space",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "displayMode": "fullscreen"
+        },
+        "actionId": "grid-open-professional-space",
+        "events": {
+          "tap": {
+            "actionId": "grid-open-professional-space"
+          }
+        },
+        "layout": {
+          "columnSpan": 1,
+          "rowSpan": 1,
+          "minHeight": 168,
+          "minWidth": 0,
+          "width": "fill",
+          "maxWidth": "100%"
+        },
+        "appearance": {
+          "borderRadius": 24,
+          "backgroundColor": "#dce4ff",
+          "backgroundGradient": {
+            "start": "#dce4ff",
+            "end": "#b7c4fb"
+          },
+          "iconPosition": "topLeft",
+          "titlePosition": "belowIcon",
+          "showSubtitle": true,
+          "showActionArrow": true,
+          "iconSize": 36,
+          "titleFontSize": 16,
+          "subtitleFontSize": 12,
+          "titlePadding": 12,
+          "titleMaxLines": 2,
+          "subtitleMaxLines": 3,
+          "titleOverflow": "ellipsis",
+          "subtitleOverflow": "ellipsis",
+          "width": "fill",
+          "minWidth": 0
+        }
+      },
+      "grid-feature-circle-connect": {
+        "id": "grid-feature-circle-connect",
+        "type": "featureCard",
+        "style": "softCard",
+        "title": "Circle Connect",
+        "subtitle": "Meaningful conversations. Stronger circles.",
+        "iconToken": "users",
+        "actionArrowIconToken": "chevron-right",
+        "image": null,
+        "imageUrl": null,
+        "color": "#ea580c",
+        "gradientStart": "#ffe0cc",
+        "gradientEnd": "#f4b496",
+        "textColor": "#9a3412",
+        "url": "https://efactor.tech/index.php/grid-chat",
+        "route": "https://efactor.tech/index.php/grid-chat",
+        "openIn": "inAppWebView",
+        "webViewTitle": "Circle Connect",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "displayMode": "fullscreen"
+        },
+        "actionId": "grid-open-circle-connect",
+        "events": {
+          "tap": {
+            "actionId": "grid-open-circle-connect"
+          }
+        },
+        "layout": {
+          "columnSpan": 1,
+          "rowSpan": 1,
+          "minHeight": 168,
+          "minWidth": 0,
+          "width": "fill",
+          "maxWidth": "100%"
+        },
+        "appearance": {
+          "borderRadius": 24,
+          "backgroundColor": "#ffe0cc",
+          "backgroundGradient": {
+            "start": "#ffe0cc",
+            "end": "#f4b496"
+          },
+          "iconPosition": "topLeft",
+          "titlePosition": "belowIcon",
+          "showSubtitle": true,
+          "showActionArrow": true,
+          "iconSize": 36,
+          "titleFontSize": 16,
+          "subtitleFontSize": 12,
+          "titlePadding": 12,
+          "titleMaxLines": 2,
+          "subtitleMaxLines": 3,
+          "titleOverflow": "ellipsis",
+          "subtitleOverflow": "ellipsis",
+          "width": "fill",
+          "minWidth": 0
+        }
+      },
+      "grid-explore-find-talent": {
+        "id": "grid-explore-find-talent",
+        "type": "exploreCard",
+        "title": "Find Talent",
+        "subtitle": "People with skills you need",
+        "iconToken": "user",
+        "color": "#8b5cf6",
+        "actionId": "grid-open-find-talent",
+        "events": {
+          "tap": {
+            "actionId": "grid-open-find-talent"
+          }
+        },
+        "layout": {
+          "columnSpan": 1,
+          "rowSpan": 1,
+          "minHeight": 112,
+          "minWidth": 0,
+          "width": "fill",
+          "maxWidth": "100%"
+        },
+        "appearance": {
+          "borderRadius": 18,
+          "backgroundColor": "#ffffff",
+          "titleMaxLines": 2,
+          "subtitleMaxLines": 2,
+          "titleOverflow": "ellipsis",
+          "subtitleOverflow": "ellipsis",
+          "minWidth": 0,
+          "width": "fill"
+        }
+      },
+      "grid-explore-join-circles": {
+        "id": "grid-explore-join-circles",
+        "type": "exploreCard",
+        "title": "Join Circles",
+        "subtitle": "Communities you'll love",
+        "iconToken": "users",
+        "color": "#14b8a6",
+        "actionId": "grid-open-join-circles",
+        "events": {
+          "tap": {
+            "actionId": "grid-open-join-circles"
+          }
+        },
+        "layout": {
+          "columnSpan": 1,
+          "rowSpan": 1,
+          "minHeight": 112,
+          "minWidth": 0,
+          "width": "fill",
+          "maxWidth": "100%"
+        },
+        "appearance": {
+          "borderRadius": 18,
+          "backgroundColor": "#ffffff",
+          "titleMaxLines": 2,
+          "subtitleMaxLines": 2,
+          "titleOverflow": "ellipsis",
+          "subtitleOverflow": "ellipsis",
+          "minWidth": 0,
+          "width": "fill"
+        }
+      },
+      "grid-page": {
+        "id": "grid-page",
+        "type": "scrollPage",
+        "style": "gridNetwork",
+        "layout": {
+          "direction": "vertical",
+          "safeArea": true,
+          "safeAreaEdges": [
+            "top",
+            "left",
+            "right",
+            "bottom"
+          ],
+          "overflowX": "hidden",
+          "overflowY": "auto",
+          "width": "fill",
+          "maxWidth": "100%",
+          "minWidth": 0,
+          "reservedBottomInset": 108,
+          "padding": {
+            "left": 16,
+            "right": 16,
+            "top": 12,
+            "bottom": 108
+          },
+          "gap": 16,
+          "responsive": {
+            "narrow": {
+              "padding": {
+                "left": 12,
+                "right": 12,
+                "top": 8,
+                "bottom": 108
+              },
+              "gap": 12
+            },
+            "compact": {
+              "padding": {
+                "left": 12,
+                "right": 12,
+                "top": 10,
+                "bottom": 108
+              },
+              "gap": 14
+            },
+            "regular": {
+              "padding": {
+                "left": 16,
+                "right": 16,
+                "top": 12,
+                "bottom": 108
+              },
+              "gap": 16
+            },
+            "medium": {
+              "padding": {
+                "left": 20,
+                "right": 20,
+                "top": 12,
+                "bottom": 108
+              },
+              "gap": 18
+            },
+            "expanded": {
+              "padding": {
+                "left": 28,
+                "right": 28,
+                "top": 16,
+                "bottom": 108
+              },
+              "gap": 22,
+              "maxWidth": 720
+            }
+          }
+        },
+        "children": [
+          "grid-page-header",
+          "grid-feature-row",
+          "grid-stats-row",
+          "grid-share-qr",
+          "grid-explore-section",
+          "grid-quote-block"
+        ]
+      },
+      "grid-page-header": {
+        "id": "grid-page-header",
+        "type": "pageHeader",
+        "title": "Grid",
+        "subtitle": "Your professional network space",
+        "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
+        "image": "https://efactor.tech/assets/images/GRID_Logo.png",
+        "designTokens": {
+          "colors": {
+            "textPrimary": "#2e1065",
+            "textSecondary": "#6b7280",
+            "border": "#e5e7eb",
+            "surface": "#ffffff",
+            "onSurface": "#111827",
+            "onAccent": "#ffffff",
+            "pageBackground": "#f7f8fc",
+            "accent": "#7c3aed"
+          },
+          "action": {
+            "fontSize": 15,
+            "fontWeight": 700,
+            "lineHeight": 1.2,
+            "color": "#ffffff"
+          },
+          "typography": {
+            "pageTitle": {
+              "size": 26,
+              "fontSize": 26,
+              "weight": 800,
+              "fontWeight": 800,
+              "letterSpacing": -0.02,
+              "maxLines": 1,
+              "overflow": "ellipsis"
+            },
+            "pageSubtitle": {
+              "size": 13,
+              "fontSize": 13,
+              "weight": 500,
+              "fontWeight": 500,
+              "maxLines": 2,
+              "overflow": "ellipsis"
+            },
+            "action": {
+              "size": 15,
+              "fontSize": 15,
+              "weight": 700,
+              "fontWeight": 700,
+              "lineHeight": 1.2
+            }
+          },
+          "radius": {
+            "card": 22,
+            "explore": 18,
+            "button": 999
+          }
+        },
+        "layout": {
+          "direction": "horizontal",
+          "alignItems": "center",
+          "crossAxisAlignment": "center",
+          "gap": 10,
+          "overflowX": "hidden",
+          "width": "fill",
+          "maxWidth": "100%",
+          "minWidth": 0,
+          "titleFlex": 1,
+          "titleMinWidth": 0,
+          "titleSubtitleDirection": "vertical",
+          "subtitlePlacement": "belowTitle",
+          "actionsFlex": 0,
+          "responsive": {
+            "narrow": {
+              "gap": 8,
+              "titleFontSize": 22,
+              "subtitleFontSize": 12,
+              "logoHeight": 28
+            },
+            "compact": {
+              "gap": 10,
+              "titleFontSize": 24,
+              "subtitleFontSize": 13,
+              "logoHeight": 32
+            },
+            "regular": {
+              "gap": 12,
+              "titleFontSize": 28,
+              "subtitleFontSize": 13,
+              "logoHeight": 36
+            },
+            "medium": {
+              "gap": 12,
+              "titleFontSize": 30,
+              "subtitleFontSize": 14,
+              "logoHeight": 36
+            },
+            "expanded": {
+              "gap": 16,
+              "titleFontSize": 34,
+              "subtitleFontSize": 15,
+              "logoHeight": 40
+            }
+          }
+        },
+        "appearance": {
+          "logoHeight": 32,
+          "logoMaxWidth": 96
+        },
+        "typography": {
+          "titleToken": "typography.pageTitle",
+          "subtitleToken": "typography.pageSubtitle",
+          "title": {
+            "fontSize": 24,
+            "fontWeight": 800,
+            "maxLines": 1,
+            "overflow": "ellipsis"
+          },
+          "subtitle": {
+            "fontSize": 13,
+            "fontWeight": 500,
+            "maxLines": 2,
+            "overflow": "ellipsis"
+          }
+        },
+        "actions": [
+          {
+            "id": "grid-header-search",
+            "iconToken": "search",
+            "actionId": "grid-open-search",
+            "layout": {
+              "width": 40,
+              "height": 40,
+              "flex": 0,
+              "shrink": 0
+            },
+            "appearance": {
+              "size": 40,
+              "iconSize": 22
+            }
+          },
+          {
+            "id": "grid-header-avatar",
+            "type": "avatarButton",
+            "label": "S",
+            "initial": "S",
+            "color": "#7c3aed",
+            "backgroundColor": "#7c3aed",
+            "foregroundColor": "#ffffff",
+            "actionId": "navigate-profile",
+            "fontSize": 15,
+            "action": {
+              "fontSize": 15,
+              "fontWeight": 700
+            },
+            "colorToken": "colors.onAccent",
+            "backgroundColorToken": "colors.accent",
+            "fontSizeToken": "action.fontSize",
+            "designTokens": {
+              "colors": {
+                "surface": "#ffffff",
+                "onAccent": "#ffffff",
+                "accent": "#7c3aed"
+              },
+              "action": {
+                "fontSize": 15,
+                "fontWeight": 700
+              }
+            },
+            "layout": {
+              "width": 40,
+              "height": 40,
+              "flex": 0,
+              "shrink": 0
+            },
+            "style": {
+              "width": 40,
+              "height": 40,
+              "fontSize": 15,
+              "fontWeight": 700,
+              "backgroundColor": "#7c3aed",
+              "color": "#ffffff"
+            },
+            "appearance": {
+              "size": 40,
+              "width": 40,
+              "height": 40,
+              "borderRadius": 20,
+              "backgroundColor": "#7c3aed",
+              "foregroundColor": "#ffffff",
+              "fontSize": 15,
+              "fontWeight": 700
+            }
+          }
+        ]
+      },
+      "grid-feature-row": {
+        "id": "grid-feature-row",
+        "type": "responsiveGrid",
+        "layout": {
+          "columns": 2,
+          "columnGap": 12,
+          "rowGap": 12,
+          "rowHeight": 188,
+          "minRowHeight": 188,
+          "minimumCellWidthDp": 0,
+          "fit": "fill",
+          "width": "fill",
+          "maxWidth": "100%",
+          "minWidth": 0,
+          "allowShrink": true,
+          "overflowX": "hidden",
+          "independentScroll": false,
+          "responsive": {
+            "narrow": {
+              "columns": 2,
+              "columnGap": 10,
+              "rowGap": 10,
+              "rowHeight": 176,
+              "minRowHeight": 176,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden"
+            },
+            "compact": {
+              "columns": 2,
+              "columnGap": 8,
+              "rowGap": 8,
+              "rowHeight": 188,
+              "minRowHeight": 188,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden"
+            },
+            "regular": {
+              "columns": 2,
+              "columnGap": 12,
+              "rowGap": 12,
+              "rowHeight": 188,
+              "minRowHeight": 188,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden"
+            },
+            "medium": {
+              "columns": 2,
+              "columnGap": 12,
+              "rowGap": 12,
+              "rowHeight": 200,
+              "minRowHeight": 200,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden"
+            },
+            "expanded": {
+              "columns": 2,
+              "columnGap": 16,
+              "rowGap": 16,
+              "rowHeight": 210,
+              "minRowHeight": 210,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden",
+              "maximumContentWidth": 720
+            }
+          }
+        },
+        "layouts": {
+          "narrow": {
+            "columns": 2,
+            "columnGap": 10,
+            "rowGap": 10,
+            "rowHeight": 176,
+            "minRowHeight": 176,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden"
+          },
+          "compact": {
+            "columns": 2,
+            "columnGap": 8,
+            "rowGap": 8,
+            "rowHeight": 188,
+            "minRowHeight": 188,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden"
+          },
+          "regular": {
+            "columns": 2,
+            "columnGap": 12,
+            "rowGap": 12,
+            "rowHeight": 188,
+            "minRowHeight": 188,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden"
+          },
+          "medium": {
+            "columns": 2,
+            "columnGap": 12,
+            "rowGap": 12,
+            "rowHeight": 200,
+            "minRowHeight": 200,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden"
+          },
+          "expanded": {
+            "columns": 2,
+            "columnGap": 16,
+            "rowGap": 16,
+            "rowHeight": 210,
+            "minRowHeight": 210,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden",
+            "maximumContentWidth": 720
+          }
+        },
+        "overflowPolicy": "reflow",
+        "preserveChildOrder": true,
+        "children": [
+          "grid-feature-professional-space",
+          "grid-feature-circle-connect"
+        ]
+      },
+      "grid-stats-row": {
+        "id": "grid-stats-row",
+        "type": "statusSummary",
+        "layout": {
+          "columns": 3,
+          "gap": 8,
+          "width": "fill",
+          "maxWidth": "100%",
+          "minWidth": 0,
+          "overflowX": "hidden",
+          "responsive": {
+            "compact": {
+              "columns": 3,
+              "gap": 6,
+              "rowHeight": 72,
+              "minRowHeight": 64
+            },
+            "narrow": {
+              "columns": 3,
+              "gap": 6,
+              "rowHeight": 56,
+              "minRowHeight": 56
+            },
+            "regular": {
+              "columns": 3,
+              "gap": 8,
+              "rowHeight": 72,
+              "minRowHeight": 64
+            },
+            "medium": {
+              "columns": 3,
+              "gap": 8,
+              "rowHeight": 72,
+              "minRowHeight": 64
+            },
+            "expanded": {
+              "columns": 3,
+              "gap": 12,
+              "rowHeight": 80,
+              "minRowHeight": 64
+            }
+          }
+        },
+        "appearance": {
+          "backgroundColor": "#ffffff",
+          "borderRadius": 22,
+          "valueFontSize": 20,
+          "labelFontSize": 11,
+          "paddingVertical": 12,
+          "paddingHorizontal": 8,
+          "labelMaxLines": 2,
+          "labelOverflow": "ellipsis",
+          "minWidth": 0,
+          "width": "fill"
+        },
+        "items": [
+          {
+            "id": "professionals",
+            "label": "Professionals",
+            "value": 248,
+            "colorToken": "colors.textPrimary",
+            "appearance": {
+              "borderRadius": 22,
+              "backgroundColor": "#ffffff",
+              "valueFontSize": 22,
+              "labelFontSize": 12,
+              "paddingVertical": 12,
+              "paddingHorizontal": 12
+            }
+          },
+          {
+            "id": "opportunities",
+            "label": "Opportunities",
+            "value": 36,
+            "colorToken": "colors.textPrimary",
+            "appearance": {
+              "borderRadius": 22,
+              "backgroundColor": "#ffffff",
+              "valueFontSize": 22,
+              "labelFontSize": 12,
+              "paddingVertical": 12,
+              "paddingHorizontal": 12
+            }
+          },
+          {
+            "id": "active-circles",
+            "label": "Active Circles",
+            "value": 12,
+            "colorToken": "colors.textPrimary",
+            "appearance": {
+              "borderRadius": 22,
+              "backgroundColor": "#ffffff",
+              "valueFontSize": 22,
+              "labelFontSize": 12,
+              "paddingVertical": 12,
+              "paddingHorizontal": 12
+            }
+          }
+        ]
+      },
+      "grid-share-qr": {
+        "id": "grid-share-qr",
+        "type": "shareQrCard",
+        "title": "Share Profile QR",
+        "subtitle": "Share your professional or circle profile with anyone.",
+        "iconToken": "grid",
+        "selectedMode": "professional",
+        "modes": [
+          {
+            "id": "professional",
+            "label": "Professional",
+            "selected": true,
+            "actionId": "grid-select-qr-mode"
+          },
+          {
+            "id": "circle",
+            "label": "Circle",
+            "selected": false,
+            "actionId": "grid-select-qr-mode"
+          }
+        ],
+        "qrCaption": "Scan to connect",
+        "qrPayload": "https://efactor.tech/grid/connect?mode=professional",
+        "image": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
+        "qrImageUrl": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
+        "qrImageUrlTemplate": "https://efactor.tech/v8/qr_image.php?data={data}&mode={mode}&size=160",
+        "qrImageUrlsByMode": {
+          "professional": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
+          "circle": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dcircle&size=160&mode=circle"
+        },
+        "shareActionId": "grid-share-qr",
+        "actionId": "grid-share-qr",
+        "layout": {
+          "direction": "horizontal",
+          "gap": 12,
+          "width": "fill",
+          "maxWidth": "100%",
+          "minWidth": 0,
+          "overflowX": "hidden",
+          "responsive": {
+            "compact": {
+              "direction": "horizontal",
+              "gap": 10
+            },
+            "narrow": {
+              "direction": "vertical",
+              "gap": 10
+            },
+            "regular": {
+              "direction": "horizontal",
+              "gap": 12
+            },
+            "medium": {
+              "direction": "horizontal",
+              "gap": 12
+            },
+            "expanded": {
+              "direction": "horizontal",
+              "gap": 16
+            }
+          }
+        },
+        "appearance": {
+          "backgroundColor": "#eef2f7",
+          "borderRadius": 20,
+          "titleFontSize": 18,
+          "subtitleFontSize": 13
+        }
+      },
+      "grid-explore-section": {
+        "id": "grid-explore-section",
+        "type": "section",
+        "title": "Continue Exploring",
+        "trailing": {
+          "label": "See all",
+          "actionId": "grid-see-all-exploring"
+        },
+        "children": [
+          "grid-explore-row"
+        ]
+      },
+      "grid-explore-row": {
+        "id": "grid-explore-row",
+        "type": "responsiveGrid",
+        "layout": {
+          "columns": 2,
+          "columnGap": 12,
+          "rowGap": 12,
+          "rowHeight": 122,
+          "minRowHeight": 122,
+          "minimumCellWidthDp": 0,
+          "fit": "fill",
+          "width": "fill",
+          "maxWidth": "100%",
+          "minWidth": 0,
+          "allowShrink": true,
+          "overflowX": "hidden",
+          "independentScroll": false,
+          "responsive": {
+            "narrow": {
+              "columns": 2,
+              "columnGap": 10,
+              "rowGap": 10,
+              "rowHeight": 122,
+              "minRowHeight": 122,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden"
+            },
+            "compact": {
+              "columns": 2,
+              "columnGap": 10,
+              "rowGap": 10,
+              "rowHeight": 122,
+              "minRowHeight": 122,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden"
+            },
+            "regular": {
+              "columns": 2,
+              "columnGap": 12,
+              "rowGap": 12,
+              "rowHeight": 122,
+              "minRowHeight": 122,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden"
+            },
+            "medium": {
+              "columns": 2,
+              "columnGap": 12,
+              "rowGap": 12,
+              "rowHeight": 122,
+              "minRowHeight": 122,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden"
+            },
+            "expanded": {
+              "columns": 2,
+              "columnGap": 16,
+              "rowGap": 16,
+              "rowHeight": 122,
+              "minRowHeight": 122,
+              "minimumCellWidthDp": 0,
+              "fit": "fill",
+              "width": "fill",
+              "maxWidth": "100%",
+              "minWidth": 0,
+              "allowShrink": true,
+              "overflowX": "hidden",
+              "maximumContentWidth": 720
+            }
+          }
+        },
+        "layouts": {
+          "narrow": {
+            "columns": 2,
+            "columnGap": 10,
+            "rowGap": 10,
+            "rowHeight": 122,
+            "minRowHeight": 122,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden"
+          },
+          "compact": {
+            "columns": 2,
+            "columnGap": 10,
+            "rowGap": 10,
+            "rowHeight": 122,
+            "minRowHeight": 122,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden"
+          },
+          "regular": {
+            "columns": 2,
+            "columnGap": 12,
+            "rowGap": 12,
+            "rowHeight": 122,
+            "minRowHeight": 122,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden"
+          },
+          "medium": {
+            "columns": 2,
+            "columnGap": 12,
+            "rowGap": 12,
+            "rowHeight": 122,
+            "minRowHeight": 122,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden"
+          },
+          "expanded": {
+            "columns": 2,
+            "columnGap": 16,
+            "rowGap": 16,
+            "rowHeight": 122,
+            "minRowHeight": 122,
+            "minimumCellWidthDp": 0,
+            "fit": "fill",
+            "width": "fill",
+            "maxWidth": "100%",
+            "minWidth": 0,
+            "allowShrink": true,
+            "overflowX": "hidden",
+            "maximumContentWidth": 720
+          }
+        },
+        "overflowPolicy": "reflow",
+        "preserveChildOrder": true,
+        "children": [
+          "grid-explore-find-talent",
+          "grid-explore-join-circles"
+        ]
+      },
+      "grid-quote-block": {
+        "id": "grid-quote-block",
+        "type": "quoteBlock",
+        "title": "Connections turn potential into progress.",
+        "iconToken": "quote",
+        "appearance": {
+          "backgroundColor": "#f5f3ff",
+          "textColor": "#312e81",
+          "borderRadius": 20
+        }
+      },
+      "grid-loading": {
+        "id": "grid-loading",
+        "type": "skeleton",
+        "variant": "home-dashboard"
+      },
+      "grid-empty": {
+        "id": "grid-empty",
+        "type": "emptyState",
+        "iconToken": "grid",
+        "title": "Grid is empty",
+        "subtitle": "Your network space will appear here."
+      },
+      "grid-error": {
+        "id": "grid-error",
+        "type": "errorState",
+        "title": "Unable to load Grid",
+        "retryActionId": "refresh-grid"
+      }
+    },
+    "actions": {
+      "navigate-grid": {
+        "type": "navigate",
+        "destination": {
+          "routeId": "grid"
+        }
+      },
+      "navigate-profile": {
+        "type": "navigate",
+        "destination": {
+          "routeId": "profile"
+        }
+      },
+      "refresh-grid": {
+        "type": "sequence",
+        "actions": [
+          {
+            "type": "set-state",
+            "path": "refreshing",
+            "value": true
+          },
+          {
+            "type": "refresh-data-source",
+            "dataSourceId": "grid"
+          },
+          {
+            "type": "set-state",
+            "path": "refreshing",
+            "value": false
+          }
+        ]
+      },
+      "grid-open-search": {
+        "type": "host-action",
+        "actionId": "open-grid-search"
+      },
+      "grid-open-professional-space": {
+        "type": "open-url",
+        "url": "https://efactor.tech/index.php/grid",
+        "route": "https://efactor.tech/index.php/grid",
+        "title": "Professional Space",
+        "openIn": "inAppWebView",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "displayMode": "fullscreen"
+        },
+        "destination": {
+          "url": "https://efactor.tech/index.php/grid",
+          "openIn": "inAppWebView",
+          "title": "Professional Space",
+          "sharedCookies": true,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "webView": {
+            "javaScriptEnabled": true,
+            "sharedCookies": true,
+            "clearCache": false,
+            "showAppBar": false,
+            "showToolbar": false,
+            "hideAppBar": true,
+            "displayMode": "fullscreen"
+          }
+        }
+      },
+      "grid-open-circle-connect": {
+        "type": "open-url",
+        "url": "https://efactor.tech/index.php/grid-chat",
+        "route": "https://efactor.tech/index.php/grid-chat",
+        "title": "Circle Connect",
+        "openIn": "inAppWebView",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "displayMode": "fullscreen"
+        },
+        "destination": {
+          "url": "https://efactor.tech/index.php/grid-chat",
+          "openIn": "inAppWebView",
+          "title": "Circle Connect",
+          "sharedCookies": true,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "webView": {
+            "javaScriptEnabled": true,
+            "sharedCookies": true,
+            "clearCache": false,
+            "showAppBar": false,
+            "showToolbar": false,
+            "hideAppBar": true,
+            "displayMode": "fullscreen"
+          }
+        }
+      },
+      "grid-open-find-talent": {
+        "type": "host-action",
+        "actionId": "open-grid-find-talent"
+      },
+      "grid-open-join-circles": {
+        "type": "host-action",
+        "actionId": "open-grid-join-circles"
+      },
+      "grid-see-all-exploring": {
+        "type": "host-action",
+        "actionId": "open-grid-exploring-all"
+      },
+      "grid-share-qr": {
+        "type": "host-action",
+        "actionId": "share-grid-qr"
+      },
+      "grid-select-qr-mode": {
+        "type": "host-action",
+        "actionId": "select-grid-qr-mode"
+      }
+    },
+    "dataSources": {
+      "grid": {
+        "type": "rest",
+        "endpoint": "https://efactor.tech/v8/grid_api_creation.php",
+        "method": "GET",
+        "queryParameters": {
+          "action": "get_grid",
+          "user_id": 707
+        },
+        "responseMapping": {
+          "schema": "$.schema",
+          "content": "$.content"
+        },
+        "published": true
+      }
+    },
+    "iconRegistry": {
+      "grid": {
+        "flutter": "borderAll",
+        "web": "border-all"
+      },
+      "search": {
+        "flutter": "magnifyingGlass",
+        "web": "magnifying-glass"
+      },
+      "user": {
+        "flutter": "user",
+        "web": "user"
+      },
+      "users": {
+        "flutter": "users",
+        "web": "users"
+      },
+      "quote": {
+        "flutter": "quoteLeft",
+        "web": "quote-left"
+      },
+      "chevron-right": {
+        "flutter": "chevronRight",
+        "web": "chevron-right"
+      },
+      "profile": {
+        "flutter": "userPen",
+        "web": "user-pen"
+      }
+    },
+    "action": {
+      "fontSize": 15,
+      "fontWeight": 700
+    },
+    "theme": {
+      "colors": {
+        "surface": "#ffffff",
+        "onAccent": "#ffffff",
+        "onSurface": "#111827",
+        "accent": "#7c3aed",
+        "textPrimary": "#2e1065",
+        "textSecondary": "#6b7280",
+        "pageBackground": "#f7f8fc"
+      }
+    },
+    "typography": {
+      "action": {
+        "fontSize": 15,
+        "fontWeight": 700,
+        "lineHeight": 1.2
+      },
+      "pageTitle": {
+        "fontSize": 26,
+        "fontWeight": 800,
+        "maxLines": 1,
+        "overflow": "ellipsis"
+      },
+      "pageSubtitle": {
+        "fontSize": 13,
+        "fontWeight": 500,
+        "maxLines": 2,
+        "overflow": "ellipsis"
+      }
+    },
+    "designTokens": {
+      "colors": {
+        "textPrimary": "#2e1065",
+        "textSecondary": "#6b7280",
+        "border": "#e5e7eb",
+        "surface": "#ffffff",
+        "onSurface": "#111827",
+        "onAccent": "#ffffff",
+        "pageBackground": "#f7f8fc",
+        "accent": "#7c3aed"
+      },
+      "action": {
+        "fontSize": 15,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "color": "#ffffff"
+      },
+      "typography": {
+        "pageTitle": {
+          "size": 26,
+          "fontSize": 26,
+          "weight": 800,
+          "fontWeight": 800,
+          "letterSpacing": -0.02,
+          "maxLines": 1,
+          "overflow": "ellipsis"
+        },
+        "pageSubtitle": {
+          "size": 13,
+          "fontSize": 13,
+          "weight": 500,
+          "fontWeight": 500,
+          "maxLines": 2,
+          "overflow": "ellipsis"
+        },
+        "action": {
+          "size": 15,
+          "fontSize": 15,
+          "weight": 700,
+          "fontWeight": 700,
+          "lineHeight": 1.2
+        }
+      },
+      "radius": {
+        "card": 22,
+        "explore": 18,
+        "button": 999
+      }
+    },
+    "layoutPolicy": {
+      "overflowPolicy": "reflow",
+      "overflowX": "hidden",
+      "width": "fill",
+      "maxWidth": "100%",
+      "reservedBottomInset": 108,
+      "responsiveBreakpoints": {
+        "narrow": 0,
+        "compact": 320,
+        "regular": 480,
+        "medium": 600,
+        "expanded": 840
+      },
+      "responsive": {
+        "defaultBreakpoint": "compact",
+        "breakpoints": {
+          "narrow": {
+            "maxWidth": 319
+          },
+          "compact": {
+            "minWidth": 320,
+            "maxWidth": 599
+          },
+          "medium": {
+            "minWidth": 600,
+            "maxWidth": 839
+          },
+          "expanded": {
+            "minWidth": 840
+          }
+        },
+        "grid": {
+          "narrowScreenThresholdDp": 340,
+          "narrowScreenMaxColumns": 2,
+          "minimumCellWidthDp": 0,
+          "clampColumnSpanToColumns": true,
+          "preserveMetroColumnsOnNarrow": false
+        },
+        "overflowPolicy": {
+          "headerText": "ellipsis",
+          "default": "ellipsis"
+        }
+      }
+    },
+    "security": {
+      "requireHttps": true,
+      "allowedAssetDomains": [
+        "efactor.tech",
+        "www.efactor.tech"
+      ]
+    }
+  }
+}

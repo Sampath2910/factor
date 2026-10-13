@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>eFactor Backend Requirements — Remote Device State Sync</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #1a1a1a;
+    margin: 0;
+  }
+  h1 {
+    font-size: 19pt;
+    line-height: 1.25;
+    margin: 0 0 6px;
+    color: #0f172a;
+  }
+  .byline {
+    font-size: 9.5pt;
+    color: #64748b;
+    margin: 0 0 4px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid #e2e8f0;
+  }
+  h2 {
+    font-size: 13pt;
+    margin: 26px 0 8px;
+    padding-top: 2px;
+    color: #0f172a;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 14px;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  h2:first-of-type { border-top: none; padding-top: 4px; }
+  p { margin: 0 0 10px; }
+  ol, ul { margin: 0 0 10px; padding-left: 22px; }
+  li { margin-bottom: 5px; }
+  code {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 9pt;
+    background: #f1f5f9;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #0f172a;
+  }
+  pre {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 8.5pt;
+    line-height: 1.45;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid #94a3b8;
+    border-radius: 3px;
+    padding: 10px 12px;
+    margin: 0 0 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 14px;
+    font-size: 9.5pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 6px 9px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: #f1f5f9; font-weight: 600; color: #0f172a; }
+  td code, th code { font-size: 8.5pt; }
+  strong { color: #0f172a; }
+  .lead-note {
+    background: #fef9c3;
+    border-left: 3px solid #ca8a04;
+    padding: 9px 12px;
+    margin: 0 0 14px;
+    break-inside: avoid;
+  }
+</style>
+</head>
+<body>
+
+<h1>eFactor Backend Requirements — Remote Device State Sync</h1>
+<p class="byline">2026-09-21</p>
+
+<h2>Summary</h2>
+<p>The app cannot show a change made on the physical remote because the cloud never sends per-parameter device state to the phone. This is a backend/firmware gap, not a mobile bug.</p>
+<p>The client side is already built and verified in a live session on 21 September 2026 (Redmi 2201117TI, user 707, nodes <code>...7EC2000000040300</code> and <code>...7EC2000000049200</code>). The app connects to the cloud WebSocket, requests node state every 10 seconds, receives the reply, parses it and repaints bound controls. The data is what is missing: every reply carries device catalogue metadata and no current parameter values.</p>
+<p>For a fan whose schema declares five controls, the cloud reports exactly one state field.</p>
+<table>
+<thead><tr><th>Schema control binding</th><th>Reported by cloud today</th></tr></thead>
+<tbody>
+<tr><td><code>1_power_command_2_toggle_switch</code></td><td>Yes, as <code>devices[].power</code></td></tr>
+<tr><td><code>1_buzzer_command_2_toggle_switch</code></td><td>No</td></tr>
+<tr><td><code>1_speed_command_2_slider</code></td><td>No</td></tr>
+<tr><td><code>1_direction_command_2_trigger</code></td><td>No</td></tr>
+<tr><td><code>1_rpm_command_0_text</code></td><td>No</td></tr>
+</tbody>
+</table>
+<p class="lead-note"><strong>Request 1 is the blocking item.</strong> Requests 2 to 5 are correctness and performance problems found in the same session.</p>
+
+<h2>Evidence</h2>
+<p>This is a verbatim <code>getAllNodes</code> reply captured on the handset at 10:59:12, trimmed to one node. The app had requested state for node <code>...040300</code> specifically.</p>
+<pre><code>{"total":2,"all_nodes":[{
+  "config":{
+    "node_id":"FFFFFFFFFFFFFFFF7EC2000000040300",
+    "node_type":"WIFI",
+    "devices":[{
+      "id":"FFFFFFFFFFFFFFFF7EC2000000040300",
+      "module_type":"WIFI",
+      "device_name":"fan_7E000403",
+      "name":"fan_7E000403",
+      "power":true,
+      "ui_type":"Toggle Switch",
+      "page_name":"Page1.Operation",
+      "ui_description":"Read/Write",
+      "local_control":"enable",
+      "primary":"power",
+      "type":"efactor.device.fan",
+      "brand_logo":"https://efactor.tech/files/brand_logo/efactor.jpg",
+      "device_image":"https://efactor.tech/files/brand_logo/fan-EF-003FMN03.jpg",
+      "Device Communication":"disable",
+      "Status":"disable"
+    }]
+  },
+  "role":"primary",
+  "status":{"connectivity":{"connected":"true","timestamp":1789968552000}}
+}]}</code></pre>
+<p>Everything here except <code>power</code> and <code>connected</code> is static catalogue data: names, image URLs, UI hints. There is no <code>Buzzer</code>, no <code>Speed</code>, no <code>Direction</code>, no <code>rpm</code>.</p>
+<p>The same reply arrived at 10:59:12, 10:59:22, 10:59:32 and 10:59:42, identical each time, confirming the request/response cycle works and simply returns no state.</p>
+<p>The payload that does carry parameters is the <code>auto_get_nodes_params</code> telemetry push documented as Issue 6 in the earlier <code>BACKEND_ISSUES_REPORT.md</code>. It arrived <strong>zero times</strong> during the session. The full log buffer was searched for it.</p>
+
+<h2>Request 1 — deliver per-parameter state (blocking)</h2>
+<p>The app needs the current value of every parameter the device schema declares. Either option below works; option A is preferred because it makes the UI update immediately rather than on the next poll.</p>
+<p><strong>Option A — push on change.</strong> When a parameter changes on the device for any reason, including the physical remote, emit an <code>auto_get_nodes_params</code> message over the cloud WebSocket to every subscriber of that node. This is the mechanism already described in the previous report; it is simply not firing.</p>
+<p><strong>Option B — include state in the query reply.</strong> Add a parameters block to the <code>getAllNodes</code> and <code>getAllNodesStatus</code> replies, so the app's existing 10-second poll picks it up.</p>
+<p>Either way the shape should be a flat map of parameter name to current value, per device:</p>
+<pre><code>{"all_nodes":[{
+  "config":{"node_id":"FFFFFFFFFFFFFFFF7EC2000000040300"},
+  "parameters":{
+    "power": true,
+    "Buzzer": false,
+    "Speed": 3,
+    "Direction": "00",
+    "rpm": 9,
+    "Current": 0,
+    "Voltage": 25.19
+  },
+  "parameters_updated_at": 1789968552000
+}]}</code></pre>
+<p>The <code>parameters_updated_at</code> timestamp matters: the app applies an optimistic value when the user taps and holds it for 12 seconds. A timestamp lets the app resolve a conflict correctly instead of guessing. If a timestamp is impractical, say so and the app will keep its current time-window approach.</p>
+<p>Without this change no amount of app-side work can make remote changes visible.</p>
+
+<h2>Request 2 — payload shape</h2>
+<p>Three shape problems. The app works around all three today, but each workaround is a guess that will break on the next payload change.</p>
+<table>
+<thead><tr><th>Problem</th><th>Today</th><th>Should be</th></tr></thead>
+<tbody>
+<tr><td>Parameters keyed under an empty string</td><td><code>"": {"power":"true", "Speed":3}</code></td><td><code>"parameters": {"power":true, "Speed":3}</code></td></tr>
+<tr><td>Booleans sent as strings</td><td><code>"connected":"true"</code>, <code>"power":"true"</code></td><td><code>"connected":true</code>, <code>"power":true</code></td></tr>
+<tr><td><code>node_id</code> nested inconsistently</td><td><code>all_nodes[].node_id</code> in one reply, <code>all_nodes[].config.node_id</code> in another</td><td>one position, always</td></tr>
+</tbody>
+</table>
+<p>The third one caused a real bug. The app looked for <code>all_nodes[].node_id</code>; when <code>getAllNodes</code> nested it under <code>config</code> instead, the id came back empty, the "is this my node?" check passed by default, and <strong>both</strong> fans' values were applied to whichever device page was open. The app now reads both positions, but one consistent position would remove the class of bug.</p>
+<p>Also worth noting: <code>"name": null</code> and <code>"name": "NULL"</code> both appear for the same field across the two nodes in one reply. Please use JSON <code>null</code> consistently.</p>
+
+<h2>Request 3 — parameter naming contract</h2>
+<p>The device reports <code>power</code>, <code>Buzzer</code>, <code>Speed</code>. The SDUI schema binds those same controls as <code>1_power_command_2_toggle_switch</code>, <code>1_buzzer_command_2_toggle_switch</code>, <code>1_speed_command_2_slider</code>. Nothing in either payload states that these refer to the same thing.</p>
+<p>The app currently bridges the gap by fuzzy matching: it lowercases the telemetry name, splits each schema key on underscores and looks for the name among the parts. That works for <code>Buzzer</code> to <code>1_buzzer_command_2_toggle_switch</code>, but it is fragile. A telemetry field named <code>current</code> would match any schema key containing that word, and a device with two of the same parameter on different pages is ambiguous.</p>
+<p>Either of these removes the guesswork:</p>
+<ol>
+<li>Have telemetry use the same key the schema binds, so <code>power</code> becomes <code>1_power_command_2_toggle_switch</code>.</li>
+<li>Or publish the mapping inside the device schema, for example a <code>telemetryKey</code> field on each entry of <code>controls[]</code>, so the app can resolve it exactly.</li>
+</ol>
+<p>Option 2 is less disruptive since it does not change the firmware payload.</p>
+
+<h2>Request 4 — command replies should echo the resulting state</h2>
+<p><code>sendData</code> currently returns an empty payload:</p>
+<pre><code>sendData CLOUD success code=200 body=
+
+{"payload":""}</code></pre>
+<p>HTTP 200 with an empty body tells the app the command was accepted by the cloud, not that the device applied it. Returning the resulting parameter value would let the app confirm rather than assume:</p>
+<pre><code>{"payload":{"node_id":"...040300","parameter":"Buzzer","value":true,"applied_at":1789968552000}}</code></pre>
+<p>Related: the round trip takes about 4.3 seconds (09:20:17.408 request, 09:20:21.875 reply; a second sample was 3.9 s). Routing logs <code>sendData routing: CLOUD</code> even when the protocol is MQTT and the device is on the same LAN as the phone. If LAN routing is meant to be used when mDNS has found the node, it is not engaging.</p>
+
+<h2>Request 5 — device schema transfer cost</h2>
+<p><code>api_schema.php</code> returns 1,898,091 bytes for model <code>EF-003FMN03</code> and re-sends all of it on every request, with no way for the app to skip an unchanged body.</p>
+<table>
+<thead><tr><th>Observation</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Response size, <code>EF-003FMN03</code></td><td>1.9 MB</td></tr>
+<tr><td>Response size, <code>EFCKER V1.0</code></td><td>6.6 MB</td></tr>
+<tr><td>Response size, <code>pavan-2608</code></td><td>3.1 MB</td></tr>
+<tr><td><code>Content-Length</code> header</td><td>absent (<code>contentLength=unknown</code>)</td></tr>
+<tr><td><code>ETag</code> / <code>Last-Modified</code></td><td>absent</td></tr>
+<tr><td>Status on an unchanged schema</td><td>always <code>200</code>, never <code>304</code></td></tr>
+</tbody>
+</table>
+<p>In one 3-minute window the same 1.9 MB schema was fetched three times and each sync reported no structural change. That is roughly 5.7 MB of mobile data to learn nothing.</p>
+<p>Two asks:</p>
+<ol>
+<li>Send an <code>ETag</code> (or <code>Last-Modified</code>) and honour <code>If-None-Match</code> / <code>If-Modified-Since</code> with <code>304 Not Modified</code>. The app already sends <code>Cache-Control: no-cache</code> on forced refreshes and has a local cache ready to revalidate.</li>
+<li>Send a <code>Content-Length</code>. Without it the app cannot size its read timeout and falls back to a flat 30 seconds.</li>
+</ol>
+<p>This matters beyond bandwidth. If Request 1 cannot be delivered soon, the app's fallback is to poll this schema for parameter values, and at 1.9 MB a response that is not revalidatable makes that fallback impractical.</p>
+
+<h2>Lower priority</h2>
+<p><strong>Mixed HTTP and HTTPS scan endpoints.</strong> The <code>scanApi</code> published inside the device schema is <code>https://</code> for <code>EF-003FMN03</code> and <code>EFCKER V1.0</code>, but plain <code>http://</code> for <code>pavan-2608</code>. Android blocks cleartext traffic by default, so the <code>http://</code> one will fail on a release build. All published endpoints should be <code>https://</code>.</p>
+<p><strong>Inconsistent schema versions.</strong> <code>DEVICE_UI_SCHEMA_EXTRACTED</code> reports <code>schemaVersion=4.0.0</code> for <code>EF-003FMN03</code> and <code>EFCKER V1.0</code>, but <code>4.1.0</code> for <code>pavan-2608</code>. If 4.1.0 adds or changes fields, please confirm what differs so the client can handle both; if it is only a version bump, aligning them avoids confusion.</p>
+<p><strong>Node connectivity reported as offline.</strong> At 10:58:16 both nodes reported <code>"connected":"false"</code>, then at 10:59:04 node <code>...040300</code> reported <code>"connected":"true"</code> with no device change in between. Worth confirming the broker heartbeat is reliable, since the app disables controls for a node it believes is offline.</p>
+
+<h2>How to verify the fix</h2>
+<p>No app change is needed to test Request 1. The client already polls and applies whatever arrives.</p>
+<ol>
+<li>Open the device page for a fan in the app.</li>
+<li>Press a button on the physical remote, for example the buzzer.</li>
+<li>The control should change on screen within about 10 seconds.</li>
+</ol>
+<p>To confirm from the backend side without the app, subscribe to the cloud WebSocket as user <code>707</code> and check that either an <code>auto_get_nodes_params</code> push arrives after the remote press, or that the next <code>getAllNodes</code> reply contains the changed parameter value.</p>
+<p>The app logs every message it receives, so if something arrives and still does not appear on screen, this line names the mismatch and lists the keys the schema expects:</p>
+<pre><code>[SDUI][REMOTE_SYNC] no schema parameter matched "&lt;name&gt;" (value=&lt;v&gt;).
+  Known keys: 1_rpm_command_0_text, 1_buzzer_command_2_toggle_switch,
+  1_direction_command_2_trigger, 1_power_command_2_toggle_switch,
+  1_speed_command_2_slider</code></pre>
+<p>Send that line back and the mapping can be corrected on either side.</p>
+
+</body>
+</html>

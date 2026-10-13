@@ -1,0 +1,126 @@
+{
+  "schemaType": "device-ui",
+  "meta": {
+    "app": {
+      "modelNo": "EF-003FMN03",
+      "nodeId": "FFFFFFFFFFFFFFFF7EC200000005E800"
+    }
+  },
+  "dataSources": {
+    "deviceCommands": {
+      "adapter": "deviceApi"
+    }
+  },
+  "pages": [
+    { "id": "page_1", "pageNo": "1", "title": "home" }
+  ],
+  "state": {
+    "activePageIndex": 0,
+    "device": {
+      "parameters": {
+        "1_rpm_command_0_text": "0",
+        "1_speed_command_2_slider": 1
+      }
+    }
+  },
+  "controls": [
+    {
+      "id": "1:Buzzer:command-2-toggle-switch",
+      "binding": "device.parameters.1_buzzer_command_2_toggle",
+      "access": "write",
+      "deviceFrame": {
+        "commands": [
+          { "byte_start_position": 1, "no_of_bytes": 1, "default_name": "CommandId", "value": "A1" },
+          { "byte_start_position": 2, "no_of_bytes": 1, "default_name": "FunctionCode", "value": "BB" },
+          {
+            "byte_start_position": 3,
+            "no_of_bytes": 1,
+            "default_name": "Data",
+            "asperui": "[false][true]",
+            "asperui_values": "[00][01]"
+          },
+          { "byte_start_position": 4, "no_of_bytes": 1, "default_name": "Terminator", "value": "0A" }
+        ]
+      }
+    },
+    {
+      "id": "1:power:command-2-toggle-switch",
+      "binding": "device.parameters.1_power_command_2_toggle",
+      "access": "write",
+      "deviceFrame": {
+        "commands": [
+          { "byte_start_position": 1, "no_of_bytes": 1, "default_name": "CommandId", "value": "A1" },
+          { "byte_start_position": 2, "no_of_bytes": 1, "default_name": "FunctionCode", "value": "C2" },
+          {
+            "byte_start_position": 3,
+            "no_of_bytes": 1,
+            "default_name": "Data",
+            "asperui": "[false][true]",
+            "asperui_values": "[00][01]"
+          },
+          { "byte_start_position": 4, "no_of_bytes": 1, "default_name": "Terminator", "value": "0A" }
+        ]
+      }
+    },
+    {
+      "id": "1:Speed:command-2-slider",
+      "binding": "device.parameters.1_speed_command_2_slider",
+      "access": "write",
+      "componentType": "slider",
+      "events": [
+        {
+          "event": "onChanged",
+          "action": {
+            "type": "send",
+            "binding": "device.parameters.1_speed_command_2_slider"
+          }
+        }
+      ],
+      "deviceFrame": {
+        "commands": [
+          { "byte_start_position": 1, "no_of_bytes": 1, "default_name": "CommandId", "value": "A1" },
+          { "byte_start_position": 2, "no_of_bytes": 1, "default_name": "FunctionCode", "value": "C0" },
+          { "byte_start_position": 3, "no_of_bytes": 1, "default_name": "Data", "asperui": "slider" },
+          { "byte_start_position": 4, "no_of_bytes": 1, "default_name": "Terminator", "value": "0A" }
+        ]
+      }
+    },
+    {
+      "id": "1:Direction:command-2-trigger",
+      "binding": "device.parameters.1_direction_command_2_trigger",
+      "access": "write",
+      "componentType": "trigger",
+      "deviceFrame": {
+        "commands": [
+          { "byte_start_position": 1, "no_of_bytes": 1, "default_name": "CommandId", "value": "A1" },
+          { "byte_start_position": 2, "no_of_bytes": 1, "default_name": "FunctionCode", "value": "C0" },
+          {
+            "byte_start_position": 3,
+            "no_of_bytes": 1,
+            "default_name": "Data",
+            "asperui": "[Command][0][08]",
+            "asperui_values": "[08][08][08]"
+          },
+          { "byte_start_position": 4, "no_of_bytes": 1, "default_name": "Terminator", "value": "0A" }
+        ]
+      }
+    },
+    {
+      "id": "1:rpm:command-0-text",
+      "binding": "device.parameters.1_rpm_command_0_text",
+      "access": "read",
+      "readOnly": true,
+      "writable": false,
+      "protocolMeta": {
+        "items": "[Command]",
+        "item_values": "[3D]"
+      },
+      "deviceFrame": {
+        "commands": [
+          { "byte_start_position": 1, "no_of_bytes": 1, "default_name": "CommandId", "value": "01" },
+          { "byte_start_position": 2, "no_of_bytes": 1, "default_name": "FunctionCode", "value": "3D" }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+# Credentials — never commit
+.env
+**/.env
+*.pem
+*.p12
+*.keystore
+**/key.properties
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Baseline snapshot — contains device config for STUDIO_9_7 that
+# shouldn't be tracked in version control (regenerated on every test run)
+baseline_snapshot.json
+
+# macOS / Windows desktop clutter
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/build/
+**/coverage/
+**/.packages
+**/doc/api/
+*.symbols
+*.map.json
+
+# Flutter ephemeral / generated
+**/ios/Flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/linux/flutter/ephemeral/
+**/windows/flutter/ephemeral/
+**/ios/.symlinks/
+**/ios/Pods/
+**/macos/Pods/
+**/DerivedData/
+
+# Android build caches
+**/.gradle/
+**/local.properties
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/.kotlin/
+
+# Misc
+*.log
+*.class
+*.swp
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/

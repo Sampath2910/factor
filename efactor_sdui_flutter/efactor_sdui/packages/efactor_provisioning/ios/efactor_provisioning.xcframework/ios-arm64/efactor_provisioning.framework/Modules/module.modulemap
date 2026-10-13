@@ -1,0 +1,10 @@
+framework module efactor_provisioning {
+  umbrella header "efactor_provisioning-umbrella.h"
+
+  export *
+  module * { export * }
+}
+
+module efactor_provisioning.Swift {
+  header "efactor_provisioning-Swift.h"
+}

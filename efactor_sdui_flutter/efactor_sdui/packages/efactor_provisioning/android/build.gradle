@@ -1,0 +1,68 @@
+// eFactor provisioning — Flutter plugin (Android), BINARY wrapper.
+// Ships the closed-source core as a prebuilt .aar (managers, bridges, Java core,
+// native .so, protobuf) plus EfactorProvisioningPlugin.kt as source (Flutter
+// needs the pluginClass as source). The .aar carries no POM, so its runtime
+// dependencies are re-declared here as `api` so the host app still gets them.
+
+group = "tech.efactor.efactor_provisioning"
+version = "0.0.1"
+
+buildscript {
+    ext.kotlin_version = "1.9.22"
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.3.0"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+// Declare the local Maven repository at the ALLPROJECTS level so the HOST APP (which
+// resolves the api(...) aar transitively) can find it with full metadata support (avoiding flatDir).
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+        maven { url "${project(':efactor_provisioning').projectDir}/repo" }
+    }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+android {
+    namespace = "tech.efactor.provisioning_wrapper"
+    compileSdk = 34
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        consumerProguardFiles "consumer-rules.pro"
+        minSdk = 23
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+
+    // The closed-source compiled core (classes + native .so + generated protobuf) via local Maven repo.
+    api "tech.efactor:efactor_provisioning:0.0.1"
+
+    // Transitive runtime deps the .aar needs (no POM ships with a flatDir aar).
+    api "androidx.appcompat:appcompat:1.6.1"
+    api "org.java-websocket:Java-WebSocket:1.5.1"
+    api "org.greenrobot:eventbus:3.3.1"
+    api "com.google.protobuf:protobuf-javalite:3.18.0"
+    api "com.google.crypto.tink:tink-android:1.6.1"
+    api "com.squareup.okhttp3:okhttp:4.9.3"
+    api "com.google.code.gson:gson:2.10.1"
+}

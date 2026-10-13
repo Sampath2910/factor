@@ -1,0 +1,76 @@
+name: efactor_sdui
+description: Server-driven UI renderer for Efactor Design Studio device schemas (STUDIO_9_7).
+publish_to: "none"
+
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Efactor native Cloud / Discovery / Provisioning / Data SDK.
+  efactor_provisioning:
+    path: packages/efactor_provisioning
+
+  # UI and schema rendering
+  google_fonts: ^8.2.1
+  gauge_indicator: ^0.5.0
+  url_launcher: ^6.3.1
+  cached_network_image: ^3.4.1
+  flutter_cache_manager: ^3.4.1
+
+  # API communication
+  http: ^1.2.2
+  flutter_secure_storage: ^9.2.2
+
+  # Local storage
+  shared_preferences: ^2.3.2
+  path_provider: ^2.1.2
+  hive: ^2.2.3
+
+  # Device and network information
+  connectivity_plus: ^6.0.3
+  network_info_plus: ^6.0.0
+  device_info_plus: ^10.1.2
+
+  # Wi-Fi scanning
+  wifi_scan: ^0.4.1+2
+
+  # Permissions and location
+  geolocator: ^12.0.0
+
+  # Camera, images and QR scanning
+  image_picker: ^1.1.2
+  mobile_scanner: ^7.0.0
+  flutter_svg: ^2.0.10+1
+  font_awesome_flutter: ^11.0.0
+  permission_handler: ^11.3.1
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
+  webview_flutter_wkwebview: ^3.26.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/branding/efactor_app_logo.jpg
+  adaptive_icon_background: "#F4F7FB"
+  adaptive_icon_foreground: assets/branding/efactor_app_logo.jpg
+  remove_alpha_ios: true
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/branding/
+    - assets/iot_schema_test.json
+

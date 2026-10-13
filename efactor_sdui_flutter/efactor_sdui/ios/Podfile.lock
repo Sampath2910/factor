@@ -1,0 +1,46 @@
+PODS:
+  - device_info_plus (0.0.1):
+    - Flutter
+  - efactor_provisioning (0.0.1):
+    - Flutter
+  - Flutter (1.0.0)
+  - flutter_secure_storage (6.0.0):
+    - Flutter
+  - network_info_plus (0.0.1):
+    - Flutter
+  - wifi_scan (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
+  - efactor_provisioning (from `.symlinks/plugins/efactor_provisioning/ios`)
+  - Flutter (from `Flutter`)
+  - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
+  - network_info_plus (from `.symlinks/plugins/network_info_plus/ios`)
+  - wifi_scan (from `.symlinks/plugins/wifi_scan/ios`)
+
+EXTERNAL SOURCES:
+  device_info_plus:
+    :path: ".symlinks/plugins/device_info_plus/ios"
+  efactor_provisioning:
+    :path: ".symlinks/plugins/efactor_provisioning/ios"
+  Flutter:
+    :path: Flutter
+  flutter_secure_storage:
+    :path: ".symlinks/plugins/flutter_secure_storage/ios"
+  network_info_plus:
+    :path: ".symlinks/plugins/network_info_plus/ios"
+  wifi_scan:
+    :path: ".symlinks/plugins/wifi_scan/ios"
+
+SPEC CHECKSUMS:
+  device_info_plus: 71ffc6ab7634ade6267c7a93088ed7e4f74e5896
+  efactor_provisioning: d7fa6e8dcbd7525956c0f9c6201548fcd53a4852
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
+  network_info_plus: 16d8832ab43b7bc22b168d76fffcad9da35486d2
+  wifi_scan: 3254c160abc7266feac359a927f8ab64f2703774
+
+PODFILE CHECKSUM: d72375ac25cf25809396b51e6762fc3ef4153555
+
+COCOAPODS: 1.16.2

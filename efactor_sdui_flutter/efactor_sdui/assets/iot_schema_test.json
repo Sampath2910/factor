@@ -1,0 +1,3288 @@
+{
+  "success": true,
+  "schema_version": "2.4.2",
+  "updated_at": "2026-09-24 12:23:29",
+  "regenerated": false,
+  "complete": true,
+  "user_id": 655,
+  "device_count": 2,
+  "schema": {
+    "schemaVersion": "2.4.2",
+    "kind": "efactor.iot.sdui.dashboard",
+    "generatedAt": "2026-09-24T12:23:29+05:30",
+    "generatedDate": "2026-09-24",
+    "generatedTime": "12:23:29",
+    "generatedTimezone": "Asia/Kolkata",
+    "userId": 655,
+    "deviceCount": 2,
+    "responsive": {
+      "version": "1.0",
+      "unit": "logicalPx",
+      "dimensionPolicy": "logical",
+      "scaleLegacyDimensions": false,
+      "safeArea": true,
+      "breakpoints": {
+        "narrow": {
+          "minimumWidth": 0,
+          "maximumWidth": 359
+        },
+        "compact": {
+          "minimumWidth": 360,
+          "maximumWidth": 599
+        },
+        "medium": {
+          "minimumWidth": 600,
+          "maximumWidth": 839
+        },
+        "expanded": {
+          "minimumWidth": 840
+        }
+      },
+      "layouts": {
+        "narrow": {
+          "pagePadding": {
+            "horizontal": 10,
+            "top": 12,
+            "bottom": 108
+          },
+          "maxContentWidth": null
+        },
+        "compact": {
+          "pagePadding": {
+            "horizontal": 12,
+            "top": 14,
+            "bottom": 108
+          },
+          "maxContentWidth": null
+        },
+        "medium": {
+          "pagePadding": {
+            "horizontal": 20,
+            "top": 16,
+            "bottom": 32
+          },
+          "maxContentWidth": 720
+        },
+        "expanded": {
+          "pagePadding": {
+            "horizontal": 32,
+            "top": 20,
+            "bottom": 40
+          },
+          "maxContentWidth": 1024
+        }
+      }
+    },
+    "auth": {
+      "type": "iot-access-token",
+      "headerName": "Authorization",
+      "tokenBinding": {
+        "$secureState": "session.iotAccessToken"
+      },
+      "note": "Token is resolved at runtime from session.iotAccessToken — never hardcode JWT in published schema."
+    },
+    "hostChrome": {
+      "reuseHostAppShell": true,
+      "keepHostBottomNavigation": true,
+      "replaceAppShell": false,
+      "bottomNavigationFixed": true,
+      "bottomNavigationOutsideScroll": true,
+      "reservedBottomInset": 108
+    },
+    "appShell": {
+      "reuseHostShell": true,
+      "replaceOnNestedSchema": false,
+      "keepHostBottomNavigation": true,
+      "bottomNavigationFixed": true,
+      "bottomNavigationOutsidePageScroll": true,
+      "bottomNavigationPosition": "fixed",
+      "contentAvoidsBottomNavigation": true,
+      "reservedBottomInset": 108
+    },
+    "layout": {
+      "engine": "sdui",
+      "pagePadding": {
+        "horizontal": 12,
+        "top": 14,
+        "bottom": 108
+      },
+      "grid": {
+        "columns": 2,
+        "gap": 12
+      },
+      "card": {
+        "minHeight": 168,
+        "borderRadius": 24,
+        "padding": {
+          "top": 14,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "zoneSpacing": {
+          "topRow": {
+            "marginBottom": 10
+          },
+          "titleBlock": {
+            "marginBottom": 6
+          },
+          "productImage": {
+            "paddingTop": 4,
+            "paddingBottom": 6,
+            "minHeight": 48
+          },
+          "statusRow": {
+            "marginBottom": 8
+          },
+          "footer": {
+            "paddingTop": 2,
+            "gap": 8
+          }
+        }
+      },
+      "responsiveLayout": {
+        "narrow": {
+          "pagePadding": {
+            "horizontal": 10,
+            "top": 12,
+            "bottom": 24
+          }
+        },
+        "compact": {
+          "pagePadding": {
+            "horizontal": 12,
+            "top": 14,
+            "bottom": 28
+          }
+        },
+        "medium": {
+          "pagePadding": {
+            "horizontal": 20,
+            "top": 16,
+            "bottom": 32
+          },
+          "maxContentWidth": 720
+        },
+        "expanded": {
+          "pagePadding": {
+            "horizontal": 32,
+            "top": 20,
+            "bottom": 40
+          },
+          "maxContentWidth": 1024
+        }
+      }
+    },
+    "theme": {
+      "background": "#ececec",
+      "surface": "#ffffff",
+      "surfaceOnline": "#1c1c1e",
+      "surfaceOffline": "#ffffff",
+      "textPrimary": "#111827",
+      "textSecondary": "#9ca3af",
+      "textOnDark": "#ffffff",
+      "online": "#84cc16",
+      "onlineAccent": "#a3e635",
+      "offline": "#94a3b8",
+      "accent": "#111827",
+      "accentOrange": "#fb923c",
+      "danger": "#dc2626",
+      "cardRadius": 24,
+      "gridGap": 12,
+      "fontFamily": "Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+      "deviceSort": "onlineFirst",
+      "shadowOnline": "0 12px 28px rgba(0,0,0,.18)",
+      "shadowOffline": "0 8px 24px rgba(0,0,0,.07)",
+      "borderOffline": "1.5px solid #e5e7eb",
+      "cardFlip": {
+        "enabled": true,
+        "durationMs": 420,
+        "curve": "easeInOutCubic",
+        "perspectiveDepth": 1200,
+        "axis": "y"
+      }
+    },
+    "typography": {
+      "productTitle": {
+        "fontSize": 13.5,
+        "fontWeight": 800,
+        "lineHeight": 1.28,
+        "letterSpacing": -0.01,
+        "colorOnline": "#ffffff",
+        "colorOffline": "#111827",
+        "lineClamp": 2
+      },
+      "brandText": {
+        "fontSize": 11,
+        "fontWeight": 600,
+        "lineHeight": 1.25,
+        "letterSpacing": 0.01,
+        "colorOnline": "rgba(255,255,255,.62)",
+        "colorOffline": "#9ca3af"
+      },
+      "deviceTypeText": {
+        "fontSize": 10,
+        "fontWeight": 600,
+        "lineHeight": 1.2,
+        "colorOnline": "rgba(255,255,255,.42)",
+        "colorOffline": "#cbd5e1"
+      },
+      "statusText": {
+        "fontSize": 10.5,
+        "fontWeight": 800,
+        "lineHeight": 1.2,
+        "colorOnline": "#a3e635",
+        "colorOffline": "#94a3b8"
+      },
+      "powerLabel": {
+        "fontSize": 12,
+        "fontWeight": 800,
+        "lineHeight": 1.2,
+        "colorOnline": "#ffffff",
+        "colorOffline": "#111827"
+      },
+      "summaryDate": {
+        "fontSize": 11,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "color": "#9ca3af"
+      },
+      "summaryTitle": {
+        "fontSize": 13,
+        "fontWeight": 800,
+        "lineHeight": 1.25,
+        "color": "#111827"
+      },
+      "summaryValue": {
+        "fontSize": 28,
+        "fontWeight": 900,
+        "lineHeight": 1.05,
+        "color": "#84cc16"
+      }
+    },
+    "icons": {
+      "smartHomeHeader": {
+        "viewBox": "0 0 24 24",
+        "width": 22,
+        "height": 22,
+        "strokeWidth": 1.8,
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round",
+        "fill": "none",
+        "paths": [
+          "M4 10.5 12 4l8 6.5",
+          "M6 9.5V20h12V9.5",
+          "M10 20v-5h4v5",
+          "M12 4v2",
+          "M16 7h2"
+        ],
+        "circles": [
+          {
+            "cx": 17,
+            "cy": 7,
+            "r": 1.2,
+            "fill": "currentColor",
+            "stroke": "none"
+          }
+        ],
+        "id": "smart-home",
+        "type": "svg",
+        "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M4 10.5 12 4l8 6.5\"/\u003E\u003Cpath d=\"M6 9.5V20h12V9.5\"/\u003E\u003Cpath d=\"M10 20v-5h4v5\"/\u003E\u003Cpath d=\"M12 4v2\"/\u003E\u003Cpath d=\"M16 7h2\"/\u003E\u003Ccircle cx=\"17\" cy=\"7\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/\u003E\u003C/svg\u003E"
+      },
+      "wifiSignal": {
+        "viewBox": "0 0 24 24",
+        "containerSize": 18,
+        "iconSize": 16,
+        "strokeWidth": 2,
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round",
+        "fill": "none",
+        "placement": {
+          "zone": "topRow",
+          "align": "right"
+        },
+        "colorOnline": "#ffffff",
+        "colorOffline": "#111827",
+        "opacityOnline": 0.55,
+        "opacityOffline": 0.28,
+        "paths": [
+          "M5 12.55a11 11 0 0 1 14.08 0",
+          "M8.53 16.11a6 6 0 0 1 6.95 0"
+        ],
+        "circles": [
+          {
+            "cx": 12,
+            "cy": 20,
+            "r": 1.5,
+            "fill": "currentColor",
+            "stroke": "none"
+          }
+        ],
+        "id": "wifi-signal",
+        "type": "svg",
+        "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M5 12.55a11 11 0 0 1 14.08 0\"/\u003E\u003Cpath d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"/\u003E\u003Ccircle cx=\"12\" cy=\"20\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/\u003E\u003C/svg\u003E"
+      },
+      "connectionArt": {
+        "viewBox": "0 0 24 24",
+        "containerSize": 58,
+        "iconSize": 28,
+        "strokeWidth": 2,
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round",
+        "fill": "none",
+        "placement": {
+          "zone": "topRow",
+          "align": "right"
+        },
+        "colorOnline": "#ffffff",
+        "colorOffline": "#111827",
+        "opacityOnline": 0.55,
+        "opacityOffline": 0.28,
+        "paths": [
+          "M5 12.55a11 11 0 0 1 14.08 0",
+          "M1.42 9a16 16 0 0 1 21.16 0",
+          "M8.53 16.11a6 6 0 0 1 6.95 0"
+        ],
+        "circles": [
+          {
+            "cx": 12,
+            "cy": 20,
+            "r": 1.5,
+            "fill": "currentColor",
+            "stroke": "none"
+          }
+        ],
+        "id": "connection-art",
+        "borderRadius": 18,
+        "type": "svg",
+        "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M5 12.55a11 11 0 0 1 14.08 0\"/\u003E\u003Cpath d=\"M1.42 9a16 16 0 0 1 21.16 0\"/\u003E\u003Cpath d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"/\u003E\u003Ccircle cx=\"12\" cy=\"20\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/\u003E\u003C/svg\u003E"
+      },
+      "addDevice": {
+        "viewBox": "0 0 24 24",
+        "width": 22,
+        "height": 22,
+        "strokeWidth": 2.2,
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round",
+        "fill": "none",
+        "paths": [
+          "M12 5v14",
+          "M5 12h14"
+        ],
+        "id": "add-device",
+        "type": "svg",
+        "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M12 5v14\"/\u003E\u003Cpath d=\"M5 12h14\"/\u003E\u003C/svg\u003E"
+      },
+      "qrcode": {
+        "viewBox": "0 0 24 24",
+        "width": 18,
+        "height": 18,
+        "strokeWidth": 2,
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round",
+        "fill": "none",
+        "paths": [
+          "M4 4h6v6H4z",
+          "M14 4h6v6h-6z",
+          "M4 14h6v6H4z",
+          "M14 14h3v3h-3z",
+          "M19 14h2v2h-2z",
+          "M14 19h2v2h-2z",
+          "M18 18h3v3h-3z"
+        ],
+        "id": "qrcode",
+        "type": "svg",
+        "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/\u003E\u003Crect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/\u003E\u003Crect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/\u003E\u003Cpath d=\"M14 14h3v3h-3z\"/\u003E\u003Cpath d=\"M19 14h2v2h-2z\"/\u003E\u003Cpath d=\"M14 19h2v2h-2z\"/\u003E\u003Cpath d=\"M18 18h3v3h-3z\"/\u003E\u003C/svg\u003E"
+      },
+      "catalog": {
+        "fan": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M12 9c0-3-2.5-6-5-5.5C4 4 3 7 5 9c1 1 4 1 4 1s-1 3 1 5c1.5 2 4.5 2 5.5.5C17 14 15 11 12 9z",
+            "M12 15c0 3 2.5 6 5 5.5C20 20 21 17 19 15c-1-1-4-1-4-1s1-3-1-5c-1.5-2-4.5-2-5.5-.5C7 10 9 13 12 15z"
+          ],
+          "circles": [
+            {
+              "cx": 12,
+              "cy": 12,
+              "r": 3
+            }
+          ],
+          "id": "fan",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M12 9c0-3-2.5-6-5-5.5C4 4 3 7 5 9c1 1 4 1 4 1s-1 3 1 5c1.5 2 4.5 2 5.5.5C17 14 15 11 12 9z\"/\u003E\u003Cpath d=\"M12 15c0 3 2.5 6 5 5.5C20 20 21 17 19 15c-1-1-4-1-4-1s1-3-1-5c-1.5-2-4.5-2-5.5-.5C7 10 9 13 12 15z\"/\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"/\u003E\u003C/svg\u003E"
+        },
+        "light": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M9 21h6",
+            "M12 3a6 6 0 0 1 4.24 10.24C15.5 14 15 15 15 16H9c0-1-.5-2-1.24-2.76A6 6 0 0 1 12 3z",
+            "M9 16v1a3 3 0 0 0 6 0v-1"
+          ],
+          "id": "light",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M9 21h6\"/\u003E\u003Cpath d=\"M12 3a6 6 0 0 1 4.24 10.24C15.5 14 15 15 15 16H9c0-1-.5-2-1.24-2.76A6 6 0 0 1 12 3z\"/\u003E\u003Cpath d=\"M9 16v1a3 3 0 0 0 6 0v-1\"/\u003E\u003C/svg\u003E"
+        },
+        "switch": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M9 7v3M15 7v3",
+            "M12 16v5M8 21h8"
+          ],
+          "rects": [
+            {
+              "x": 6,
+              "y": 3,
+              "width": 12,
+              "height": 13,
+              "rx": 2
+            }
+          ],
+          "id": "switch",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M9 7v3M15 7v3\"/\u003E\u003Cpath d=\"M12 16v5M8 21h8\"/\u003E\u003Crect x=\"6\" y=\"3\" width=\"12\" height=\"13\" rx=\"2\"/\u003E\u003C/svg\u003E"
+        },
+        "camera": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"
+          ],
+          "circles": [
+            {
+              "cx": 12,
+              "cy": 13,
+              "r": 3
+            }
+          ],
+          "id": "camera",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z\"/\u003E\u003Ccircle cx=\"12\" cy=\"13\" r=\"3\"/\u003E\u003C/svg\u003E"
+        },
+        "lock": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M7 11V7a5 5 0 0 1 10 0v4"
+          ],
+          "rects": [
+            {
+              "x": 3,
+              "y": 11,
+              "width": 18,
+              "height": 11,
+              "rx": 2
+            }
+          ],
+          "circles": [
+            {
+              "cx": 12,
+              "cy": 16,
+              "r": 1.5,
+              "fill": "currentColor",
+              "stroke": "none"
+            }
+          ],
+          "id": "lock",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M7 11V7a5 5 0 0 1 10 0v4\"/\u003E\u003Crect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/\u003E\u003Ccircle cx=\"12\" cy=\"16\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/\u003E\u003C/svg\u003E"
+        },
+        "thermo": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"
+          ],
+          "id": "thermo",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z\"/\u003E\u003C/svg\u003E"
+        },
+        "sensor": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49",
+            "M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"
+          ],
+          "circles": [
+            {
+              "cx": 12,
+              "cy": 12,
+              "r": 2
+            }
+          ],
+          "id": "sensor",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49\"/\u003E\u003Cpath d=\"M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14\"/\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"2\"/\u003E\u003C/svg\u003E"
+        },
+        "speaker": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "rects": [
+            {
+              "x": 4,
+              "y": 2,
+              "width": 16,
+              "height": 20,
+              "rx": 2
+            }
+          ],
+          "circles": [
+            {
+              "cx": 12,
+              "cy": 14,
+              "r": 4
+            },
+            {
+              "cx": 12,
+              "cy": 14,
+              "r": 1.5,
+              "fill": "currentColor",
+              "stroke": "none"
+            },
+            {
+              "cx": 12,
+              "cy": 6,
+              "r": 1
+            }
+          ],
+          "id": "speaker",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\"/\u003E\u003Ccircle cx=\"12\" cy=\"14\" r=\"4\"/\u003E\u003Ccircle cx=\"12\" cy=\"14\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/\u003E\u003Ccircle cx=\"12\" cy=\"6\" r=\"1\"/\u003E\u003C/svg\u003E"
+        },
+        "tv": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M8 21h8M12 17v4"
+          ],
+          "rects": [
+            {
+              "x": 2,
+              "y": 3,
+              "width": 20,
+              "height": 14,
+              "rx": 2
+            }
+          ],
+          "id": "tv",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M8 21h8M12 17v4\"/\u003E\u003Crect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\"/\u003E\u003C/svg\u003E"
+        },
+        "kitchen": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M7 5V3M12 5V3M17 5V3",
+            "M13 10h5M13 14h5"
+          ],
+          "rects": [
+            {
+              "x": 2,
+              "y": 5,
+              "width": 20,
+              "height": 14,
+              "rx": 2
+            }
+          ],
+          "circles": [
+            {
+              "cx": 8,
+              "cy": 12,
+              "r": 2.5
+            }
+          ],
+          "id": "kitchen",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M7 5V3M12 5V3M17 5V3\"/\u003E\u003Cpath d=\"M13 10h5M13 14h5\"/\u003E\u003Crect x=\"2\" y=\"5\" width=\"20\" height=\"14\" rx=\"2\"/\u003E\u003Ccircle cx=\"8\" cy=\"12\" r=\"2.5\"/\u003E\u003C/svg\u003E"
+        },
+        "washer": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M8 6h.01M11 6h.01M14 6h.01"
+          ],
+          "rects": [
+            {
+              "x": 3,
+              "y": 3,
+              "width": 18,
+              "height": 18,
+              "rx": 2
+            }
+          ],
+          "circles": [
+            {
+              "cx": 12,
+              "cy": 13,
+              "r": 4
+            }
+          ],
+          "id": "washer",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M8 6h.01M11 6h.01M14 6h.01\"/\u003E\u003Crect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/\u003E\u003Ccircle cx=\"12\" cy=\"13\" r=\"4\"/\u003E\u003C/svg\u003E"
+        },
+        "router": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M5 12.55a11 11 0 0 1 14.08 0",
+            "M1.42 9a16 16 0 0 1 21.16 0",
+            "M8.53 16.11a6 6 0 0 1 6.95 0"
+          ],
+          "circles": [
+            {
+              "cx": 12,
+              "cy": 20,
+              "r": 1.5,
+              "fill": "currentColor",
+              "stroke": "none"
+            }
+          ],
+          "id": "router",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M5 12.55a11 11 0 0 1 14.08 0\"/\u003E\u003Cpath d=\"M1.42 9a16 16 0 0 1 21.16 0\"/\u003E\u003Cpath d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"/\u003E\u003Ccircle cx=\"12\" cy=\"20\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/\u003E\u003C/svg\u003E"
+        },
+        "scanner": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2",
+            "M7 8v8M12 8v8M17 8v8"
+          ],
+          "id": "scanner",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2\"/\u003E\u003Cpath d=\"M7 8v8M12 8v8M17 8v8\"/\u003E\u003C/svg\u003E"
+        },
+        "energy": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M22 11v2",
+            "M7 11v2M11 11v2"
+          ],
+          "rects": [
+            {
+              "x": 2,
+              "y": 7,
+              "width": 16,
+              "height": 10,
+              "rx": 2
+            }
+          ],
+          "id": "energy",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M22 11v2\"/\u003E\u003Cpath d=\"M7 11v2M11 11v2\"/\u003E\u003Crect x=\"2\" y=\"7\" width=\"16\" height=\"10\" rx=\"2\"/\u003E\u003C/svg\u003E"
+        },
+        "device": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M9 3v2M12 3v2M15 3v2M9 19v2M12 19v2M15 19v2M3 9h2M3 12h2M3 15h2M19 9h2M19 12h2M19 15h2"
+          ],
+          "rects": [
+            {
+              "x": 7,
+              "y": 7,
+              "width": 10,
+              "height": 10,
+              "rx": 1
+            }
+          ],
+          "id": "device",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M9 3v2M12 3v2M15 3v2M9 19v2M12 19v2M15 19v2M3 9h2M3 12h2M3 15h2M19 9h2M19 12h2M19 15h2\"/\u003E\u003Crect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1\"/\u003E\u003C/svg\u003E"
+        }
+      },
+      "deviceTypeMap": [
+        {
+          "match": "fan|air|ventil|exhaust",
+          "iconId": "fan",
+          "label": "Fan"
+        },
+        {
+          "match": "light|lamp|bulb|led|tube",
+          "iconId": "light",
+          "label": "Light"
+        },
+        {
+          "match": "plug|socket|switch|outlet|relay",
+          "iconId": "switch",
+          "label": "Switch"
+        },
+        {
+          "match": "camera|cam|cctv|security|monitor",
+          "iconId": "camera",
+          "label": "Camera"
+        },
+        {
+          "match": "lock|door|gate|access",
+          "iconId": "lock",
+          "label": "Lock"
+        },
+        {
+          "match": "thermo|temp|heat|cool|hvac|ac|climate",
+          "iconId": "thermo",
+          "label": "Climate"
+        },
+        {
+          "match": "sensor|motion|pir|detect",
+          "iconId": "sensor",
+          "label": "Sensor"
+        },
+        {
+          "match": "speaker|audio|sound|music|alarm",
+          "iconId": "speaker",
+          "label": "Audio"
+        },
+        {
+          "match": "tv|tele|screen|display|projector",
+          "iconId": "tv",
+          "label": "Display"
+        },
+        {
+          "match": "cook|rice|oven|micro|kitchen|grill|toaster|kettle|coffee",
+          "iconId": "kitchen",
+          "label": "Kitchen"
+        },
+        {
+          "match": "wash|dryer|laundry|machine",
+          "iconId": "washer",
+          "label": "Appliance"
+        },
+        {
+          "match": "router|gateway|hub|wifi|network|bridge",
+          "iconId": "router",
+          "label": "Network"
+        },
+        {
+          "match": "scan|barcode|qr",
+          "iconId": "scanner",
+          "label": "Scanner"
+        },
+        {
+          "match": "battery|energy|meter|power|watt",
+          "iconId": "energy",
+          "label": "Energy"
+        },
+        {
+          "match": ".*",
+          "iconId": "device",
+          "label": "Device",
+          "default": true
+        }
+      ]
+    },
+    "ui": {
+      "matchPreview": true,
+      "visibleComponents": [
+        "iot-summary-card",
+        "iot-device-grid"
+      ],
+      "headerActions": [
+        {
+          "id": "addDevice",
+          "type": "iconButton",
+          "control": "addDeviceButton",
+          "icon": "addDevice",
+          "label": "Add device",
+          "ariaLabel": "Scan QR to add device",
+          "title": "Scan QR to add device",
+          "placement": {
+            "zone": "page.header",
+            "align": "right",
+            "replacesAvatar": true
+          },
+          "style": {
+            "width": 42,
+            "height": 42,
+            "borderRadius": 14,
+            "background": "linear-gradient(145deg,#2563eb,#1d4ed8)",
+            "color": "#ffffff",
+            "boxShadow": "0 8px 20px rgba(37,99,235,.28)"
+          },
+          "onTap": {
+            "action": "openOverlay",
+            "overlayId": "qrScannerModal"
+          }
+        }
+      ],
+      "overlayIds": [
+        "qrScannerModal"
+      ]
+    },
+    "overlays": {
+      "qrScannerModal": {
+        "id": "qrScannerModal",
+        "type": "qrScanner",
+        "presentation": "appScannerSheet",
+        "title": "Add Device",
+        "subtitle": "Align the QR code on your device inside the frame. We verify it, then register the WiFi node.",
+        "layout": {
+          "variant": "appScannerSheet",
+          "maxWidth": 420,
+          "sheetRadius": 24,
+          "scannerMinHeight": 340,
+          "align": "bottomOnMobile"
+        },
+        "responsiveLayout": {
+          "narrow": {
+            "layout": {
+              "maxWidth": "fill",
+              "sheetRadius": 20,
+              "scannerMinHeight": 260
+            },
+            "scanner": {
+              "qrbox": {
+                "width": 220,
+                "height": 220
+              }
+            }
+          },
+          "compact": {
+            "layout": {
+              "maxWidth": 420,
+              "sheetRadius": 24,
+              "scannerMinHeight": 300
+            },
+            "scanner": {
+              "qrbox": {
+                "width": 250,
+                "height": 250
+              }
+            }
+          },
+          "medium": {
+            "layout": {
+              "maxWidth": 520,
+              "sheetRadius": 28,
+              "scannerMinHeight": 360,
+              "align": "center"
+            },
+            "scanner": {
+              "qrbox": {
+                "width": 280,
+                "height": 280
+              }
+            }
+          },
+          "expanded": {
+            "layout": {
+              "maxWidth": 560,
+              "sheetRadius": 32,
+              "scannerMinHeight": 400,
+              "align": "center"
+            },
+            "scanner": {
+              "qrbox": {
+                "width": 300,
+                "height": 300
+              }
+            }
+          }
+        },
+        "theme": {
+          "accent": "#2563eb",
+          "scannerBg": "#05070c",
+          "frameAccent": "#3b82f6",
+          "backdrop": "rgba(15,23,42,.62)",
+          "heroGradient": [
+            "#eff6ff",
+            "#f8fafc"
+          ]
+        },
+        "header": {
+          "title": "Scan Device",
+          "closeIcon": "x",
+          "showBack": true,
+          "rightAction": {
+            "id": "manualNodeId",
+            "type": "iconButton",
+            "control": "manualNodeIdButton",
+            "icon": "qrcode",
+            "placement": "header.right",
+            "label": "I don't have QR",
+            "ariaLabel": "I don't have QR",
+            "title": "I don't have QR — enter node ID",
+            "style": {
+              "background": "#f1f5f9",
+              "color": "#2563eb",
+              "borderRadius": 12,
+              "padding": {
+                "top": 6,
+                "right": 10,
+                "bottom": 6,
+                "left": 10
+              },
+              "minHeight": 36,
+              "gap": 6,
+              "fontSize": 11,
+              "fontWeight": 800
+            },
+            "onTap": {
+              "action": "openPrompt",
+              "promptId": "manualNodeId"
+            }
+          }
+        },
+        "manualEntry": {
+          "id": "manualNodeId",
+          "type": "prompt",
+          "enabled": true,
+          "title": "Enter Node ID",
+          "subtitle": "Type the device node ID to connect. We verify it, then register the node — same as scanning the QR code.",
+          "statusMessage": "Node ID entered. Verifying device…",
+          "input": {
+            "id": "nodeId",
+            "name": "node_id",
+            "type": "text",
+            "label": "Node ID",
+            "placeholder": "Enter node ID",
+            "required": true,
+            "uppercase": true,
+            "errorMessage": "Please enter a Node ID.",
+            "autocapitalize": "off",
+            "autocomplete": "off",
+            "spellcheck": false
+          },
+          "actions": [
+            {
+              "id": "cancel",
+              "label": "Cancel",
+              "style": "ghost",
+              "onTap": {
+                "action": "closePrompt"
+              }
+            },
+            {
+              "id": "connect",
+              "label": "Connect",
+              "style": "primary",
+              "onTap": {
+                "action": "submitNodeId",
+                "source": "manualEntry.input",
+                "flow": [
+                  "checkDevice",
+                  "addWifiNode"
+                ],
+                "sameAsScan": true
+              }
+            }
+          ]
+        },
+        "hero": {
+          "kicker": "Add WiFi Node",
+          "subtitle": "Align the QR code on your device inside the frame. We verify it, then register the node.",
+          "icon": "qrFrame"
+        },
+        "scannerFrame": {
+          "cornerRadius": 28,
+          "cornerSize": 28,
+          "cornerBorder": 3,
+          "scanLine": true,
+          "vignette": true,
+          "aspectRatio": "1"
+        },
+        "steps": [
+          {
+            "id": "scan",
+            "label": "Scan"
+          },
+          {
+            "id": "checkDevice",
+            "label": "Verify"
+          },
+          {
+            "id": "addWifiNode",
+            "label": "Add"
+          }
+        ],
+        "statusPill": {
+          "showDot": true,
+          "idleClass": "",
+          "errorClass": "is-error",
+          "successClass": "is-success"
+        },
+        "scanner": {
+          "engine": "html5-qrcode",
+          "libraryUrl": "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js",
+          "facingMode": "environment",
+          "fps": 10,
+          "qrbox": {
+            "width": 250,
+            "height": 250
+          },
+          "hideLibraryFrame": true,
+          "normalize": {
+            "trim": true,
+            "jsonField": "node_id"
+          }
+        },
+        "location": {
+          "provider": "geolocation",
+          "required": false,
+          "fields": [
+            "latitude",
+            "longitude"
+          ],
+          "options": {
+            "enableHighAccuracy": true,
+            "timeout": 12000,
+            "maximumAge": 60000
+          }
+        },
+        "flow": [
+          {
+            "step": "scan",
+            "label": "Scan",
+            "statusMessage": "Point your camera at the device QR code…"
+          },
+          {
+            "step": "checkDevice",
+            "label": "Verify",
+            "dataSource": "checkDevice",
+            "statusMessage": "QR scanned. Verifying device…"
+          },
+          {
+            "step": "addWifiNode",
+            "label": "Add",
+            "dataSource": "addWifiNode",
+            "statusMessage": "Verified. Adding WiFi node…",
+            "successMessage": "Device added successfully.",
+            "refreshAfter": [
+              "getDevices",
+              "getAllNodesStatus"
+            ],
+            "closeDelayMs": 900,
+            "onSuccess": {
+              "showAlert": {
+                "title": "Device Added",
+                "message": "Device added successfully. You can now control it from My Devices.",
+                "style": "success"
+              },
+              "navigate": {
+                "action": "popToRoute",
+                "target": "iotDevices",
+                "route": "/iot/devices"
+              }
+            }
+          }
+        ],
+        "actions": [
+          {
+            "id": "cancel",
+            "label": "Cancel",
+            "style": "ghost",
+            "onTap": {
+              "action": "closeOverlay"
+            }
+          }
+        ],
+        "status": {
+          "errorClass": "is-error",
+          "successClass": "is-success"
+        }
+      }
+    },
+    "deviceFields": {
+      "identity": {
+        "product_id": "Unique efactorproduct row id (primary list key)",
+        "id": "Same as product_id — stable device list id",
+        "node_id": "Hardware node id — use for control APIs (power, card click)",
+        "user_id": "Owner user id"
+      },
+      "model": {
+        "model_id": "Model identifier (model_number, else model_name)",
+        "model_no": "Model number alias used by mobile apps (same as model_number)",
+        "modelName": "Model display name from DB model_name",
+        "modelNumber": "Model number from DB model_number",
+        "model_name": "Snake_case alias of modelName",
+        "model_number": "Snake_case alias of modelNumber",
+        "moduleType": "Connectivity module e.g. WIFI"
+      },
+      "node": {
+        "node.node_id": "Hardware node id",
+        "node.gateway_id": "Gateway id (add_gateway)",
+        "node.module_type": "Module type",
+        "node.is_added": "Whether device is added to gateway"
+      },
+      "product": {
+        "product_name": "User-facing product/display name",
+        "productName": "Device type label from device_type column",
+        "device_type": "Device type string",
+        "devicetype": "Alias of device_type",
+        "name": "Alias of product_name",
+        "prod_category": "Product category string",
+        "category_id": "Category id",
+        "product_category_name": "Resolved category name"
+      },
+      "brand": {
+        "brand_name": "Brand name",
+        "brandName": "Alias of brand_name",
+        "brandLogo": "Brand logo URL",
+        "brand_logo": "Alias of brandLogo",
+        "vendor_id": "Vendor/brand id",
+        "vendor_name": "Vendor name from DB"
+      },
+      "media": {
+        "productImage": "Product image URL",
+        "product_image": "Alias of productImage"
+      },
+      "status": {
+        "online": "Boolean online state",
+        "power": "Boolean power on state",
+        "status": "Online or Offline label"
+      },
+      "icons": {
+        "resolvedIconId": "Matched icon id from icons.catalog",
+        "resolvedIcon": "Full icon spec object",
+        "resolvedIconSvg": "Inline SVG markup for fallback"
+      },
+      "actions": {
+        "actions.onCardClick": "POST device_card_click with node_id",
+        "actions.onPowerToggle": "POST device_power_toggle with node_id"
+      }
+    },
+    "nodeFields": {
+      "node": {
+        "node_id": "Hardware node id — primary control key",
+        "devices": "Child device states attached to this node/gateway",
+        "status.connectivity.connected": "Online connectivity flag (string true/false legacy compatible)",
+        "status.connectivity.timestamp": "Unix epoch milliseconds"
+      },
+      "device": {
+        "devices[].id": "Device/node id used for control commands",
+        "devices[].power": "Boolean power state",
+        "devices[].name": "Runtime device name from model table"
+      }
+    },
+    "schemaContract": {
+      "version": "2.4.2",
+      "required": [
+        "schemaVersion",
+        "kind",
+        "auth",
+        "responsive",
+        "layout",
+        "theme",
+        "typography",
+        "icons",
+        "ui",
+        "overlays",
+        "deviceFields",
+        "nodeFields",
+        "page",
+        "dataSources",
+        "components",
+        "devices",
+        "metrics",
+        "infoPage"
+      ],
+      "dataSources": [
+        "getDevices",
+        "getAllNodesStatus",
+        "getSchema",
+        "cardClick",
+        "powerToggle",
+        "checkDevice",
+        "addWifiNode",
+        "refreshDevices",
+        "removeDevice"
+      ],
+      "components": [
+        "summaryCard",
+        "deviceGrid"
+      ],
+      "overlays": [
+        "qrScannerModal"
+      ],
+      "interactions": {
+        "addDevice": {
+          "type": "openOverlay",
+          "trigger": "ui.headerActions.addDevice.onTap",
+          "overlayId": "qrScannerModal",
+          "control": "addDeviceButton",
+          "flow": [
+            "scan",
+            "checkDevice",
+            "addWifiNode"
+          ],
+          "refreshAfter": [
+            "getDevices",
+            "getAllNodesStatus"
+          ],
+          "note": "Scan QR → checkDevice → addWifiNode. Replaces decorative header house icon."
+        },
+        "manualNodeId": {
+          "type": "openPrompt",
+          "trigger": "overlays.qrScannerModal.header.rightAction.onTap",
+          "overlayId": "qrScannerModal",
+          "promptId": "manualNodeId",
+          "control": "manualNodeIdButton",
+          "flow": [
+            "checkDevice",
+            "addWifiNode"
+          ],
+          "refreshAfter": [
+            "getDevices",
+            "getAllNodesStatus"
+          ],
+          "note": "Header QR button opens a node ID prompt. Submit runs the same checkDevice → addWifiNode flow as a scan."
+        },
+        "powerToggle": {
+          "type": "callApi",
+          "dataSource": "powerToggle",
+          "trigger": "deviceGrid.card.fields.powerToggle.onTap",
+          "control": "powerApiToggle",
+          "statePath": "device.power",
+          "alias": "device.powerOn",
+          "enabledWhen": "device.online",
+          "stopPropagation": true,
+          "refreshAfter": [
+            "getDevices",
+            "getAllNodesStatus"
+          ],
+          "mutation": {
+            "action": "device_power_toggle",
+            "method": "POST",
+            "body": {
+              "node_id": "{{device.node_id}}",
+              "command": "{{toggle_next|off:on}}",
+              "power": "{{toggle_next}}"
+            }
+          },
+          "note": "Functional control — POST device_power_toggle via dataSources.powerToggle. Binds to iot-toggle / powerApiToggle UI."
+        },
+        "removeDevice": {
+          "type": "callApi",
+          "dataSource": "removeDevice",
+          "trigger": "infoPage.screens.gatewayDetails.footerActions.deleteDevice",
+          "control": "device_info_delete_button",
+          "confirmBeforeExecute": true,
+          "confirmDialog": {
+            "title": "Delete Device",
+            "message": "Remove this device from your account? This cannot be undone.",
+            "confirmLabel": "Delete",
+            "cancelLabel": "Cancel",
+            "confirmStyle": "destructive"
+          },
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": {
+              "$secureState": "session.iotAccessToken"
+            }
+          },
+          "body": {
+            "node_id": "{{device.node_id}}"
+          },
+          "requestSchema": {
+            "type": "object",
+            "required": [
+              "node_id"
+            ],
+            "properties": {
+              "node_id": {
+                "type": "string",
+                "binding": "device.node_id"
+              }
+            }
+          },
+          "response": {
+            "successField": "success",
+            "statusField": "status",
+            "messageField": "message",
+            "nodeIdField": "node_id",
+            "devicesField": "devices"
+          },
+          "refreshAfter": [
+            "getDevices",
+            "getAllNodesStatus"
+          ],
+          "onSuccess": {
+            "showAlert": {
+              "title": "Device Deleted",
+              "message": "Device has been removed from your account.",
+              "style": "success"
+            },
+            "navigate": {
+              "action": "popToRoute",
+              "target": "iotDevices",
+              "route": "/iot/devices"
+            }
+          }
+        }
+      }
+    },
+    "page": {
+      "id": "iot-devices",
+      "title": "IoT Devices",
+      "route": "/iot/devices",
+      "layout": "mobile-device-grid",
+      "padding": {
+        "horizontal": 12,
+        "top": 14,
+        "bottom": 28
+      },
+      "scrollable": true,
+      "safeArea": true,
+      "keyboardAvoidance": false,
+      "responsiveLayout": {
+        "narrow": {
+          "padding": {
+            "horizontal": 10,
+            "top": 12,
+            "bottom": 24
+          },
+          "maxContentWidth": null
+        },
+        "compact": {
+          "padding": {
+            "horizontal": 12,
+            "top": 14,
+            "bottom": 28
+          },
+          "maxContentWidth": null
+        },
+        "medium": {
+          "padding": {
+            "horizontal": 20,
+            "top": 16,
+            "bottom": 32
+          },
+          "maxContentWidth": 720
+        },
+        "expanded": {
+          "padding": {
+            "horizontal": 32,
+            "top": 20,
+            "bottom": 40
+          },
+          "maxContentWidth": 1024
+        }
+      },
+      "header": {
+        "eyebrow": "Smart Home",
+        "title": "My Devices",
+        "subtitle": "2 products · 1 online",
+        "subtitleBind": {
+          "template": "{{page.summary.total}} products · {{page.summary.online}} online",
+          "computeFrom": "devices"
+        },
+        "style": {
+          "padding": {
+            "top": 4,
+            "right": 2,
+            "bottom": 12,
+            "left": 2
+          },
+          "gap": 10,
+          "eyebrow": {
+            "fontSize": 12,
+            "fontWeight": 600,
+            "lineHeight": 1.2,
+            "color": "#9ca3af"
+          },
+          "title": {
+            "fontSize": 22,
+            "fontWeight": 900,
+            "lineHeight": 1.08,
+            "color": "#111827"
+          },
+          "subtitle": {
+            "fontSize": 12,
+            "fontWeight": 400,
+            "lineHeight": 1.3,
+            "color": "#9ca3af"
+          },
+          "avatarSize": 42,
+          "avatarRadius": 14,
+          "avatarIconSize": 22
+        },
+        "action": {
+          "id": "addDevice",
+          "type": "iconButton",
+          "control": "addDeviceButton",
+          "icon": "addDevice",
+          "label": "Add device",
+          "ariaLabel": "Scan QR to add device",
+          "title": "Scan QR to add device",
+          "placement": {
+            "zone": "page.header",
+            "align": "right",
+            "replacesAvatar": true
+          },
+          "style": {
+            "width": 42,
+            "height": 42,
+            "borderRadius": 14,
+            "background": "linear-gradient(145deg,#2563eb,#1d4ed8)",
+            "color": "#ffffff",
+            "boxShadow": "0 8px 20px rgba(37,99,235,.28)"
+          },
+          "onTap": {
+            "action": "openOverlay",
+            "overlayId": "qrScannerModal"
+          }
+        },
+        "avatar": {
+          "type": "actionButton",
+          "icon": "addDevice",
+          "control": "addDeviceButton",
+          "background": "linear-gradient(145deg,#2563eb,#1d4ed8)",
+          "color": "#ffffff",
+          "ariaLabel": "Scan QR to add device",
+          "onTap": {
+            "action": "openOverlay",
+            "overlayId": "qrScannerModal"
+          }
+        }
+      },
+      "summary": {
+        "total": 2,
+        "online": 1,
+        "offline": 1,
+        "componentId": "iot-summary-card"
+      }
+    },
+    "dataSources": {
+      "getDevices": {
+        "id": "getDevices",
+        "label": "Fetch live device list",
+        "method": "GET",
+        "url": "https://efactor.tech/v8/iot_api_creation.php",
+        "query": {
+          "action": "get_iot_devices",
+          "access_token": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "auth": {
+          "type": "header",
+          "headerName": "Authorization",
+          "binding": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "response": {
+          "root": "devices",
+          "idField": "product_id",
+          "controlIdField": "node_id",
+          "sort": "onlineFirst"
+        }
+      },
+      "getAllNodesStatus": {
+        "id": "getAllNodesStatus",
+        "label": "Fetch live node connectivity and power states",
+        "method": "GET",
+        "url": "https://efactor.tech/v8/iot_api_creation.php",
+        "query": {
+          "action": "getAllNodesStatus",
+          "access_token": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "auth": {
+          "type": "header",
+          "headerName": "Authorization",
+          "binding": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "response": {
+          "root": "all_nodes",
+          "nodeIdField": "node_id",
+          "connectivityPath": "status.connectivity.connected",
+          "devicesPath": "devices",
+          "deviceIdField": "id",
+          "devicePowerField": "power",
+          "mergeInto": "devices"
+        }
+      },
+      "getSchema": {
+        "id": "getSchema",
+        "label": "Fetch saved dashboard schema",
+        "method": "GET",
+        "url": "https://efactor.tech/v8/iot_api_creation.php",
+        "query": {
+          "action": "get_iot_schema",
+          "access_token": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "auth": {
+          "type": "header",
+          "headerName": "Authorization",
+          "binding": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "response": {
+          "root": "schema",
+          "devicesPath": "schema.devices"
+        }
+      },
+      "cardClick": {
+        "id": "cardClick",
+        "label": "Device card tap event",
+        "method": "POST",
+        "url": "https://efactor.tech/v8/iot_api_creation.php",
+        "query": {
+          "action": "device_card_click",
+          "access_token": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "auth": {
+          "type": "header",
+          "headerName": "Authorization",
+          "binding": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "body": {
+          "node_id": "{{device.node_id}}"
+        }
+      },
+      "powerToggle": {
+        "id": "powerToggle",
+        "label": "Device power toggle command",
+        "kind": "mutation",
+        "method": "POST",
+        "url": "https://efactor.tech/index.php/iot-dashboard/api/device-power-toggle",
+        "query": [],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "auth": {
+          "type": "session",
+          "note": "Web clients POST to logged-in session proxy with server-resolved token."
+        },
+        "body": {
+          "node_id": "{{device.node_id}}",
+          "command": "{{toggle_next|off:on}}",
+          "power": "{{toggle_next}}"
+        },
+        "response": {
+          "successField": "success",
+          "powerField": "power",
+          "commandField": "command",
+          "nodeIdField": "node_id"
+        },
+        "webProxy": {
+          "method": "POST",
+          "path": "device-power-toggle",
+          "preferSession": true,
+          "dashboardBase": "https://efactor.tech/index.php/iot-dashboard/api",
+          "appHomeBase": "https://efactor.tech/index.php/app-home-page/api"
+        },
+        "nativeApi": {
+          "method": "POST",
+          "url": "https://efactor.tech/v8/iot_api_creation.php",
+          "query": {
+            "action": "device_power_toggle"
+          },
+          "headers": {
+            "Authorization": {
+              "$secureState": "session.iotAccessToken"
+            }
+          },
+          "note": "Flutter native: Bearer token in Authorization header."
+        },
+        "refreshAfter": [
+          "getDevices",
+          "getAllNodesStatus"
+        ],
+        "optimisticUpdate": {
+          "statePath": "device.power",
+          "alias": "device.powerOn",
+          "mode": "toggle"
+        },
+        "bindContract": {
+          "statePath": "device.power",
+          "alias": "device.powerOn",
+          "valueType": "boolean",
+          "trueValues": [true, 1, "1",
+            "01",
+            "true",
+            "yes",
+            "on"
+          ],
+          "falseValues": [false, 0, "0",
+            "false",
+            "no",
+            "off"
+          ],
+          "uiOnClass": "is-on",
+          "enabledWhen": "{{device.online}}"
+        },
+        "enabledWhen": "{{device.online}}",
+        "deviceActionFallback": "device.actions.onPowerToggle"
+      },
+      "checkDevice": {
+        "id": "checkDevice",
+        "label": "Verify scanned device node",
+        "kind": "mutation",
+        "method": "POST",
+        "url": "https://efactor.tech/v8/iot_api_creation.php",
+        "query": {
+          "action": "check_device"
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "auth": {
+          "type": "header",
+          "headerName": "Authorization",
+          "binding": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "body": {
+          "node_id": "{{scan.node_id}}",
+          "latitude": "{{location.latitude}}",
+          "longitude": "{{location.longitude}}"
+        },
+        "response": {
+          "successField": "success",
+          "messageField": "message",
+          "statusField": "status",
+          "nodeIdField": "node_id",
+          "deviceTypeField": "device_type",
+          "modelNumberField": "model_number",
+          "statusValues": {
+            "available": "success",
+            "alreadyClaimed": "already_claimed",
+            "notFound": "not_found"
+          }
+        },
+        "note": "POST https://efactor.tech/v8/iot_api_creation.php?action=check_device — Authorization header, JSON body {node_id, latitude, longitude}."
+      },
+      "addWifiNode": {
+        "id": "addWifiNode",
+        "label": "Add verified WiFi node to account",
+        "kind": "mutation",
+        "method": "POST",
+        "url": "https://efactor.tech/v8/iot_api_creation.php",
+        "query": {
+          "action": "add_wifi_node",
+          "node_id": "{{scan.node_id}}"
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "auth": {
+          "type": "header",
+          "headerName": "Authorization",
+          "binding": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "body": {
+          "node_id": "{{scan.node_id}}",
+          "latitude": "{{location.latitude}}",
+          "longitude": "{{location.longitude}}"
+        },
+        "response": {
+          "successField": "success",
+          "statusField": "status",
+          "messageField": "message",
+          "successStatusValue": "success",
+          "nodeIdField": "node_id",
+          "deviceNameField": "device_name",
+          "visibleAfterAdd": "visibleAfterAdd",
+          "devicesField": "devices",
+          "totalField": "total",
+          "onlineField": "online",
+          "offlineField": "offline"
+        },
+        "refreshAfter": [
+          "getDevices",
+          "getAllNodesStatus"
+        ],
+        "note": "POST https://efactor.tech/v8/iot_api_creation.php?action=add_wifi_node&node_id={node_id} — Authorization header, JSON body {node_id, latitude, longitude}."
+      },
+      "refreshDevices": {
+        "id": "refreshDevices",
+        "label": "Reload devices after QR add",
+        "kind": "query",
+        "method": "GET",
+        "url": "https://efactor.tech/v8/iot_api_creation.php",
+        "query": {
+          "action": "get_iot_devices",
+          "access_token": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "headers": {
+          "Authorization": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "auth": {
+          "type": "header",
+          "headerName": "Authorization",
+          "binding": {
+            "$secureState": "session.iotAccessToken"
+          }
+        },
+        "response": {
+          "successField": "success",
+          "root": "devices",
+          "devicesField": "devices",
+          "idField": "product_id",
+          "sort": "onlineFirst"
+        },
+        "webProxy": {
+          "method": "GET",
+          "path": "iot-devices",
+          "preferSession": true,
+          "appHomeBase": "https://efactor.tech/index.php/app-home-page/api",
+          "dashboardBase": "https://efactor.tech/index.php/iot-dashboard/api/devices",
+          "note": "Web-session proxy — do NOT use for mobile clients without a session cookie."
+        }
+      },
+      "removeDevice": {
+        "id": "removeDevice",
+        "label": "Remove device node from account",
+        "kind": "mutation",
+        "method": "POST",
+        "url": "https://efactor.tech/index.php/app-home-page/api/remove-node",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "auth": {
+          "type": "session",
+          "headerName": "Authorization",
+          "credentials": "same-origin",
+          "note": "CI session proxy — resolves token server-side from logged-in user."
+        },
+        "body": {
+          "node_id": "{{device.node_id}}"
+        },
+        "requestSchema": {
+          "type": "object",
+          "required": [
+            "node_id"
+          ],
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "description": "The node_id of the device to remove. Must be the runtime device.node_id — never a schema-time constant.",
+              "binding": "device.node_id"
+            }
+          }
+        },
+        "response": {
+          "successField": "success",
+          "messageField": "message",
+          "statusField": "status",
+          "nodeIdField": "node_id",
+          "devicesField": "devices",
+          "totalField": "total",
+          "onlineField": "online",
+          "offlineField": "offline"
+        },
+        "confirmBeforeExecute": true,
+        "refreshAfter": [
+          "getDevices",
+          "getAllNodesStatus"
+        ],
+        "webProxy": {
+          "method": "POST",
+          "path": "remove-node",
+          "preferSession": true,
+          "appHomeBase": "https://efactor.tech/index.php/app-home-page/api",
+          "body": {
+            "node_id": "{{device.node_id}}"
+          }
+        },
+        "nativeApi": {
+          "method": "POST",
+          "url": "https://efactor.tech/v8/iot_api_creation.php",
+          "query": {
+            "action": "remove_node"
+          },
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": {
+              "$secureState": "session.iotAccessToken"
+            }
+          },
+          "body": {
+            "node_id": "{{device.node_id}}"
+          },
+          "note": "Flutter native: Bearer token in Authorization header, node_id in JSON body only."
+        },
+        "note": "POST app-home-page/api/remove-node (web proxy) or v8/iot_api_creation.php?action=remove_node (native). Authorization header, JSON body {node_id}. Response includes refreshed devices[]."
+      }
+    },
+    "components": [
+      {
+        "type": "summaryCard",
+        "id": "iot-summary-card",
+        "style": {
+          "padding": {
+            "top": 14,
+            "right": 16,
+            "bottom": 14,
+            "left": 16
+          },
+          "borderRadius": 24,
+          "background": "#ffffff",
+          "shadow": "0 8px 24px rgba(0,0,0,.06)",
+          "marginBottom": 14,
+          "gap": 12
+        },
+        "layout": {
+          "type": "row",
+          "justify": "space-between",
+          "align": "center"
+        },
+        "responsiveLayout": {
+          "narrow": {
+            "style": {
+              "padding": {
+                "top": 12,
+                "right": 12,
+                "bottom": 12,
+                "left": 12
+              }
+            }
+          },
+          "compact": {
+            "style": {
+              "padding": {
+                "top": 14,
+                "right": 16,
+                "bottom": 14,
+                "left": 16
+              }
+            }
+          },
+          "medium": {
+            "style": {
+              "padding": {
+                "top": 16,
+                "right": 20,
+                "bottom": 16,
+                "left": 20
+              }
+            }
+          },
+          "expanded": {
+            "style": {
+              "padding": {
+                "top": 18,
+                "right": 24,
+                "bottom": 18,
+                "left": 24
+              }
+            }
+          }
+        },
+        "zones": [
+          {
+            "id": "left",
+            "fields": [
+              {
+                "id": "dateLabel",
+                "type": "text",
+                "bind": "generatedDate",
+                "typography": "summaryDate"
+              },
+              {
+                "id": "title",
+                "type": "text",
+                "value": "Connected Devices",
+                "typography": "summaryTitle"
+              },
+              {
+                "id": "onlineValue",
+                "type": "metric",
+                "bind": "page.summary.online",
+                "suffix": "online",
+                "typography": "summaryValue",
+                "computeFrom": "devices",
+                "compute": "countOnline"
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "fields": [
+              {
+                "id": "connectionIcon",
+                "type": "icon",
+                "icon": "connectionArt",
+                "container": {
+                  "width": 58,
+                  "height": 58,
+                  "borderRadius": 18,
+                  "background": "linear-gradient(145deg,#ecfccb,#d9f99d)",
+                  "color": "#65a30d"
+                }
+              }
+            ]
+          }
+        ],
+        "data": {
+          "total": 2,
+          "online": 1
+        }
+      },
+      {
+        "type": "deviceGrid",
+        "id": "iot-device-grid",
+        "columns": 2,
+        "gap": 12,
+        "sort": "onlineFirst",
+        "dataSource": "getDevices",
+        "liveStatusSource": "getAllNodesStatus",
+        "refreshWith": [
+          "getDevices",
+          "getAllNodesStatus"
+        ],
+        "responsiveLayout": {
+          "narrow": {
+            "columns": 2,
+            "gap": 10
+          },
+          "compact": {
+            "columns": 2,
+            "gap": 12
+          },
+          "medium": {
+            "columns": 3,
+            "gap": 14
+          },
+          "expanded": {
+            "columns": 4,
+            "gap": 16
+          }
+        },
+        "card": {
+          "clickable": true,
+          "minHeight": 168,
+          "borderRadius": 24,
+          "padding": {
+            "top": 14,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "accessLabel": "{{device.product_name}}, {{device.brand_name}}, {{device.status}}",
+          "flip": {
+            "enabled": true,
+            "axis": "y",
+            "durationMs": 420,
+            "curve": "easeInOutCubic",
+            "perspectiveDepth": 1200,
+            "trigger": "onTap",
+            "backTrigger": "onTap",
+            "backFace": {
+              "borderRadius": 24,
+              "padding": {
+                "top": 14,
+                "right": 12,
+                "bottom": 12,
+                "left": 12
+              },
+              "background": {
+                "online": "linear-gradient(145deg,#1a2035,#0f172a)",
+                "offline": "linear-gradient(145deg,#f0f4f8,#e2e8f0)"
+              },
+              "layout": {
+                "type": "column",
+                "justify": "space-between",
+                "gap": 8
+              },
+              "zones": [
+                {
+                  "id": "backHeader",
+                  "layout": {
+                    "type": "row",
+                    "justify": "space-between",
+                    "align": "center"
+                  },
+                  "fields": [
+                    "backNodeId",
+                    "backStatus"
+                  ]
+                },
+                {
+                  "id": "backCenter",
+                  "layout": {
+                    "type": "column",
+                    "align": "center",
+                    "gap": 10
+                  },
+                  "fields": [
+                    "backDeviceIcon",
+                    "backPowerToggle"
+                  ]
+                },
+                {
+                  "id": "backFooter",
+                  "layout": {
+                    "type": "row",
+                    "justify": "center",
+                    "gap": 12
+                  },
+                  "fields": [
+                    "backFlipHint"
+                  ]
+                }
+              ],
+              "fields": {
+                "backNodeId": {
+                  "type": "text",
+                  "value": "{{device.node_id_plain}}",
+                  "typography": {
+                    "fontSize": 9,
+                    "fontWeight": 700,
+                    "letterSpacing": 0.04,
+                    "colorOnline": "rgba(255,255,255,.45)",
+                    "colorOffline": "#94a3b8"
+                  }
+                },
+                "backStatus": {
+                  "type": "status",
+                  "value": "{{device.status}}",
+                  "typography": "statusText",
+                  "dot": {
+                    "diameter": 6,
+                    "borderRadius": 3,
+                    "online": {
+                      "color": "#84cc16",
+                      "glow": "0 0 0 3px rgba(132,204,22,.22)"
+                    },
+                    "offline": {
+                      "color": "#cbd5e1"
+                    }
+                  }
+                },
+                "backDeviceIcon": {
+                  "type": "deviceIcon",
+                  "resolveFrom": "device_type|product_name",
+                  "map": "icons.deviceTypeMap",
+                  "catalog": "icons.catalog",
+                  "iconSize": 36,
+                  "strokeOnline": "#a3e635",
+                  "strokeOffline": "#94a3b8",
+                  "container": {
+                    "width": 64,
+                    "height": 64,
+                    "borderRadius": 20,
+                    "online": {
+                      "background": "rgba(132,204,22,.12)"
+                    },
+                    "offline": {
+                      "background": "rgba(148,163,184,.10)"
+                    }
+                  }
+                },
+                "backPowerToggle": {
+                  "type": "toggle",
+                  "role": "button",
+                  "control": "powerApiToggle",
+                  "linkedDataSource": "powerToggle",
+                  "interactive": true,
+                  "enabledWhen": "{{device.online}}",
+                  "bind": "{{device.power}}",
+                  "width": 52,
+                  "height": 30,
+                  "borderRadius": 999,
+                  "thumb": {
+                    "diameter": 24,
+                    "offset": 3,
+                    "translateXOn": 22,
+                    "shadow": "0 2px 6px rgba(0,0,0,.25)"
+                  },
+                  "track": {
+                    "onlineOn": {
+                      "background": "#84cc16"
+                    },
+                    "onlineOff": {
+                      "background": "rgba(255,255,255,.18)"
+                    },
+                    "offline": {
+                      "background": "#e2e8f0",
+                      "disabled": true
+                    }
+                  },
+                  "thumbColors": {
+                    "onlineOn": "#ffffff",
+                    "onlineOff": "#ffffff",
+                    "offlineOn": "#ffffff",
+                    "offlineOff": "#cbd5e1"
+                  },
+                  "stopPropagation": true,
+                  "action": {
+                    "type": "callApi",
+                    "source": "powerToggle",
+                    "stopPropagation": true,
+                    "refreshAfter": [
+                      "getDevices",
+                      "getAllNodesStatus"
+                    ]
+                  }
+                },
+                "backFlipHint": {
+                  "type": "text",
+                  "value": "Tap to flip back",
+                  "typography": {
+                    "fontSize": 9,
+                    "fontWeight": 600,
+                    "colorOnline": "rgba(255,255,255,.28)",
+                    "colorOffline": "#cbd5e1"
+                  }
+                }
+              }
+            }
+          },
+          "zones": [
+            {
+              "id": "topRow",
+              "marginBottom": 10,
+              "layout": {
+                "type": "row",
+                "justify": "space-between",
+                "align": "center"
+              },
+              "fields": [
+                "brandLogo",
+                "wifiSignal"
+              ]
+            },
+            {
+              "id": "titleBlock",
+              "marginBottom": 6,
+              "fields": [
+                "product_name",
+                "brandName",
+                "model_no",
+                "device_type"
+              ]
+            },
+            {
+              "id": "productImage",
+              "paddingTop": 4,
+              "paddingBottom": 6,
+              "minHeight": 48,
+              "fields": [
+                "productImage"
+              ]
+            },
+            {
+              "id": "statusRow",
+              "marginBottom": 8,
+              "fields": [
+                "statusPill"
+              ]
+            },
+            {
+              "id": "footer",
+              "paddingTop": 2,
+              "gap": 8,
+              "layout": {
+                "type": "row",
+                "justify": "space-between",
+                "align": "center"
+              },
+              "fields": [
+                "powerLabel",
+                "powerToggle"
+              ]
+            }
+          ],
+          "fields": {
+            "brandLogo": {
+              "type": "image",
+              "src": "{{device.brandLogo}}",
+              "width": 38,
+              "height": 38,
+              "borderRadius": 19,
+              "objectFit": "cover",
+              "container": {
+                "online": {
+                  "background": "#ffffff"
+                },
+                "offline": {
+                  "background": "#111827"
+                }
+              },
+              "fallbackChain": [
+                {
+                  "type": "deviceIcon",
+                  "resolveFrom": "device_type|product_name|brand_name",
+                  "map": "icons.deviceTypeMap",
+                  "catalog": "icons.catalog",
+                  "iconSize": 20
+                },
+                {
+                  "type": "initial",
+                  "resolveFrom": "brand_name",
+                  "typography": {
+                    "fontSize": 14,
+                    "fontWeight": 900
+                  }
+                }
+              ]
+            },
+            "wifiSignal": {
+              "viewBox": "0 0 24 24",
+              "containerSize": 18,
+              "iconSize": 16,
+              "strokeWidth": 2,
+              "strokeLinecap": "round",
+              "strokeLinejoin": "round",
+              "fill": "none",
+              "placement": {
+                "zone": "topRow",
+                "align": "right"
+              },
+              "colorOnline": "#ffffff",
+              "colorOffline": "#111827",
+              "opacityOnline": 0.55,
+              "opacityOffline": 0.28,
+              "paths": [
+                "M5 12.55a11 11 0 0 1 14.08 0",
+                "M8.53 16.11a6 6 0 0 1 6.95 0"
+              ],
+              "circles": [
+                {
+                  "cx": 12,
+                  "cy": 20,
+                  "r": 1.5,
+                  "fill": "currentColor",
+                  "stroke": "none"
+                }
+              ],
+              "id": "wifi-signal",
+              "type": "svg",
+              "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M5 12.55a11 11 0 0 1 14.08 0\"/\u003E\u003Cpath d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"/\u003E\u003Ccircle cx=\"12\" cy=\"20\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/\u003E\u003C/svg\u003E"
+            },
+            "product_name": {
+              "type": "text",
+              "value": "{{device.product_name}}",
+              "typography": "productTitle"
+            },
+            "brandName": {
+              "type": "text",
+              "value": "{{device.brand_name}}",
+              "typography": "brandText"
+            },
+            "model_no": {
+              "type": "text",
+              "bind": "device.model_no",
+              "value": "{{device.model_no}}",
+              "fallback": "{{device.model_number}}",
+              "showWhen": "{{device.model_no != \"\" || device.model_number != \"\"}}",
+              "typography": "deviceTypeText"
+            },
+            "device_type": {
+              "type": "text",
+              "value": "{{device.device_type}}",
+              "showWhen": "{{device.device_type != device.product_name}}",
+              "typography": "deviceTypeText"
+            },
+            "productImage": {
+              "type": "image",
+              "src": "{{device.productImage}}",
+              "height": 48,
+              "objectFit": "contain",
+              "borderRadius": 8,
+              "container": {
+                "width": 48,
+                "height": 48,
+                "borderRadius": 14,
+                "online": {
+                  "background": "rgba(255,255,255,.1)"
+                },
+                "offline": {
+                  "background": "#f3f4f6",
+                  "border": "1px dashed #e5e7eb"
+                }
+              },
+              "fallback": {
+                "type": "deviceIcon",
+                "resolveFrom": "device_type|product_name",
+                "map": "icons.deviceTypeMap",
+                "catalog": "icons.catalog",
+                "iconSize": 24,
+                "strokeOnline": "#a3e635",
+                "strokeOffline": "#9ca3af"
+              }
+            },
+            "statusPill": {
+              "type": "status",
+              "value": "{{device.status}}",
+              "typography": "statusText",
+              "dot": {
+                "diameter": 6,
+                "borderRadius": 3,
+                "online": {
+                  "color": "#84cc16",
+                  "glow": "0 0 0 3px rgba(132,204,22,.22)"
+                },
+                "offline": {
+                  "color": "#cbd5e1"
+                }
+              }
+            },
+            "powerLabel": {
+              "type": "text",
+              "valueOnline": "On",
+              "valueOffline": "Off",
+              "bindPower": "{{device.power}}",
+              "typography": "powerLabel"
+            },
+            "powerToggle": {
+              "type": "toggle",
+              "role": "button",
+              "control": "powerApiToggle",
+              "linkedDataSource": "powerToggle",
+              "interactive": true,
+              "enabledWhen": "{{device.online}}",
+              "bind": "{{device.power}}",
+              "bindContract": {
+                "statePath": "device.power",
+                "alias": "device.powerOn",
+                "valueType": "boolean",
+                "trueValues": [true, 1, "1",
+                  "01",
+                  "true",
+                  "yes",
+                  "on"
+                ],
+                "falseValues": [false, 0, "0",
+                  "false",
+                  "no",
+                  "off"
+                ],
+                "uiOnClass": "is-on",
+                "enabledWhen": "{{device.online}}"
+              },
+              "mutation": {
+                "dataSource": "powerToggle",
+                "action": "device_power_toggle",
+                "method": "POST",
+                "bodyTemplate": {
+                  "node_id": "{{device.node_id}}",
+                  "command": "{{toggle_next|off:on}}",
+                  "power": "{{toggle_next}}"
+                },
+                "responsePowerField": "power",
+                "refreshAfter": [
+                  "getDevices",
+                  "getAllNodesStatus"
+                ]
+              },
+              "width": 44,
+              "height": 26,
+              "borderRadius": 999,
+              "thumb": {
+                "diameter": 20,
+                "offset": 3,
+                "translateXOn": 18,
+                "shadow": "0 2px 6px rgba(0,0,0,.18)"
+              },
+              "track": {
+                "onlineOn": {
+                  "background": "rgba(255,255,255,.92)"
+                },
+                "onlineOff": {
+                  "background": "rgba(255,255,255,.92)"
+                },
+                "offline": {
+                  "background": "#e5e7eb",
+                  "disabled": true
+                }
+              },
+              "thumbColors": {
+                "onlineOn": "#1c1c1e",
+                "onlineOff": "#ffffff",
+                "offlineOn": "#ffffff",
+                "offlineOff": "#ffffff"
+              },
+              "stopPropagation": true,
+              "action": {
+                "type": "callApi",
+                "source": "powerToggle",
+                "stopPropagation": true,
+                "refreshAfter": [
+                  "getDevices",
+                  "getAllNodesStatus"
+                ]
+              },
+              "onTap": {
+                "action": "callApi",
+                "source": "powerToggle",
+                "stopPropagation": true,
+                "refreshAfter": [
+                  "getDevices",
+                  "getAllNodesStatus"
+                ]
+              },
+              "deviceActionFallback": "device.actions.onPowerToggle"
+            }
+          },
+          "states": {
+            "online": {
+              "class": "is-online",
+              "background": "#1c1c1e",
+              "color": "#ffffff",
+              "shadow": "0 12px 28px rgba(0,0,0,.18)"
+            },
+            "offline": {
+              "class": "is-offline",
+              "background": "#ffffff",
+              "color": "#111827",
+              "shadow": "0 8px 24px rgba(0,0,0,.07)",
+              "border": "1.5px solid #e5e7eb",
+              "imageFilter": "grayscale(.35)",
+              "imageOpacity": 0.72
+            },
+            "selected": {
+              "class": "is-selected",
+              "outline": "3px solid rgba(132,204,22,.55)",
+              "outlineOffset": 2
+            }
+          },
+          "onTap": {
+            "action": "callApi",
+            "source": "cardClick"
+          }
+        }
+      }
+    ],
+    "devices": [
+      {
+        "product_id": "1457",
+        "id": "1457",
+        "user_id": 655,
+        "node_id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+        "vendor_name": "Skytec",
+        "vendor_id": "",
+        "category_id": "",
+        "prod_category": "Efactor Module A",
+        "product_category_name": "FAN",
+        "devicetype": "fan",
+        "device_type": "fan",
+        "productName": "fan",
+        "product_name": "fan_7E0005E8",
+        "name": "fan_7E0005E8",
+        "brandName": "Skytec",
+        "brand_name": "Skytec",
+        "brandLogo": "",
+        "brand_logo": "",
+        "productImage": "https://efactor.tech/files/brand_logo/fan_org.png",
+        "product_image": "https://efactor.tech/files/brand_logo/fan_org.png",
+        "status": "Online",
+        "online": true,
+        "power": true,
+        "powerOn": true,
+        "model_id": "EF-003FMN03",
+        "model_no": "EF-003FMN03",
+        "modelName": "EF-003FMN03",
+        "modelNumber": "EF-003FMN03",
+        "model_name": "EF-003FMN03",
+        "model_number": "EF-003FMN03",
+        "moduleType": "WIFI",
+        "gatewayId": "",
+        "isAdded": "",
+        "node": {
+          "node_id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+          "gateway_id": "",
+          "module_type": "WIFI",
+          "is_added": ""
+        },
+        "actions": {
+          "onCardClick": {
+            "method": "POST",
+            "url": "https://efactor.tech/v8/iot_api_creation.php?action=device_card_click",
+            "body": {
+              "node_id": "FFFFFFFFFFFFFFFF7EC200000005E800"
+            }
+          },
+          "onPowerToggle": {
+            "method": "POST",
+            "url": "https://efactor.tech/v8/iot_api_creation.php?action=device_power_toggle",
+            "headers": {
+              "Content-Type": "application/json",
+              "X-IOT-Access-Token": "{{auth.access_token}}"
+            },
+            "body": {
+              "node_id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+              "command": "{{toggle_next|off:on}}",
+              "power": "{{toggle_next}}"
+            },
+            "refreshAfter": [
+              "getDevices",
+              "getAllNodesStatus"
+            ],
+            "responsePowerField": "power"
+          }
+        },
+        "page_names": "Status",
+        "Page Names": "Status",
+        "payload": "DEE7010601000100FE0100013141A26666C0023D7141CC7AE10100000001004D42000A",
+        "module_type": "WIFI",
+        "Module Type": "WIFI",
+        "timestamp": "2025-03-25 11:42:28",
+        "ping": "set",
+        "latitude": 17.4312833,
+        "longitude": 78.5441333,
+        "signin_latitude": 17.4311614,
+        "Signin Latitude": 17.4311614,
+        "signin_longitude": 78.5444599,
+        "Signin Longitude": 78.5444599,
+        "app_version": "v8",
+        "App Version": "v8",
+        "fw_version": "8.0.6",
+        "Fw Version": "8.0.6",
+        "add_node_time": "2025-03-25 11:42:28",
+        "Add Node Time": "2025-03-25 11:42:28",
+        "network_info": "OK",
+        "Network Info": "OK",
+        "selected": 1,
+        "SUID": "DEE7010301000000",
+        "DUID": "000100011E4147BB",
+        "UDP_CMD": "BC",
+        "Udp Cmd": "BC",
+        "UDP_ACK": "BF",
+        "Udp Ack": "BF",
+        "MEDIA": "B7",
+        "Frame": "AE",
+        "FID": 14,
+        "UserID": "41C7999A",
+        "SDUID_Enable": 0,
+        "Sduid Enable": 0,
+        "UID_DATA": "000001005441000A",
+        "Uid Data": "000001005441000A",
+        "baudrate": 115200,
+        "uartmsgid": 0,
+        "errorcode": 0,
+        "Power": 1,
+        "Speed": 6,
+        "Direction": 1,
+        "Buzzer": 1,
+        "rpm": 131,
+        "Current": "C0023D71",
+        "Voltage": "41CC7AE1",
+        "Command Get Status": true,
+        "SendData": 0,
+        "DisplayLog": 0,
+        "Display Log": 0,
+        "Display": 0,
+        "Resistance": 40133333,
+        "Imin": 40466666,
+        "Imax": 40600000,
+        "Frequence": 9.223372036854776e+18,
+        "PolePairs": 8,
+        "Open_Loop_Current": "3FC00000",
+        "Open Loop Current": "3FC00000",
+        "PowerLimit": "2C",
+        "TorqueLimit": "00001B58",
+        "Speed1": 4,
+        "Speed2": 7,
+        "Speed3": "0B",
+        "Speed4": 11,
+        "Speed5": 17,
+        "Speed6": "1A",
+        "Speed7": "1B",
+        "Color": 0,
+        "Lamp": 1,
+        "Timer": 0,
+        "DimmingLevel": "FE",
+        "Fan_enable/disable": 1,
+        "Fan Enable/disable": 1,
+        "Remote_lock/unlock": 0,
+        "Remote Lock/unlock": 0,
+        "Watt": "41A26666",
+        "vacrms": 1000000,
+        "Remote Address": "004D4200",
+        "configure_node": "FAIL",
+        "Configure Node": "FAIL",
+        "device_comm_page": "enable",
+        "Device Comm Page": "enable",
+        "status_page": "enable",
+        "Status Page": "enable",
+        "Mortgage_page": "disable",
+        "Mortgage Page": "disable",
+        "device_p2p_control": "disable",
+        "Device P2p Control": "disable",
+        "Configure_Config": "enable",
+        "Configure Config": "enable",
+        "Remote_Address": "disable",
+        "Remote_Pair_Pairing": "disable",
+        "Remote Pair Pairing": "disable",
+        "parameters": {
+          "page_names": "Status",
+          "Page Names": "Status",
+          "payload": "DEE7010601000100FE0100013141A26666C0023D7141CC7AE10100000001004D42000A",
+          "module_type": "WIFI",
+          "Module Type": "WIFI",
+          "timestamp": "2025-03-25 11:42:28",
+          "ping": "set",
+          "latitude": 17.4312833,
+          "longitude": 78.5441333,
+          "signin_latitude": 17.4311614,
+          "Signin Latitude": 17.4311614,
+          "signin_longitude": 78.5444599,
+          "Signin Longitude": 78.5444599,
+          "app_version": "v8",
+          "App Version": "v8",
+          "fw_version": "8.0.6",
+          "Fw Version": "8.0.6",
+          "add_node_time": "2025-03-25 11:42:28",
+          "Add Node Time": "2025-03-25 11:42:28",
+          "network_info": "OK",
+          "Network Info": "OK",
+          "selected": 1,
+          "SUID": "DEE7010301000000",
+          "DUID": "000100011E4147BB",
+          "UDP_CMD": "BC",
+          "Udp Cmd": "BC",
+          "UDP_ACK": "BF",
+          "Udp Ack": "BF",
+          "MEDIA": "B7",
+          "Frame": "AE",
+          "FID": 14,
+          "UserID": "41C7999A",
+          "SDUID_Enable": 0,
+          "Sduid Enable": 0,
+          "UID_DATA": "000001005441000A",
+          "Uid Data": "000001005441000A",
+          "baudrate": 115200,
+          "uartmsgid": 0,
+          "errorcode": 0,
+          "power": 1,
+          "Power": 1,
+          "Speed": 6,
+          "Direction": 1,
+          "Buzzer": 1,
+          "rpm": 131,
+          "Current": "C0023D71",
+          "Voltage": "41CC7AE1",
+          "Command Get Status": true,
+          "SendData": 0,
+          "DisplayLog": 0,
+          "Display Log": 0,
+          "Display": 0,
+          "Resistance": 40133333,
+          "Imin": 40466666,
+          "Imax": 40600000,
+          "Frequence": 9.223372036854776e+18,
+          "PolePairs": 8,
+          "Open_Loop_Current": "3FC00000",
+          "Open Loop Current": "3FC00000",
+          "PowerLimit": "2C",
+          "TorqueLimit": "00001B58",
+          "Speed1": 4,
+          "Speed2": 7,
+          "Speed3": "0B",
+          "Speed4": 11,
+          "Speed5": 17,
+          "Speed6": "1A",
+          "Speed7": "1B",
+          "Color": 0,
+          "Lamp": 1,
+          "Timer": 0,
+          "DimmingLevel": "FE",
+          "Fan_enable/disable": 1,
+          "Fan Enable/disable": 1,
+          "Remote_lock/unlock": 0,
+          "Remote Lock/unlock": 0,
+          "Watt": "41A26666",
+          "vacrms": 1000000,
+          "Remote Address": "004D4200",
+          "configure_node": "FAIL",
+          "Configure Node": "FAIL",
+          "device_comm_page": "enable",
+          "Device Comm Page": "enable",
+          "status_page": "enable",
+          "Status Page": "enable",
+          "Mortgage_page": "disable",
+          "Mortgage Page": "disable",
+          "device_p2p_control": "disable",
+          "Device P2p Control": "disable",
+          "Configure_Config": "enable",
+          "Configure Config": "enable",
+          "Remote_Address": "disable",
+          "Remote_Pair_Pairing": "disable",
+          "Remote Pair Pairing": "disable"
+        },
+        "resolvedIconId": "fan",
+        "resolvedIcon": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M12 9c0-3-2.5-6-5-5.5C4 4 3 7 5 9c1 1 4 1 4 1s-1 3 1 5c1.5 2 4.5 2 5.5.5C17 14 15 11 12 9z",
+            "M12 15c0 3 2.5 6 5 5.5C20 20 21 17 19 15c-1-1-4-1-4-1s1-3-1-5c-1.5-2-4.5-2-5.5-.5C7 10 9 13 12 15z"
+          ],
+          "circles": [
+            {
+              "cx": 12,
+              "cy": 12,
+              "r": 3
+            }
+          ],
+          "id": "fan",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M12 9c0-3-2.5-6-5-5.5C4 4 3 7 5 9c1 1 4 1 4 1s-1 3 1 5c1.5 2 4.5 2 5.5.5C17 14 15 11 12 9z\"/\u003E\u003Cpath d=\"M12 15c0 3 2.5 6 5 5.5C20 20 21 17 19 15c-1-1-4-1-4-1s1-3-1-5c-1.5-2-4.5-2-5.5-.5C7 10 9 13 12 15z\"/\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"/\u003E\u003C/svg\u003E"
+        },
+        "resolvedIconSvg": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M12 9c0-3-2.5-6-5-5.5C4 4 3 7 5 9c1 1 4 1 4 1s-1 3 1 5c1.5 2 4.5 2 5.5.5C17 14 15 11 12 9z\"/\u003E\u003Cpath d=\"M12 15c0 3 2.5 6 5 5.5C20 20 21 17 19 15c-1-1-4-1-4-1s1-3-1-5c-1.5-2-4.5-2-5.5-.5C7 10 9 13 12 15z\"/\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"/\u003E\u003C/svg\u003E"
+      },
+      {
+        "product_id": "1752",
+        "id": "1752",
+        "user_id": 655,
+        "node_id": "FFFFFFFFFFFFFFFF7EC200000003A600",
+        "vendor_name": "DHRIO",
+        "vendor_id": "",
+        "category_id": "",
+        "prod_category": "Efactor Module A",
+        "product_category_name": "",
+        "devicetype": "socket",
+        "device_type": "socket",
+        "productName": "socket",
+        "product_name": "socket_7E0003A6",
+        "name": "socket_7E0003A6",
+        "brandName": "DHRIO",
+        "brand_name": "DHRIO",
+        "brandLogo": "",
+        "brand_logo": "",
+        "productImage": "",
+        "product_image": "",
+        "status": "Offline",
+        "online": false,
+        "power": true,
+        "powerOn": true,
+        "model_id": "EF_smart_plug",
+        "model_no": "EF_smart_plug",
+        "modelName": "EF_smart_plug",
+        "modelNumber": "EF_smart_plug",
+        "model_name": "EF_smart_plug",
+        "model_number": "EF_smart_plug",
+        "moduleType": "WIFI",
+        "gatewayId": "",
+        "isAdded": "",
+        "node": {
+          "node_id": "FFFFFFFFFFFFFFFF7EC200000003A600",
+          "gateway_id": "",
+          "module_type": "WIFI",
+          "is_added": ""
+        },
+        "actions": {
+          "onCardClick": {
+            "method": "POST",
+            "url": "https://efactor.tech/v8/iot_api_creation.php?action=device_card_click",
+            "body": {
+              "node_id": "FFFFFFFFFFFFFFFF7EC200000003A600"
+            }
+          },
+          "onPowerToggle": {
+            "method": "POST",
+            "url": "https://efactor.tech/v8/iot_api_creation.php?action=device_power_toggle",
+            "headers": {
+              "Content-Type": "application/json",
+              "X-IOT-Access-Token": "{{auth.access_token}}"
+            },
+            "body": {
+              "node_id": "FFFFFFFFFFFFFFFF7EC200000003A600",
+              "command": "{{toggle_next|off:on}}",
+              "power": "{{toggle_next}}"
+            },
+            "refreshAfter": [
+              "getDevices",
+              "getAllNodesStatus"
+            ],
+            "responsePowerField": "power"
+          }
+        },
+        "page_names": "Page1.Operation",
+        "Page Names": "Page1.Operation",
+        "payload": "DEE701100F0001009E0100000000000000000000F60000000000000A",
+        "module_type": "WIFI",
+        "Module Type": "WIFI",
+        "timestamp": "2026-04-25 15:36:39",
+        "latitude": 17.4312223,
+        "longitude": 78.544178,
+        "phone": 9705085694,
+        "email": "prafulsshah@yahoo.com",
+        "add_node_time": "2026-04-25 15:36:39",
+        "Add Node Time": "2026-04-25 15:36:39",
+        "Power": 1,
+        "Send Data": 0,
+        "Voltage (V)": 0,
+        "Current (A)": 0,
+        "Total Watt (W)": 0,
+        "Timer (Min)": 0,
+        "Remaining Time (Min)": 0,
+        "Command Get Status": "0000803F",
+        "Child Lock": 10,
+        "High voltage cutoff (V)": 0,
+        "Low voltage cutoff (V)": "0A",
+        "Model Num": "0F",
+        "avg powerper 1 Hr (Wh)": 10090,
+        "power factor (%)": 0,
+        "units (Kw)": "00F60000",
+        "Over load cutoff  (A)": 9,
+        "Low voltage cutoff  (V)": "000F",
+        "OK": "0A",
+        "LED On Colour": 3,
+        "LED OFF Colour": 2,
+        "parameters": {
+          "page_names": "Page1.Operation",
+          "Page Names": "Page1.Operation",
+          "payload": "DEE701100F0001009E0100000000000000000000F60000000000000A",
+          "module_type": "WIFI",
+          "Module Type": "WIFI",
+          "timestamp": "2026-04-25 15:36:39",
+          "latitude": 17.4312223,
+          "longitude": 78.544178,
+          "phone": 9705085694,
+          "email": "prafulsshah@yahoo.com",
+          "add_node_time": "2026-04-25 15:36:39",
+          "Add Node Time": "2026-04-25 15:36:39",
+          "power": 1,
+          "Power": 1,
+          "Send Data": 0,
+          "Voltage (V)": 0,
+          "Current (A)": 0,
+          "Total Watt (W)": 0,
+          "Timer (Min)": 0,
+          "Remaining Time (Min)": 0,
+          "Command Get Status": "0000803F",
+          "Child Lock": 10,
+          "High voltage cutoff (V)": 0,
+          "Low voltage cutoff (V)": "0A",
+          "Model Num": "0F",
+          "avg powerper 1 Hr (Wh)": 10090,
+          "power factor (%)": 0,
+          "units (Kw)": "00F60000",
+          "Over load cutoff  (A)": 9,
+          "Low voltage cutoff  (V)": "000F",
+          "OK": "0A",
+          "LED On Colour": 3,
+          "LED OFF Colour": 2
+        },
+        "resolvedIconId": "switch",
+        "resolvedIcon": {
+          "viewBox": "0 0 24 24",
+          "strokeWidth": 1.6,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round",
+          "fill": "none",
+          "paths": [
+            "M9 7v3M15 7v3",
+            "M12 16v5M8 21h8"
+          ],
+          "rects": [
+            {
+              "x": 6,
+              "y": 3,
+              "width": 12,
+              "height": 13,
+              "rx": 2
+            }
+          ],
+          "id": "switch",
+          "type": "svg",
+          "svgMarkup": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M9 7v3M15 7v3\"/\u003E\u003Cpath d=\"M12 16v5M8 21h8\"/\u003E\u003Crect x=\"6\" y=\"3\" width=\"12\" height=\"13\" rx=\"2\"/\u003E\u003C/svg\u003E"
+        },
+        "resolvedIconSvg": "\u003Csvg viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M9 7v3M15 7v3\"/\u003E\u003Cpath d=\"M12 16v5M8 21h8\"/\u003E\u003Crect x=\"6\" y=\"3\" width=\"12\" height=\"13\" rx=\"2\"/\u003E\u003C/svg\u003E"
+      }
+    ],
+    "infoPage": {
+      "presentation": "bottomSheet",
+      "entryScreen": "gatewayDetails",
+      "safeArea": true,
+      "responsiveLayout": {
+        "narrow": {
+          "initialChildSize": 0.72,
+          "maxChildSize": 0.95,
+          "minChildSize": 0.4,
+          "maxWidth": "fill"
+        },
+        "compact": {
+          "initialChildSize": 0.65,
+          "maxChildSize": 0.92,
+          "minChildSize": 0.35,
+          "maxWidth": "fill"
+        },
+        "medium": {
+          "initialChildSize": 0.55,
+          "maxChildSize": 0.88,
+          "minChildSize": 0.3,
+          "maxWidth": 540
+        },
+        "expanded": {
+          "initialChildSize": 0.5,
+          "maxChildSize": 0.85,
+          "minChildSize": 0.25,
+          "maxWidth": 600
+        }
+      },
+      "theme": {
+        "sheetRadius": 24,
+        "headerHeight": 56,
+        "sectionGap": 12,
+        "sectionRadius": 16,
+        "contentPadding": {
+          "horizontal": 16,
+          "vertical": 12
+        },
+        "trailingMaxWidth": 200
+      },
+      "header": {
+        "title": {
+          "bind": "device.product_name",
+          "fallback": "Device Info"
+        },
+        "eyebrow": {
+          "bind": "device.brand_name",
+          "fallback": ""
+        },
+        "avatar": {
+          "type": "image",
+          "src": "{{device.brandLogo}}",
+          "fallbackIcon": "device",
+          "width": 36,
+          "height": 36,
+          "borderRadius": 10
+        },
+        "closeIcon": "x"
+      },
+      "dataUrl": "https://efactor.tech/index.php/iot-dashboard/api/device-ui-schema/{{device.model_no}}/{{device.node_id}}",
+      "dataSource": {
+        "id": "deviceInfo",
+        "kind": "query",
+        "method": "GET",
+        "url": "https://efactor.tech/index.php/iot-dashboard/api/device-ui-schema/{{device.model_no}}/{{device.node_id}}",
+        "auth": {
+          "type": "session",
+          "credentials": "same-origin"
+        },
+        "response": {
+          "successField": "success",
+          "schemaField": "schema"
+        },
+        "caching": {
+          "enabled": true,
+          "ttlSeconds": 120,
+          "strategy": "network-first"
+        },
+        "nativeApi": {
+          "id": "deviceInfoNative",
+          "kind": "query",
+          "method": "GET",
+          "url": "https://efactor.tech/index.php/iot-dashboard/api/device-ui-schema/{{device.model_no}}/{{device.node_id}}",
+          "headers": {
+            "Authorization": {
+              "$secureState": "session.iotAccessToken"
+            }
+          },
+          "auth": {
+            "type": "header",
+            "headerName": "Authorization",
+            "binding": {
+              "$secureState": "session.iotAccessToken"
+            }
+          },
+          "response": {
+            "successField": "success",
+            "schemaField": "schema"
+          },
+          "caching": {
+            "enabled": true,
+            "ttlSeconds": 120,
+            "strategy": "network-first"
+          },
+          "note": "Flutter native: Bearer token in Authorization header. No session cookie required."
+        }
+      },
+      "fieldBindings": {
+        "deviceId": {
+          "bind": "device.node_id",
+          "label": "Device Id",
+          "trailingAction": "removeDevice"
+        },
+        "productName": {
+          "bind": "device.product_name",
+          "label": "Name"
+        },
+        "brandName": {
+          "bind": "device.brand_name",
+          "label": "Brand"
+        },
+        "deviceType": {
+          "bind": "device.device_type",
+          "label": "Type"
+        },
+        "modelNumber": {
+          "bind": "device.model_number",
+          "label": "Model"
+        },
+        "status": {
+          "bind": "device.status",
+          "label": "Status"
+        },
+        "onlineState": {
+          "bind": "device.online",
+          "label": "Online"
+        }
+      },
+      "actions": {
+        "removeDevice": {
+          "type": "callApi",
+          "dataSource": "removeDevice",
+          "confirmBeforeExecute": true,
+          "confirmDialog": {
+            "title": "Delete Device",
+            "message": "Remove this device from your account? This cannot be undone.",
+            "confirmLabel": "Delete",
+            "cancelLabel": "Cancel",
+            "confirmStyle": "destructive"
+          },
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": {
+              "$secureState": "session.iotAccessToken"
+            }
+          },
+          "body": {
+            "node_id": "{{device.node_id}}"
+          },
+          "requestSchema": {
+            "type": "object",
+            "required": [
+              "node_id"
+            ],
+            "properties": {
+              "node_id": {
+                "type": "string",
+                "binding": "device.node_id"
+              }
+            }
+          },
+          "response": {
+            "successField": "success",
+            "statusField": "status",
+            "messageField": "message",
+            "nodeIdField": "node_id",
+            "devicesField": "devices"
+          },
+          "refreshAfter": [
+            "getDevices",
+            "getAllNodesStatus"
+          ],
+          "onSuccess": {
+            "showAlert": {
+              "title": "Device Deleted",
+              "message": "Device has been removed from your account.",
+              "style": "success"
+            },
+            "navigate": {
+              "action": "popToRoute",
+              "target": "iotDevices",
+              "route": "/iot/devices"
+            }
+          }
+        }
+      },
+      "screens": {
+        "gatewayDetails": {
+          "id": "gatewayDetails",
+          "title": "{{device.product_name}}",
+          "sections": [
+            {
+              "id": "identity",
+              "title": "Device",
+              "rows": [
+                {
+                  "id": "deviceId",
+                  "label": "Device Id",
+                  "bind": "device.node_id",
+                  "trailingAction": "removeDevice"
+                },
+                {
+                  "id": "productName",
+                  "label": "Name",
+                  "bind": "device.product_name"
+                },
+                {
+                  "id": "brandName",
+                  "label": "Brand",
+                  "bind": "device.brand_name"
+                },
+                {
+                  "id": "deviceType",
+                  "label": "Type",
+                  "bind": "device.device_type",
+                  "showWhen": "{{device.device_type != \"\"}}"
+                },
+                {
+                  "id": "modelNumber",
+                  "label": "Model",
+                  "bind": "device.model_number",
+                  "showWhen": "{{device.model_number != \"\"}}"
+                }
+              ]
+            },
+            {
+              "id": "connectivity",
+              "title": "Connectivity",
+              "rows": [
+                {
+                  "id": "status",
+                  "label": "Status",
+                  "bind": "device.status"
+                },
+                {
+                  "id": "onlineState",
+                  "label": "Online",
+                  "bind": "device.online",
+                  "valueMap": {
+                    "true": "Yes",
+                    "false": "No",
+                    "1": "Yes",
+                    "0": "No"
+                  }
+                }
+              ]
+            }
+          ],
+          "footerActions": [
+            {
+              "id": "device_info_delete_button",
+              "label": "Delete Device",
+              "icon": "trash-2",
+              "action": "removeDevice",
+              "actionRef": "infoPage.actions.removeDevice",
+              "style": "destructive",
+              "confirm": true,
+              "confirmDialog": {
+                "title": "Delete Device",
+                "message": "Remove this device from your account? This cannot be undone.",
+                "confirmLabel": "Delete",
+                "cancelLabel": "Cancel",
+                "confirmStyle": "destructive"
+              },
+              "onSuccess": {
+                "showAlert": {
+                  "title": "Device Deleted",
+                  "message": "Device has been removed from your account.",
+                  "style": "success"
+                },
+                "navigate": {
+                  "action": "popToRoute",
+                  "target": "iotDevices",
+                  "route": "/iot/devices"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "controlBindings": {
+        "deleteInlineActionId": "device_info_delete_inline",
+        "deleteFooterButtonId": "device_info_delete_button",
+        "removeDeviceAction": "removeDevice",
+        "headerButtonId": "device_info_button",
+        "dataSource": "deviceInfo"
+      }
+    },
+    "metrics": {
+      "total": {
+        "bind": "page.summary.total",
+        "computeFrom": "devices",
+        "compute": "countAll"
+      },
+      "online": {
+        "bind": "page.summary.online",
+        "computeFrom": "devices",
+        "compute": "countOnline"
+      },
+      "offline": {
+        "bind": "page.summary.offline",
+        "computeFrom": "devices",
+        "compute": "countOffline"
+      }
+    },
+    "nodesSummary": {
+      "total": 2,
+      "online": 1,
+      "offline": 1
+    },
+    "savedAt": "2026-09-24T12:23:29+05:30",
+    "savedDate": "2026-09-24",
+    "savedTime": "12:23:29",
+    "savedTimezone": "Asia/Kolkata",
+    "sourceFingerprint": "a4f163d757cb3314c1d74e066c56271f6d6604f1fe9a0f47a382cf2732267584",
+    "meta": {
+      "sourceFingerprint": "a4f163d757cb3314c1d74e066c56271f6d6604f1fe9a0f47a382cf2732267584",
+      "mappingSyncedAt": "2026-09-24T12:23:29+05:30"
+    }
+  }
+}

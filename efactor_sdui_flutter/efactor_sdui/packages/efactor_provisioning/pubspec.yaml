@@ -1,0 +1,34 @@
+name: efactor_provisioning
+description: >
+  eFactor ESP Wi-Fi (SoftAP) provisioning plugin with a custom protobuf layer.
+  One shared Dart API, native Android + iOS implementations.
+version: 0.0.1
+publish_to: "none" # local plugin; remove this line if you publish to a private registry
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  plugin_platform_interface: ^2.1.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+# ---------------------------------------------------------------------------
+# This block is what makes it ONE library working on BOTH platforms.
+# The `pluginClass` on each platform is the native entry point that Flutter
+# registers automatically. The shared Dart API lives in lib/.
+# ---------------------------------------------------------------------------
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: tech.efactor.efactor_provisioning
+        pluginClass: EfactorProvisioningPlugin
+      ios:
+        pluginClass: EfactorProvisioningPlugin
