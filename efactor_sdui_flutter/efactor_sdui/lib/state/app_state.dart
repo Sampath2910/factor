@@ -3167,13 +3167,9 @@ class AppState extends ChangeNotifier {
           coerced = coerced ? 1 : 0;
         }
       } else if (type == 'enum') {
-        final options = _optionsFor(control);
-        for (final opt in options) {
-          final optVal = opt['value'];
-          if (_enumOptionMatches(optVal, coerced)) {
-            coerced = optVal;
-            break;
-          }
+        final matched = resolveEnumOption(control, coerced);
+        if (matched != null && matched['value'] != null) {
+          coerced = matched['value'];
         }
       } else if (type == 'string') {
         if (coerced != null && coerced is! String) {
@@ -3237,9 +3233,7 @@ class AppState extends ChangeNotifier {
               (max == null || numericValue <= max);
         case 'enum':
           final options = _optionsFor(control);
-          return options.isEmpty ||
-              options.any((option) =>
-                  _enumOptionMatches(option['value'], value));
+          return options.isEmpty || resolveEnumOption(control, value) != null;
         case 'string':
           return value is String;
         case 'trigger':
@@ -3517,62 +3511,215 @@ class AppState extends ChangeNotifier {
       }
     }
 
+    List<Map<String, dynamic>>? resolved;
     for (final candidate in candidates) {
       final normalized = normalizeEnumOptions(candidate);
       if (normalized.isNotEmpty) {
         final hasMeaningful = normalized.any((item) =>
             !RegExp(r'^\[\d+\]').hasMatch(item['label']?.toString() ?? ''));
-        if (hasMeaningful) return normalized;
+        if (hasMeaningful) {
+          resolved = normalized;
+          break;
+        }
       }
     }
 
     final meta = control['protocolMeta'] as Map?;
-    if (meta != null) {
+    if (resolved == null && meta != null) {
       final items = meta['items'];
       final itemValues = meta['item_values'] ?? meta['sno_asperui'];
       final fromMeta = normalizeEnumOptions(items, rawValues: itemValues);
-      if (fromMeta.isNotEmpty) return fromMeta;
+      if (fromMeta.isNotEmpty) resolved = fromMeta;
 
-      final uiComponents = meta['ui_components'];
-      if (uiComponents is List) {
-        for (final raw in uiComponents) {
-          if (raw is Map) {
-            final fromUi = normalizeEnumOptions(
-              raw['items'],
-              rawValues: raw['item_values'] ?? raw['sno_asperui'],
-            );
-            if (fromUi.isNotEmpty) return fromUi;
+      if (resolved == null) {
+        final uiComponents = meta['ui_components'];
+        if (uiComponents is List) {
+          for (final raw in uiComponents) {
+            if (raw is Map) {
+              final fromUi = normalizeEnumOptions(
+                raw['items'],
+                rawValues: raw['item_values'] ?? raw['sno_asperui'],
+              );
+              if (fromUi.isNotEmpty) {
+                resolved = fromUi;
+                break;
+              }
+            }
           }
         }
       }
     }
 
+    if (resolved == null) {
+      final frame = control['deviceFrame'] as Map?;
+      if (frame != null) {
+        final commands = frame['commands'];
+        if (commands is List) {
+          for (final cmd in commands) {
+            if (cmd is Map && cmd['asperui'] != null) {
+              final fromCmd = normalizeEnumOptions(
+                cmd['asperui'],
+                rawValues: cmd['asperui_values'] ?? cmd['sno_asperui'],
+              );
+              if (fromCmd.isNotEmpty) {
+                resolved = fromCmd;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (resolved == null) {
+      for (final candidate in candidates) {
+        final normalized = normalizeEnumOptions(candidate);
+        if (normalized.isNotEmpty) {
+          resolved = normalized;
+          break;
+        }
+      }
+    }
+
+    if (resolved == null || resolved.isEmpty) return const [];
+    return _enrichOptionsWithProtocolAliases(resolved, control);
+  }
+
+  /// Attaches sno / label / payload aliases so live status indices (e.g. `02`)
+  /// match command dropdown hex values (e.g. `0000020150DC…`) and labels (`FRY`).
+  static List<Map<String, dynamic>> _enrichOptionsWithProtocolAliases(
+    List<Map<String, dynamic>> options,
+    Map<String, dynamic> control,
+  ) {
+    final meta = control['protocolMeta'] as Map? ?? const <String, dynamic>{};
+    final labels = extractBracketTokens(meta['items']);
+    final payloads = extractBracketTokens(meta['item_values']);
+    final sno = extractBracketTokens(meta['sno_asperui']);
+
     final frame = control['deviceFrame'] as Map?;
+    List<String> frameLabels = const [];
+    List<String> frameValues = const [];
+    List<String> frameSno = const [];
     if (frame != null) {
       final commands = frame['commands'];
       if (commands is List) {
         for (final cmd in commands) {
-          if (cmd is Map && cmd['asperui'] != null) {
-            final fromCmd = normalizeEnumOptions(
-              cmd['asperui'],
-              rawValues: cmd['asperui_values'] ?? cmd['sno_asperui'],
-            );
-            if (fromCmd.isNotEmpty) return fromCmd;
+          if (cmd is! Map) continue;
+          final fl = extractBracketTokens(cmd['asperui']);
+          final fv = extractBracketTokens(cmd['asperui_values']);
+          final fs = extractBracketTokens(cmd['sno_asperui']);
+          if (fl.isNotEmpty || fv.isNotEmpty || fs.isNotEmpty) {
+            frameLabels = fl;
+            frameValues = fv;
+            frameSno = fs;
+            break;
           }
         }
       }
     }
 
-    for (final candidate in candidates) {
-      final normalized = normalizeEnumOptions(candidate);
-      if (normalized.isNotEmpty) return normalized;
+    final aliasLabels = labels.isNotEmpty ? labels : frameLabels;
+    final aliasPayloads = payloads.isNotEmpty ? payloads : frameValues;
+    final aliasSno = sno.isNotEmpty ? sno : frameSno;
+    if (aliasLabels.isEmpty && aliasPayloads.isEmpty && aliasSno.isEmpty) {
+      return options;
     }
 
-    return const [];
+    final enriched = <Map<String, dynamic>>[];
+    for (var i = 0; i < options.length; i++) {
+      final option = Map<String, dynamic>.from(options[i]);
+      final aliases = <String>{};
+      void addAlias(dynamic raw) {
+        final text = raw?.toString().trim() ?? '';
+        if (text.isEmpty) return;
+        if (RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(text)) return;
+        aliases.add(text);
+      }
+
+      addAlias(option['label']);
+      addAlias(option['value']);
+      if (i < aliasLabels.length) addAlias(aliasLabels[i]);
+      if (i < aliasPayloads.length) addAlias(aliasPayloads[i]);
+      if (i < aliasSno.length) addAlias(aliasSno[i]);
+
+      // Drop the canonical value from aliases to avoid duplicate work.
+      final canonical = option['value']?.toString().trim();
+      if (canonical != null) aliases.remove(canonical);
+      if (aliases.isNotEmpty) {
+        option['aliases'] = aliases.toList(growable: false);
+      }
+      if (i < aliasSno.length &&
+          (option['sno'] == null || option['sno'].toString().trim().isEmpty)) {
+        option['sno'] = aliasSno[i];
+      }
+      enriched.add(option);
+    }
+    return enriched;
   }
 
   List<Map<String, dynamic>> _optionsFor(Map<String, dynamic> control) =>
       optionsFor(control);
+
+  /// Resolves an incoming live / UI value onto a single option, matching
+  /// option value, label, sno, payload aliases, and protocolMeta parallel arrays.
+  static Map<String, dynamic>? resolveEnumOption(
+    Map<String, dynamic> control,
+    dynamic value,
+  ) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+    if (RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(text)) return null;
+
+    final options = optionsFor(control);
+    for (final option in options) {
+      if (enumOptionEntryMatches(option, value)) return option;
+    }
+
+    final meta = control['protocolMeta'] as Map?;
+    if (meta == null) return null;
+    final labels = extractBracketTokens(meta['items']);
+    final payloads = extractBracketTokens(meta['item_values']);
+    final sno = extractBracketTokens(meta['sno_asperui']);
+    final count = [labels.length, payloads.length, sno.length, options.length]
+        .fold<int>(0, (max, n) => n > max ? n : max);
+    for (var i = 0; i < count; i++) {
+      final candidates = <dynamic>[
+        if (i < labels.length) labels[i],
+        if (i < payloads.length) payloads[i],
+        if (i < sno.length) sno[i],
+      ];
+      if (!candidates.any((c) => _enumOptionMatches(c, value))) continue;
+      if (i < options.length) return options[i];
+      return <String, dynamic>{
+        'label': i < labels.length ? labels[i] : text,
+        'value': i < payloads.length
+            ? payloads[i]
+            : (i < sno.length ? sno[i] : text),
+        if (i < sno.length) 'sno': sno[i],
+      };
+    }
+    return null;
+  }
+
+  static bool enumOptionEntryMatches(
+    Map<String, dynamic> option,
+    dynamic incomingValue,
+  ) {
+    if (_enumOptionMatches(option['value'], incomingValue) ||
+        _enumOptionMatches(option['label'], incomingValue) ||
+        _enumOptionMatches(option['sno'], incomingValue) ||
+        _enumOptionMatches(option['runtimeValue'], incomingValue)) {
+      return true;
+    }
+    final aliases = option['aliases'];
+    if (aliases is List) {
+      for (final alias in aliases) {
+        if (_enumOptionMatches(alias, incomingValue)) return true;
+      }
+    }
+    return false;
+  }
 
   static bool _enumOptionMatches(dynamic optionValue, dynamic incomingValue) {
     if (optionValue == incomingValue) return true;
@@ -3596,11 +3743,22 @@ class AppState extends ChangeNotifier {
     final incClean = incStr.startsWith('0x') ? incStr.substring(2) : incStr;
     final optHex = int.tryParse(optClean, radix: 16);
     final incHex = int.tryParse(incClean, radix: 16);
-    if (optHex != null && incHex != null && optHex == incHex) return true;
+    // Equate short protocol indices (e.g. `02`/`2`) or equal-length hex.
+    // Never equate sno `02` with a long recipe payload just because both parse.
+    if (optHex != null && incHex != null && optHex == incHex) {
+      final bothShort = optClean.length <= 4 && incClean.length <= 4;
+      final sameLength = optClean.length == incClean.length;
+      if (bothShort || sameLength) return true;
+    }
 
     final optStripped = optStr.replaceFirst(RegExp(r'^0+'), '');
     final incStripped = incStr.replaceFirst(RegExp(r'^0+'), '');
-    if (optStripped.isNotEmpty && optStripped == incStripped) return true;
+    if (optStripped.isNotEmpty &&
+        optStripped == incStripped &&
+        optStr.length <= 4 &&
+        incStr.length <= 4) {
+      return true;
+    }
 
     return false;
   }

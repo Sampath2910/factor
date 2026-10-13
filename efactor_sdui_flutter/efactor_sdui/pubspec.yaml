@@ -52,6 +52,14 @@ dependencies:
   webview_flutter_android: ^4.14.1
   webview_flutter_wkwebview: ^3.26.1
 
+  # Closed-app calls + message notifications (requires Firebase config files).
+  # CallKit plugin removed: it forced a Java 17 Gradle toolchain and broke
+  # Android release builds on machines that only have Android Studio JBR 21.
+  # Incoming UI uses IncomingCallService + local notifications instead.
+  firebase_core: ^3.15.2
+  firebase_messaging: ^15.2.10
+  flutter_local_notifications: ^19.4.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -68,6 +76,12 @@ flutter_launcher_icons:
   remove_alpha_ios: true
 
 flutter:
+  # Project path contains spaces ("studio pavan 19-09"). Flutter SPM
+  # double-encodes those paths and fails resolving firebase_messaging.
+  # Force CocoaPods until the project lives in a path without spaces.
+  config:
+    enable-swift-package-manager: false
+
   uses-material-design: true
 
   assets:

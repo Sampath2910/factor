@@ -159,12 +159,175 @@ class DeviceInfoCacheManager {
     }
   }
 
+  /// SharedPreferences practical size guard (~1MB). Larger blobs stay disk-only.
+  static const int prefsMaxBytes = 750 * 1024;
+
+  /// Refuse to persist payloads larger than this even on disk (full device
+  /// schemas are tens of MB; gateway info is under 100KB).
+  static const int absoluteMaxCacheBytes = 2 * 1024 * 1024;
+
+  /// Reads a dotted / indexed path such as `node_details[0].config.info`.
+  static dynamic readJsonPath(dynamic root, String path) {
+    dynamic current = root;
+    final tokenPattern = RegExp(r'([^\.\[\]]+)|\[(\d+)\]');
+    for (final match in tokenPattern.allMatches(path)) {
+      final key = match.group(1);
+      final indexText = match.group(2);
+      if (key != null) {
+        if (current is! Map || !current.containsKey(key)) return null;
+        current = current[key];
+      } else if (indexText != null) {
+        final index = int.tryParse(indexText);
+        if (index == null || current is! List || index >= current.length) {
+          return null;
+        }
+        current = current[index];
+      }
+    }
+    return current;
+  }
+
+  /// Shrinks a fetched payload using **schema-declared** `responsePath` /
+  /// `infoPath` only. No product-specific path strings are invented here.
+  static dynamic extractCacheableInfoPayload(
+    dynamic data, {
+    String? responsePath,
+    String? infoPath,
+  }) {
+    if (data == null) return null;
+
+    Map<String, dynamic>? asMap(dynamic value) {
+      if (value is Map<String, dynamic>) return value;
+      if (value is Map) {
+        return value.map((k, v) => MapEntry(k.toString(), v));
+      }
+      return null;
+    }
+
+    final root = asMap(data);
+    final trimmedResponse = responsePath?.trim();
+    final trimmedInfo = infoPath?.trim();
+
+    Map<String, dynamic>? slice = root;
+    if (trimmedResponse != null && trimmedResponse.isNotEmpty) {
+      slice = asMap(readJsonPath(data, trimmedResponse));
+      if (slice == null) return null;
+    }
+
+    if (trimmedInfo != null && trimmedInfo.isNotEmpty && slice != null) {
+      final info = asMap(
+        trimmedInfo.contains('.')
+            ? readJsonPath(slice, trimmedInfo)
+            : slice[trimmedInfo],
+      );
+      if (info == null || info.isEmpty) return null;
+      final out = <String, dynamic>{'info': Map<String, dynamic>.from(info)};
+      for (final copyKey in slice.keys) {
+        if (copyKey == trimmedInfo || copyKey == 'info') continue;
+        // Keep sibling identity fields from the responsePath slice only when
+        // they are scalars / small maps already present in the schema slice.
+        final value = slice[copyKey];
+        if (value is String || value is num || value is bool) {
+          out[copyKey] = value;
+        }
+      }
+      return out;
+    }
+
+    // No infoPath: return the responsePath slice (or original root when the
+    // schema did not declare a path and the payload is already compact).
+    if (trimmedResponse != null && trimmedResponse.isNotEmpty) {
+      return slice;
+    }
+
+    // Schema did not declare paths — only keep already-compact shapes that
+    // the Info resolver can bind (`info` or `device` maps at the root).
+    if (root == null) return null;
+    if (root['info'] is Map && (root['info'] as Map).isNotEmpty) return root;
+    if (root['device'] is Map && (root['device'] as Map).isNotEmpty) return root;
+    return null;
+  }
+
+  /// Reads infoPage / dataSource path declarations from a device schema.
+  static ({String? responsePath, String? infoPath}) infoPathsFromSchema(
+    Map<String, dynamic> schema,
+  ) {
+    Map<String, dynamic>? asMap(dynamic value) {
+      if (value is Map) {
+        return value.map((k, v) => MapEntry(k.toString(), v));
+      }
+      return null;
+    }
+
+    final infoPage = asMap(schema['infoPage']) ??
+        asMap(readJsonPath(schema, 'extensions.serverDrivenUi.infoPage')) ??
+        asMap(readJsonPath(schema, 'extensions.universalUi.infoPage'));
+
+    Map<String, dynamic>? source;
+    final dsRaw = infoPage?['dataSource'];
+    if (dsRaw is Map) {
+      source = asMap(dsRaw);
+    } else {
+      final id = dsRaw?.toString().trim();
+      final dataSources = asMap(schema['dataSources']);
+      if (id != null && id.isNotEmpty) {
+        source = asMap(dataSources?[id]);
+      }
+    }
+
+    String? firstText(List<dynamic> values) {
+      for (final value in values) {
+        if (value is Map) continue;
+        final text = value?.toString().trim();
+        if (text != null && text.isNotEmpty) return text;
+      }
+      return null;
+    }
+
+    return (
+      responsePath: firstText(<dynamic>[
+        source?['responsePath'],
+        infoPage?['responsePath'],
+      ]),
+      infoPath: firstText(<dynamic>[
+        infoPage?['infoPath'],
+        source?['infoPath'],
+      ]),
+    );
+  }
+
+  /// Seeds a cacheable info payload from the already-loaded device UI schema
+  /// using only paths declared on that schema's infoPage / dataSource.
+  static dynamic seedInfoPayloadFromSchema(Map<String, dynamic> schema) {
+    final paths = infoPathsFromSchema(schema);
+    if ((paths.responsePath == null || paths.responsePath!.isEmpty) &&
+        (paths.infoPath == null || paths.infoPath!.isEmpty)) {
+      return null;
+    }
+    final seeded = extractCacheableInfoPayload(
+      schema,
+      responsePath: paths.responsePath,
+      infoPath: paths.infoPath,
+    );
+    if (seeded is! Map) return null;
+    if (paths.infoPath != null && paths.infoPath!.isNotEmpty) {
+      final info = seeded['info'];
+      if (info is! Map || info.isEmpty) return null;
+    }
+    return seeded;
+  }
+
   /// Saves device info data (payload) to local persistent disk and memory.
+  ///
+  /// [responsePath] / [infoPath] slice large device-schema responses down to
+  /// the gateway info block before persistence.
   Future<void> saveInfoData({
     required String modelId,
     required String nodeId,
     String? url,
     required dynamic data,
+    String? responsePath,
+    String? infoPath,
   }) async {
     if (data == null) return;
     final key = buildCacheKey(
@@ -174,19 +337,43 @@ class DeviceInfoCacheManager {
       prefix: 'info_data',
     );
     try {
-      final raw = jsonEncode(data);
+      final sliced = extractCacheableInfoPayload(
+            data,
+            responsePath: responsePath,
+            infoPath: infoPath,
+          ) ??
+          data;
+      final raw = jsonEncode(sliced);
+      if (raw.length > absoluteMaxCacheBytes) {
+        logDebug(
+          '[DeviceInfoCacheManager] Refusing to cache oversized info payload '
+          '(${raw.length} bytes) for $key — provide responsePath/infoPath or a '
+          'light info URL',
+        );
+        return;
+      }
       _memoryCache[key] = _CachedPayloadEntry(
-        data: data,
+        data: sliced,
         cachedAt: DateTime.now(),
       );
       await SchemaDiskCache.writeString('$key.json', raw);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(key, raw);
-      await prefs.setInt(
-        '$key.savedAtMs',
-        DateTime.now().millisecondsSinceEpoch,
+      if (raw.length <= prefsMaxBytes) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(key, raw);
+        await prefs.setInt(
+          '$key.savedAtMs',
+          DateTime.now().millisecondsSinceEpoch,
+        );
+      } else {
+        logDebug(
+          '[DeviceInfoCacheManager] Info payload ${raw.length} bytes exceeds '
+          'prefs limit — disk-only cache for $key',
+        );
+      }
+      logDebug(
+        '[DeviceInfoCacheManager] Saved info data locally for $key '
+        '(${raw.length} bytes)',
       );
-      logDebug('[DeviceInfoCacheManager] Saved info data locally for $key');
     } catch (error) {
       logDebug(
         '[DeviceInfoCacheManager] Failed to save info data for $key: $error',
@@ -320,29 +507,9 @@ class DeviceInfoCacheManager {
         return null;
       }
 
-      dynamic readPath(dynamic root, String path) {
-        dynamic current = root;
-        final tokenPattern = RegExp(r'([^\.\[\]]+)|\[(\d+)\]');
-        for (final match in tokenPattern.allMatches(path)) {
-          final key = match.group(1);
-          final indexText = match.group(2);
-          if (key != null) {
-            if (current is! Map || !current.containsKey(key)) return null;
-            current = current[key];
-          } else if (indexText != null) {
-            final index = int.tryParse(indexText);
-            if (index == null || current is! List || index >= current.length) {
-              return null;
-            }
-            current = current[index];
-          }
-        }
-        return current;
-      }
-
       final infoPage = asMap(schema['infoPage']) ??
-          asMap(readPath(schema, 'extensions.serverDrivenUi.infoPage')) ??
-          asMap(readPath(schema, 'extensions.universalUi.infoPage'));
+          asMap(readJsonPath(schema, 'extensions.serverDrivenUi.infoPage')) ??
+          asMap(readJsonPath(schema, 'extensions.universalUi.infoPage'));
 
       if (infoPage != null) {
         await saveInfoSchema(
@@ -352,19 +519,35 @@ class DeviceInfoCacheManager {
         );
       }
 
-      final dataSourceId = infoPage?['dataSource']?.toString();
-      final dataSources = asMap(schema['dataSources']);
-      final source = dataSourceId != null
-          ? asMap(dataSources?[dataSourceId])
-          : null;
+      Map<String, dynamic>? source;
+      final dsRaw = infoPage?['dataSource'];
+      if (dsRaw is Map) {
+        source = asMap(dsRaw);
+      } else {
+        final dataSourceId = dsRaw?.toString().trim();
+        final dataSources = asMap(schema['dataSources']);
+        source = dataSourceId != null && dataSourceId.isNotEmpty
+            ? asMap(dataSources?[dataSourceId])
+            : null;
+      }
 
       String? firstText(List<dynamic> values) {
         for (final v in values) {
+          if (v is Map) continue;
           final t = v?.toString().trim();
           if (t != null && t.isNotEmpty) return t;
         }
         return null;
       }
+
+      final responsePath = firstText(<dynamic>[
+        source?['responsePath'],
+        infoPage?['responsePath'],
+      ]);
+      final infoPath = firstText(<dynamic>[
+        infoPage?['infoPath'],
+        source?['infoPath'],
+      ]);
 
       final rawUrl = firstText(<dynamic>[
         source?['url'],
@@ -372,10 +555,9 @@ class DeviceInfoCacheManager {
         asMap(source?['nativeApi'])?['url'],
       ]);
 
-      if (rawUrl == null || rawUrl.isEmpty) return;
-
-      final resolvedUrl = resolveInfoTemplateValue(state, rawUrl)?.toString();
-      if (resolvedUrl == null || resolvedUrl.isEmpty) return;
+      final resolvedUrl = rawUrl == null || rawUrl.isEmpty
+          ? null
+          : resolveInfoTemplateValue(state, rawUrl)?.toString();
 
       final cached = await hasCachedInfoData(
         modelId: modelId,
@@ -383,6 +565,27 @@ class DeviceInfoCacheManager {
         url: resolvedUrl,
       );
       if (cached) return;
+
+      // Prefer gateway info already embedded in the loaded device schema when
+      // infoPage/dataSource declare responsePath / infoPath.
+      final seeded = seedInfoPayloadFromSchema(schema);
+      if (seeded != null) {
+        await saveInfoData(
+          modelId: modelId,
+          nodeId: nodeId,
+          url: resolvedUrl,
+          data: seeded,
+          responsePath: responsePath,
+          infoPath: infoPath,
+        );
+        logDebug(
+          '[DeviceInfoCacheManager] Seeded info cache from schema for '
+          '$modelId/$nodeId',
+        );
+        return;
+      }
+
+      if (resolvedUrl == null || resolvedUrl.isEmpty) return;
 
       final inFlightKey = buildCacheKey(
         modelId: modelId,
@@ -406,6 +609,8 @@ class DeviceInfoCacheManager {
           nodeId: nodeId,
           url: resolvedUrl,
           data: payload,
+          responsePath: responsePath,
+          infoPath: infoPath,
         );
         logDebug(
           '[DeviceInfoCacheManager] Pre-cached info data for $modelId/$nodeId',

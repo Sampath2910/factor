@@ -248,14 +248,14 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
     return schemaFingerprint(schema);
   }
 
-  Future<void> _refreshLiveSchema() async {
+  Future<void> _refreshLiveSchema({bool forceFull = false}) async {
     if (!mounted || _schemaRefreshInProgress || _state == null) {
       return;
     }
 
     _schemaRefreshInProgress = true;
     try {
-      final result = await _repository.revalidate();
+      final result = await _repository.revalidate(forceFull: forceFull);
       if (!mounted) return;
 
       _lastSchemaLoadAt = DateTime.now();

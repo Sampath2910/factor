@@ -764,11 +764,25 @@ class ComponentRegistry {
       final isRawBracketString = value is String &&
           RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(value.trim());
       if (!isRawBracketString && value != null) {
-        for (final option in options) {
-          if (AppState.enumOptionMatches(option['value'], value) ||
-              AppState.enumOptionMatches(option['label'], value)) {
-            selectedOption = option;
-            break;
+        Map<String, dynamic>? controlForBinding;
+        if (binding.isNotEmpty) {
+          for (final ctrl in state.controls) {
+            if (ctrl['binding']?.toString() == binding) {
+              controlForBinding = ctrl;
+              break;
+            }
+          }
+        }
+        if (controlForBinding != null) {
+          selectedOption =
+              AppState.resolveEnumOption(controlForBinding, value);
+        }
+        if (selectedOption == null) {
+          for (final option in options) {
+            if (AppState.enumOptionEntryMatches(option, value)) {
+              selectedOption = option;
+              break;
+            }
           }
         }
       }
@@ -880,16 +894,83 @@ class ComponentRegistry {
         return null;
       }
 
+      Map<String, dynamic>? triggerControl;
+      List<Map<String, dynamic>> triggerOptions = const [];
+      if (binding.isNotEmpty) {
+        for (final ctrl in state.controls) {
+          if (ctrl['binding']?.toString() == binding) {
+            triggerControl = ctrl;
+            break;
+          }
+        }
+        if (triggerControl != null) {
+          final valueType =
+              triggerControl['valueType']?.toString().trim().toLowerCase();
+          if (valueType == 'trigger') {
+            triggerOptions = AppState.optionsFor(triggerControl);
+          }
+        }
+      }
+
       final staticLabel = firstNonEmpty([
         props['label'],
         props['actionText'],
         props['text'],
+        triggerControl?['label'],
+        triggerControl?['parameter'],
+        triggerControl?['parameterName'],
+        triggerControl?['rightAccessory'] is Map
+            ? (triggerControl!['rightAccessory'] as Map)['label']
+            : null,
       ]);
-      final liveLabel = firstNonEmpty([
-        if (props['labelBinding'] != null)
-          state.resolveBinding(props['labelBinding'].toString()),
-      ]);
-      final label = staticLabel ?? liveLabel ?? firstNonEmpty([value]);
+
+      // labelBinding often points at the same parameter binding. Until a real
+      // protocol value arrives the binding may still hold the schema field
+      // name — treat that as unset and keep the schema static caption.
+      String? liveLabel;
+      if (props['labelBinding'] != null) {
+        final raw =
+            state.resolveBinding(props['labelBinding'].toString());
+        final rawText = raw?.toString().trim() ?? '';
+        final isPlaceholder = rawText.isEmpty ||
+            (triggerControl != null &&
+                AppState.isFrameFieldNameOrPlaceholder(
+                  triggerControl,
+                  raw,
+                ));
+        if (!isPlaceholder) {
+          liveLabel = rawText;
+        }
+      }
+
+      // When the control declares options, map the live protocol value through
+      // those schema options (no product-specific labels).
+      String? mappedTriggerLabel;
+      if (triggerOptions.isNotEmpty) {
+        final matched = triggerControl != null
+            ? AppState.resolveEnumOption(triggerControl, value)
+            : null;
+        final optionLabel = matched?['label']?.toString().trim();
+        if (optionLabel != null && optionLabel.isNotEmpty) {
+          mappedTriggerLabel = staticLabel != null &&
+                  staticLabel.toLowerCase() != optionLabel.toLowerCase()
+              ? '$staticLabel: $optionLabel'
+              : optionLabel;
+        }
+      }
+
+      final label = mappedTriggerLabel ??
+          staticLabel ??
+          liveLabel ??
+          firstNonEmpty([
+            if (value != null &&
+                (triggerControl == null ||
+                    !AppState.isFrameFieldNameOrPlaceholder(
+                      triggerControl,
+                      value,
+                    )))
+              value,
+          ]);
       final backgroundColor = SduiStyle.color(
         props['backgroundColor'] ??
             props['color'] ??
@@ -905,16 +986,29 @@ class ComponentRegistry {
         props['borderColor'] ?? backgroundColor,
       );
       final borderWidth = (props['borderWidth'] as num?)?.toDouble() ?? 0;
+      // Radius / padding come only from control props or schema theme tokens.
       final borderRadius =
           (props['borderRadius'] as num?)?.toDouble() ??
           (themeRadius['button'] as num?)?.toDouble();
-      final paddingMap = props['padding'] as Map?;
+      final paddingMap = props['padding'] is Map
+          ? Map<String, dynamic>.from(props['padding'] as Map)
+          : null;
       final schemaPadding = (themeSpacing['cardPadding'] as num?)?.toDouble();
-      final top = (paddingMap?['top'] as num?)?.toDouble() ?? schemaPadding;
-      final right = (paddingMap?['right'] as num?)?.toDouble() ?? schemaPadding;
-      final bottom =
-          (paddingMap?['bottom'] as num?)?.toDouble() ?? schemaPadding;
-      final left = (paddingMap?['left'] as num?)?.toDouble() ?? schemaPadding;
+      final uniformPadding = props['padding'] is num
+          ? (props['padding'] as num).toDouble()
+          : null;
+      final top = (paddingMap?['top'] as num?)?.toDouble() ??
+          uniformPadding ??
+          schemaPadding;
+      final right = (paddingMap?['right'] as num?)?.toDouble() ??
+          uniformPadding ??
+          schemaPadding;
+      final bottom = (paddingMap?['bottom'] as num?)?.toDouble() ??
+          uniformPadding ??
+          schemaPadding;
+      final left = (paddingMap?['left'] as num?)?.toDouble() ??
+          uniformPadding ??
+          schemaPadding;
 
       if (binding.isEmpty ||
           label == null ||
@@ -968,6 +1062,21 @@ class ComponentRegistry {
         onPressed: !state.isBindingWritable(binding)
             ? null
             : () async {
+          // Triggers that declare schema options: cycle to the next option
+          // value, then send via setBinding dispatch.
+          if (triggerOptions.length >= 2) {
+            var currentIndex = -1;
+            for (var i = 0; i < triggerOptions.length; i++) {
+              if (AppState.enumOptionEntryMatches(triggerOptions[i], value)) {
+                currentIndex = i;
+                break;
+              }
+            }
+            final next =
+                triggerOptions[(currentIndex + 1) % triggerOptions.length];
+            state.setBinding(binding, next['value']);
+            return;
+          }
           final events = (props['events'] as List? ?? const [])
               .whereType<Map>();
           final hasSend = events.any(

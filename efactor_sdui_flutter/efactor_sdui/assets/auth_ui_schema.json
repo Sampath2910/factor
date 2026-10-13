@@ -32,7 +32,7 @@
       "breakpoints": {
         "narrow": {
           "minimumWidth": 0,
-          "maximumWidth": 359
+          "maximumWidth": 390
         },
         "compact": {
           "minimumWidth": 360,
@@ -361,6 +361,10 @@
       "orientation": "portrait|landscape",
       "keyboardAvoidance": true,
       "scrollBehavior": "inside-screen",
+      "defaults": {
+        "countryCode": "+91",
+        "userType": "User"
+      },
       "postAuthDestination": {
         "type": "flutterAppHome",
         "targetPageId": "home",
@@ -3536,6 +3540,7 @@
         "scrollable": true,
         "safeArea": true,
         "keyboardAvoidance": true,
+        "verticalOverflow": "scroll",
         "sourcePage": {
           "view": "Views/sd_auth/signup.php",
           "generatedFromView": true,
@@ -5193,6 +5198,7 @@
                 "type": "textButton",
                 "text": "Send OTP",
                 "resendText": "Resend OTP",
+                "otpVisibilityStateKey": "signupForm.otpVisible",
                 "style": {
                   "color": "#FFFFFF",
                   "fontSize": 11,
@@ -5247,6 +5253,7 @@
                 "type": "button",
                 "text": "Verify",
                 "verifiedText": "Verified",
+                "verifiedStateKey": "signupForm.otpVerified",
                 "variant": "glassPill",
                 "size": {
                   "height": 30,
@@ -5577,6 +5584,7 @@
         "scrollable": true,
         "safeArea": true,
         "keyboardAvoidance": true,
+        "verticalOverflow": "scroll",
         "sourcePage": {
           "view": "Views/sd_auth/forgot_password.php",
           "generatedFromView": true,
@@ -6615,6 +6623,7 @@
                 "type": "textButton",
                 "text": "Resend OTP",
                 "resendText": "Resend OTP",
+                "otpVisibilityStateKey": "forgotPasswordForm.otpVisible",
                 "style": {
                   "color": "#FFFFFF",
                   "fontSize": 11,

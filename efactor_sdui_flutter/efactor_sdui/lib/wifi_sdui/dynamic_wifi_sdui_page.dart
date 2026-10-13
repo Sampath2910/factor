@@ -180,6 +180,8 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     super.dispose();
   }
 
+  /// Pull-to-refresh: Wi‑Fi has no separate schema API — reload the live
+  /// device schema via the host callback (`forceRefresh: true` upstream).
   Future<void> _refreshLiveSchema() async {
     if (_busy) return;
     final refresh = widget.state.onPostProvisionRefresh;

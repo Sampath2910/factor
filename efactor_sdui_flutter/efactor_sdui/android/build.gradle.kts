@@ -1,3 +1,6 @@
+import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+
 allprojects {
     repositories {
         google()
@@ -9,6 +12,16 @@ allprojects {
         maven {
             url = uri("${rootProject.projectDir}/../packages/efactor_provisioning/android/repo")
         }
+    }
+}
+
+// Prefer the running JDK (Android Studio JBR 21) when plugins request an
+// older toolchain. Applied afterEvaluate so it wins over plugin defaults.
+subprojects {
+    afterEvaluate {
+        extensions.findByType(JavaPluginExtension::class.java)?.toolchain
+            ?.languageVersion
+            ?.set(JavaLanguageVersion.of(21))
     }
 }
 

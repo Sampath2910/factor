@@ -295,6 +295,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage> {
             Expanded(
               child: SchemaPullToRefresh(
                 fillViewport: true,
+                // Pull always forces a full live schema fetch (not cache/delta).
                 onRefresh: () => _revalidateInBackground(forceFull: true),
                 child: renderer.buildRoot(context),
               ),

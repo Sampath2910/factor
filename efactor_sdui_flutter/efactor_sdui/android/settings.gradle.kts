@@ -17,11 +17,15 @@ pluginManagement {
     }
 }
 
-   plugins {
+plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("dev.flutter.flutter-gradle-plugin") version "1.0.0" apply false
     id("com.android.application") version "8.13.2" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    id("com.google.gms.google-services") version "4.4.2" apply false
+    // flutter_callkit_incoming requests JDK 17 via toolchain; this machine
+    // only has Android Studio JBR (21). Foojay auto-provisions JDK 17.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.9.0"
 }
 
 include(":app")

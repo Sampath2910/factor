@@ -6,11 +6,18 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Apply only when Firebase config is present so local builds still work.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.example.efactor_sdui"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
     compileOptions {
+        // Required by flutter_local_notifications (and modern AndroidX).
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -70,6 +77,7 @@ kotlin {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 // Android Studio Build / Make Project requests :app:testClasses.

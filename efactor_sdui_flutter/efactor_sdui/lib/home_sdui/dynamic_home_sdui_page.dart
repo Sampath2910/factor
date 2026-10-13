@@ -864,15 +864,21 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     _iotWasEmbedded = embedIot;
     _gridWasEmbedded = embedGrid;
 
-    final homeBody = SchemaPullToRefresh(
-      // Pull-to-refresh reloads the LIVE Home schema itself,
-      // not only the current route's data source.
-      onRefresh: () => _refreshLiveSchema(
-        showFeedback: false,
-        forceFull: true,
-      ),
-      child: renderer.buildComponent(context, rootId),
-    );
+    // Only attach Home pull-to-refresh when Home is the visible tab so
+    // embedded IoT/Grid own their own live schema pull indicators.
+    final homeContent = renderer.buildComponent(context, rootId);
+    final showingHome = !embedIot && !embedGrid;
+    final homeBody = showingHome
+        ? SchemaPullToRefresh(
+            // Pull-to-refresh reloads the LIVE Home schema itself,
+            // not only the current route's data source.
+            onRefresh: () => _refreshLiveSchema(
+              showFeedback: false,
+              forceFull: true,
+            ),
+            child: homeContent,
+          )
+        : homeContent;
 
     if (!_iotSurfaceOpened && !_gridSurfaceOpened) {
       return homeBody;

@@ -286,15 +286,17 @@ class AuthRenderer {
       builder: (context, constraints) {
         final metrics = DeviceScreenMetrics.fromContext(context);
         final runtime = SchemaRuntime(schema);
-        final logicalWidth = runtime.useSafeArea == true
+        // Breakpoints use full logical size (not safe-area inset width) so a
+        // 360dp phone is not misclassified as "narrow" after horizontal insets.
+        final layoutWidth = runtime.useSafeArea == true
             ? metrics.safeWidth
             : metrics.logicalWidth;
-        final logicalHeight = runtime.useSafeArea == true
+        final layoutHeight = runtime.useSafeArea == true
             ? metrics.safeHeight
             : metrics.logicalHeight;
         final breakpointName = runtime.resolveBreakpointName(
-          logicalWidth,
-          logicalHeight: logicalHeight,
+          metrics.logicalWidth,
+          logicalHeight: metrics.logicalHeight,
           orientation: metrics.orientation,
         );
         final legacyBreakpoint = _n(mobile['breakpointMaxWidth']) ?? 430;
@@ -316,13 +318,19 @@ class AuthRenderer {
           pageLayout['contentPadding'],
         );
 
-        // The mobileViewport contract explicitly owns the full-bleed phone
-        // frame (width=100%, padding=0). Do not reinterpret breakpoint
-        // contentPadding as an extra outer inset on narrow/compact phones;
-        // responsive panel/component padding is handled by the page itself.
-        final pageInsets = isMobile
-            ? EdgeInsets.all(basePagePadding)
-            : (responsiveInsets ?? EdgeInsets.all(basePagePadding));
+        // Prefer schema mobileViewport padding. When it is 0, apply only the
+        // horizontal breakpoint contentPadding so narrow phones keep side inset
+        // without double-stacking vertical chrome.
+        final pageInsets = !isMobile
+            ? (responsiveInsets ?? EdgeInsets.all(basePagePadding))
+            : (basePagePadding > 0
+                ? EdgeInsets.all(basePagePadding)
+                : (responsiveInsets != null
+                    ? EdgeInsets.only(
+                        left: responsiveInsets.left,
+                        right: responsiveInsets.right,
+                      )
+                    : EdgeInsets.zero));
 
         final phonePadding = _length(context, phoneSpec['padding']) ?? 0;
 
@@ -332,11 +340,11 @@ class AuthRenderer {
 
         final availableHeight = constraints.maxHeight.isFinite
             ? constraints.maxHeight
-            : MediaQuery.sizeOf(context).height;
+            : layoutHeight;
 
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width;
+            : layoutWidth;
 
         final contentHeight = (availableHeight - pageInsets.vertical).clamp(
           0.0,
@@ -378,18 +386,37 @@ class AuthRenderer {
         final hasGlassPanel = components.any(
           (raw) => raw is Map && raw['type']?.toString() == 'glassPanel',
         );
+        final keyboardInset =
+            MediaQuery.maybeViewInsetsOf(context)?.bottom ??
+            View.of(context).viewInsets.bottom;
+        final isKeyboardVisible =
+            _keyboardVisible || keyboardInset > 0;
+        final scaffoldAvoidsKeyboard =
+            page['keyboardAvoidance'] == true ||
+            schema['app']?['keyboardAvoidance'] == true;
+        // Tall auth forms (signup/forgot) use glassPanel + scrollInside. When
+        // the keyboard is open, outer scroll must still work or CTAs clip.
+        final needsOuterScrollExtent =
+            pageScrollable && (isKeyboardVisible || !hasGlassPanel);
+        // Keep a stable scroll parent whenever the page is scrollable. Swapping
+        // Padding ↔ SingleChildScrollView on IME open remounts inputs and
+        // cancels the soft keyboard (see Android ImeTracker onCancelled).
+        final useOuterScroll = pageScrollable;
 
         if (isMobile) {
           final desktopPhoneSpec =
               _map(desktop['phone']) ?? const <String, dynamic>{};
           final desktopMinimum =
               _length(context, desktopPhoneSpec['minHeight']) ?? contentHeight;
-          final canvasHeight = pageScrollable && !hasGlassPanel
-              ? (desktopMinimum > contentHeight
-                    ? desktopMinimum
-                    : contentHeight)
-              : contentHeight;
+          final usableHeight = contentHeight.clamp(0.0, double.infinity);
+          final canvasHeight = needsOuterScrollExtent
+              ? (desktopMinimum > usableHeight ? desktopMinimum : usableHeight)
+              : usableHeight;
 
+          // Scaffold resizeToAvoidBottomInset already shrinks the body — do not
+          // also pad by keyboardInset or the form jumps twice and loses focus.
+          final bottomPad =
+              (!scaffoldAvoidsKeyboard && isKeyboardVisible) ? keyboardInset : 0.0;
           final mobileCanvas = SizedBox(
             width: contentWidth,
             height: canvasHeight,
@@ -399,20 +426,27 @@ class AuthRenderer {
             ),
           );
 
-          if (pageScrollable &&
-              !hasGlassPanel &&
-              canvasHeight > contentHeight) {
+          if (useOuterScroll) {
             return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: ClampingScrollPhysics(),
+              physics: needsOuterScrollExtent
+                  ? const AlwaysScrollableScrollPhysics(
+                      parent: ClampingScrollPhysics(),
+                    )
+                  : const ClampingScrollPhysics(),
+              padding: pageInsets.copyWith(
+                bottom: pageInsets.bottom + bottomPad,
               ),
-              padding: pageInsets,
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
               child: mobileCanvas,
             );
           }
 
-          return Padding(padding: pageInsets, child: mobileCanvas);
+          return Padding(
+            padding: pageInsets.copyWith(
+              bottom: pageInsets.bottom + bottomPad,
+            ),
+            child: mobileCanvas,
+          );
         }
 
         final responsivePhoneWidth = _responsiveMaxWidth(
@@ -420,8 +454,8 @@ class AuthRenderer {
           contentWidth,
         );
         final rootLayout = runtime.resolveResponsiveLayout(
-          logicalWidth,
-          logicalHeight: logicalHeight,
+          metrics.logicalWidth,
+          logicalHeight: metrics.logicalHeight,
           orientation: metrics.orientation,
         );
         final rootMaxContentWidth = rootLayout?.maxContentWidth;
@@ -442,7 +476,8 @@ class AuthRenderer {
         );
 
         final shortViewportNeedsScroll =
-            pageScrollable && !hasGlassPanel && contentHeight < minHeight;
+            needsOuterScrollExtent &&
+            (contentHeight < minHeight || isKeyboardVisible);
         final height = shortViewportNeedsScroll
             ? (declaredHeight < minHeight ? minHeight : declaredHeight)
             : declaredHeight
@@ -475,13 +510,16 @@ class AuthRenderer {
           child: screen,
         );
 
-        if (shortViewportNeedsScroll) {
+        // Stable scroll parent on desktop too — avoid Padding ↔ ScrollView swap.
+        if (useOuterScroll) {
           return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: ClampingScrollPhysics(),
-            ),
+            physics: shortViewportNeedsScroll
+                ? const AlwaysScrollableScrollPhysics(
+                    parent: ClampingScrollPhysics(),
+                  )
+                : const ClampingScrollPhysics(),
             padding: pageInsets,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
             child: Align(alignment: Alignment.topCenter, child: phone),
           );
         }
@@ -595,8 +633,14 @@ class AuthRenderer {
                 _keyboardVisible ||
                 (View.of(context).viewInsets.bottom > 0) ||
                 (MediaQuery.maybeViewInsetsOf(context)?.bottom ?? 0) > 0;
+            final pageScrollable =
+                _page?['scrollable'] == true ||
+                _page?['verticalOverflow']?.toString().trim().toLowerCase() ==
+                    'scroll';
+            // Keep top alignment for scrollable auth forms so opening the IME
+            // does not flip center → topCenter and remount the form subtree.
             return Align(
-              alignment: isKeyboardVisible
+              alignment: (isKeyboardVisible || pageScrollable)
                   ? Alignment.topCenter
                   : Alignment.center,
               child: ConstrainedBox(
@@ -740,7 +784,8 @@ class AuthRenderer {
           // scrollable only when it reaches the available vertical limit.
           body = CustomScrollView(
             shrinkWrap: true,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            // Manual: IME-driven layout changes must not dismiss the keyboard.
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
             physics: const AlwaysScrollableScrollPhysics(
               parent: ClampingScrollPhysics(),
             ),
@@ -850,6 +895,23 @@ class AuthRenderer {
     );
   }
 
+  /// Resolves which state key controls Send/Resend OTP label switching.
+  /// Prefers schema metadata; falls back to legacy button ids.
+  String? _otpVisibilityStateKey(Map<String, dynamic> component) {
+    for (final key in <String>[
+      'otpVisibilityStateKey',
+      'resendWhenStateKey',
+      'visibilityStateKey',
+    ]) {
+      final value = component[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    final id = component['id']?.toString();
+    if (id == 'signup_send_otp') return 'signupForm.otpVisible';
+    if (id == 'forgot_send_otp') return 'forgotPasswordForm.otpVisible';
+    return null;
+  }
+
   Widget _button(
     BuildContext context,
     Map<String, dynamic> component, {
@@ -865,22 +927,34 @@ class AuthRenderer {
 
     final loading = action != null && state.isActionLoading(action);
 
-    final otpVisibleKey = component['id'] == 'signup_send_otp'
-        ? 'signupForm.otpVisible'
-        : (component['id'] == 'forgot_send_otp'
-            ? 'forgotPasswordForm.otpVisible'
-            : null);
-    final isOtpSent = otpVisibleKey != null && state.read(otpVisibleKey) == true;
-    final defaultText = (isOtpSent && component['resendText'] != null)
-        ? component['resendText'].toString()
-        : (text ?? '');
+    final otpVisibleKey = _otpVisibilityStateKey(component);
+    final isOtpSent =
+        otpVisibleKey != null && state.read(otpVisibleKey) == true;
+    final verifiedStateKey =
+        component['verifiedStateKey']?.toString().trim().isNotEmpty == true
+        ? component['verifiedStateKey'].toString().trim()
+        : (component['actionRef']?.toString() == 'verifySignupOtp'
+            ? 'signupForm.otpVerified'
+            : (component['actionRef']?.toString() == 'verifyForgotOtp'
+                ? 'forgotPasswordForm.otpVerified'
+                : null));
+    final isVerified =
+        verifiedStateKey != null && state.read(verifiedStateKey) == true;
+    final defaultText = (isVerified && component['verifiedText'] != null)
+        ? component['verifiedText'].toString()
+        : ((isOtpSent && component['resendText'] != null)
+            ? component['resendText'].toString()
+            : (text ?? ''));
 
     final resolvedText = loading && component['loadingText'] != null
         ? component['loadingText'].toString()
         : defaultText;
 
-    final rawLabelColor =
-        _color(style[textButton ? 'color' : 'textColor']);
+    final rawLabelColor = _color(
+      isVerified && style['verifiedTextColor'] != null
+          ? style['verifiedTextColor']
+          : style[textButton ? 'color' : 'textColor'],
+    );
     if (rawLabelColor == null) {
       return AuthSchemaIssue(
         title: 'Schema color missing',
@@ -976,6 +1050,16 @@ class AuthRenderer {
 
     final size = _map(component['size']);
 
+    final buttonStyle = isVerified
+        ? <String, dynamic>{
+            ...style,
+            if (style['verifiedBackgroundColor'] != null)
+              'backgroundColor': style['verifiedBackgroundColor'],
+            if (style['verifiedBorderColor'] != null)
+              'borderColor': style['verifiedBorderColor'],
+          }
+        : style;
+
     Widget button = Material(
       color: Colors.transparent,
       child: InkWell(
@@ -985,7 +1069,7 @@ class AuthRenderer {
             : null,
         child: Ink(
           height: _n(size?['height']),
-          decoration: _buttonDecoration(style, radius),
+          decoration: _buttonDecoration(buttonStyle, radius),
           child: Center(
             child: loading
                 ? const SizedBox(
@@ -1282,6 +1366,7 @@ class AuthRenderer {
     };
 
     return _AuthBoundField(
+      key: ValueKey<String>('auth_field_$stateKey'),
       state: state,
       stateKey: stateKey,
       password: password,
@@ -2526,6 +2611,7 @@ class _PhoneNumberFormatter extends TextInputFormatter {
 
 class _AuthBoundField extends StatefulWidget {
   const _AuthBoundField({
+    super.key,
     required this.state,
     required this.stateKey,
     required this.password,

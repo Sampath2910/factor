@@ -15,6 +15,7 @@ import 'services/app_cache_manager.dart';
 import 'services/efactor_cloud_service.dart';
 import 'services/incoming_call_service.dart';
 import 'services/location_startup_gate.dart';
+import 'services/push_notification_bootstrap.dart';
 import 'services/schema_prefetch.dart';
 
 Future<void> main() async {
@@ -32,6 +33,8 @@ Future<void> main() async {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
   EfactorCloudService.instance.configureLogs();
+  // Soft-fails when Firebase config files are missing.
+  await PushNotificationBootstrap.instance.initialize();
 
   runApp(
     const LocationStartupGate(
@@ -109,8 +112,9 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
 
     final uid = _authenticatedUserId()?.toString() ?? '';
     if (uid.isNotEmpty) {
+      // Permission + FCM token + backend register (no-ops if Firebase missing).
       unawaited(
-        IncomingCallService.instance.syncDeviceTokenOnLogin(
+        PushNotificationBootstrap.instance.ensureTokenSynced(
           userId: uid,
           accessToken: token,
         ),

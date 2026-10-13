@@ -1691,30 +1691,37 @@ class ParameterCard extends StatelessWidget {
 
     if (_normalizedType(result['type']) == 'elevatedbutton' &&
         !hasConflictingCopiedComponent) {
+      // Prefer schema-authored captions only (props / accessory / control
+      // label / parameter). Do not invent Material sizes or colors here.
       final declaredLabel = <dynamic>[
         props['label'],
         accessory['label'],
+        sourceControl['label'],
+        sourceControl['parameter'],
+        sourceControl['parameterName'],
         sourceControl['component'] is Map
             ? (sourceControl['component'] as Map)['displayValue']
             : null,
-        sourceControl['value'],
-        sourceControl['initialValue'],
       ]
           .map((value) => value?.toString().trim())
           .whereType<String>()
           .where((value) => value.isNotEmpty)
+          .where((value) => !_isUiComponentTypeName(value))
           .toList(growable: false);
+      // When the schema only published labelBinding, copy a schema caption so
+      // ElevatedButton still has a required label from schema fields.
       if (declaredLabel.isNotEmpty &&
           (props['label'] == null ||
               props['label'].toString().trim().isEmpty)) {
         props['label'] = declaredLabel.first;
       }
-      // Trigger captions are schema display labels ("Command"). The live
-      // binding holds the protocol byte ("08") and must not replace the
-      // button text after a send.
+      // Trigger captions are schema display labels. The live binding holds the
+      // protocol byte and must not replace the button text after a send —
+      // unless the control declares options (mapped live state).
       final valueType =
           sourceControl['valueType']?.toString().trim().toLowerCase();
-      if (valueType == 'trigger') {
+      if (valueType == 'trigger' &&
+          AppState.optionsFor(sourceControl).isEmpty) {
         props.remove('labelBinding');
       }
     }
@@ -1945,17 +1952,13 @@ class ParameterCard extends StatelessWidget {
       }
     }
 
-    final cleanOptions = AppState.optionsFor(control);
-    for (final option in cleanOptions) {
-      final optionValue = option['value'];
-      if (AppState.enumOptionMatches(optionValue, liveValue) ||
-          AppState.enumOptionMatches(option['label'], liveValue)) {
-        final label = option['label'] ?? option['text'] ?? option['title'];
-        if (label != null && label.toString().trim().isNotEmpty) {
-          final labelStr = label.toString().trim();
-          if (!RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(labelStr)) {
-            return labelStr;
-          }
+    final matched = AppState.resolveEnumOption(control, liveValue);
+    if (matched != null) {
+      final label = matched['label'] ?? matched['text'] ?? matched['title'];
+      if (label != null && label.toString().trim().isNotEmpty) {
+        final labelStr = label.toString().trim();
+        if (!RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(labelStr)) {
+          return labelStr;
         }
       }
     }

@@ -260,6 +260,7 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
     }
   }
 
+  /// Pull-to-refresh always requests a full live auth schema (forceFull).
   Future<void> _pullRefreshAuthSchema() async {
     final current = _state;
     if (current == null) {

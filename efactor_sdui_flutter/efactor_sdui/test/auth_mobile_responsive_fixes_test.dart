@@ -87,6 +87,32 @@ void main() {
     expect(find.text('Schema error'), findsNothing);
   });
 
+  testWidgets('Signup page scrolls when keyboard opens on short phone', (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final state = AuthState(pageSchema('signup'));
+    final renderer = AuthRenderer(state);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(360, 640),
+            viewInsets: EdgeInsets.only(bottom: 280),
+          ),
+          child: Builder(builder: (ctx) => renderer.build(ctx)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(SingleChildScrollView), findsWidgets);
+    expect(find.text('Schema error'), findsNothing);
+  });
+
   testWidgets('Auth card slides to topCenter when keyboard opens on 360dp phone', (tester) async {
     tester.view.physicalSize = const Size(360, 780);
     tester.view.devicePixelRatio = 1.0;
@@ -115,6 +141,60 @@ void main() {
       return widget is Align && widget.alignment == Alignment.topCenter;
     });
     expect(alignFinder, findsWidgets, reason: 'Card must align to topCenter when keyboard is visible');
+  });
+
+  testWidgets('Signup TextField keeps focus after keyboard insets appear', (tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final state = AuthState(pageSchema('signup'));
+    final renderer = AuthRenderer(state);
+
+    Future<void> pumpAuth({double keyboardBottom = 0}) {
+      return tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: const Size(360, 780),
+              viewInsets: EdgeInsets.only(bottom: keyboardBottom),
+            ),
+            child: AnimatedBuilder(
+              animation: state,
+              builder: (ctx, _) => renderer.build(ctx),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await pumpAuth();
+    await tester.pump();
+
+    final emailField = find.byWidgetPredicate(
+      (w) => w is TextField && w.keyboardType == TextInputType.emailAddress,
+    );
+    expect(emailField, findsOneWidget);
+
+    await tester.tap(emailField);
+    await tester.pump();
+    expect(
+      FocusManager.instance.primaryFocus?.hasFocus,
+      isTrue,
+      reason: 'Email field must take focus on tap',
+    );
+
+    // IME open: same tree with viewInsets — focus must survive the rebuild.
+    await pumpAuth(keyboardBottom: 280);
+    await tester.pump();
+
+    expect(
+      FocusManager.instance.primaryFocus?.hasFocus,
+      isTrue,
+      reason: 'Focus must survive keyboard inset rebuild (IME cancel bug)',
+    );
+    expect(find.byType(SingleChildScrollView), findsWidgets);
   });
 
   testWidgets('Tapping Send OTP with empty fields highlights errors instead of dropping tap', (tester) async {

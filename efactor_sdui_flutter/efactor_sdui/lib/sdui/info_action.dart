@@ -122,16 +122,31 @@ Future<void> handleOpenInfo(
     orientation: orientation,
   );
 
-  final dataSourceId = _firstText(<dynamic>[
-    effectiveAction['load'],
-    effectiveAction['dataSource'],
-    infoPage['dataSource'],
-    _asMap(_asMap(schema['meta'])?['infoPage'])?['dataSource'],
-  ]);
+  // dataSource may be a string id OR an inline map (asset / studio schemas).
+  Map<String, dynamic>? source;
+  final dsRaw = infoPage['dataSource'] ??
+      effectiveAction['dataSource'] ??
+      _asMap(_asMap(schema['meta'])?['infoPage'])?['dataSource'];
+  if (dsRaw is Map) {
+    source = _asMap(dsRaw);
+  } else {
+    final dataSourceId = _firstText(<dynamic>[
+      effectiveAction['load'],
+      dsRaw,
+    ]);
+    source = dataSourceId == null
+        ? null
+        : _asMap(_asMap(schema['dataSources'])?[dataSourceId]);
+  }
 
-  final source = dataSourceId == null
-      ? null
-      : _asMap(_asMap(schema['dataSources'])?[dataSourceId]);
+  final responsePath = _firstText(<dynamic>[
+    source?['responsePath'],
+    infoPage['responsePath'],
+  ]);
+  final infoPath = _firstText(<dynamic>[
+    infoPage['infoPath'],
+    source?['infoPath'],
+  ]);
 
   final rawDataSourceUrl = _firstText(<dynamic>[
     source?['url'],
@@ -152,6 +167,26 @@ Future<void> handleOpenInfo(
     );
   }
 
+  // 2. Seed from the already-loaded device schema using only infoPage /
+  // dataSource responsePath + infoPath declarations.
+  if (cachedPayload == null) {
+    final seeded = DeviceInfoCacheManager.seedInfoPayloadFromSchema(schema);
+    if (seeded != null) {
+      cachedPayload = seeded;
+      if (modelId.isNotEmpty ||
+          (resolvedUrl != null && resolvedUrl.isNotEmpty)) {
+        await DeviceInfoCacheManager.instance.saveInfoData(
+          modelId: modelId,
+          nodeId: nodeId,
+          url: resolvedUrl,
+          data: seeded,
+          responsePath: responsePath,
+          infoPath: infoPath,
+        );
+      }
+    }
+  }
+
   var resolver = _InfoBindingResolver.fromPayloads(
     schema: schema,
     infoPage: infoPage,
@@ -169,12 +204,16 @@ Future<void> handleOpenInfo(
     resolver,
   );
 
+  // Fetch only when the schema asks for onAction load or bindings are still
+  // unresolved after cache/schema seed. No URL allow/deny lists.
+  final shouldNetworkFetch = shouldLoadOnAction || hasUnresolvedBindings;
+
   // If no cached payload exists (first time loading):
   // We fetch from the network, immediately save locally to disk & memory, and display.
   // If cached payload DOES exist:
   // We DO NOT BLOCK the user! The page displays instantly from local cache (0ms).
   // In the background, silent revalidation fetches any fresh updates and applies them seamlessly.
-  if (cachedPayload == null && (shouldLoadOnAction || hasUnresolvedBindings)) {
+  if (cachedPayload == null && shouldNetworkFetch) {
     final fetchedPayload = await _tryLoadSchemaDeclaredInfoData(
       context: context,
       state: state,
@@ -191,6 +230,8 @@ Future<void> handleOpenInfo(
           nodeId: nodeId,
           url: resolvedUrl,
           data: fetchedPayload,
+          responsePath: responsePath,
+          infoPath: infoPath,
         );
       }
       resolver = _InfoBindingResolver.fromPayloads(
@@ -201,7 +242,7 @@ Future<void> handleOpenInfo(
       );
       resolverNotifier.value = resolver;
     }
-  } else if (cachedPayload != null && (shouldLoadOnAction || hasUnresolvedBindings)) {
+  } else if (cachedPayload != null && shouldNetworkFetch) {
     // Silent background revalidation (stale-while-revalidate)
     unawaited(() async {
       try {
@@ -220,6 +261,8 @@ Future<void> handleOpenInfo(
               nodeId: nodeId,
               url: resolvedUrl,
               data: freshPayload,
+              responsePath: responsePath,
+              infoPath: infoPath,
             );
           }
           resolverNotifier.value = _InfoBindingResolver.fromPayloads(

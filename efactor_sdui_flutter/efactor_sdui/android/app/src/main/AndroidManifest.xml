@@ -93,6 +93,14 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- Default FCM tray channel (must match PushNotificationBootstrap). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="efactor_messages" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
+
         <!-- Disable Impeller: impellerc.exe shader compiler is blocked by
              Windows Application Control policy on this build machine.
              Using the legacy Skia renderer instead. -->

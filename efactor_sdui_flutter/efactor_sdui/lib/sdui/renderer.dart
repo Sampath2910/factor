@@ -2879,6 +2879,10 @@ class _ApiControlGroup extends StatelessWidget {
               resolvedPadding,
             ),
             child: Column(
+              // Intrinsic height only. A max-size Column inside a bounded
+              // device page viewport expands into a tall empty gray card
+              // (header at top, blank body) — seen on trigger-only groups.
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (label.isNotEmpty) ...[
@@ -2976,6 +2980,7 @@ Widget _responseRows({
 
   Widget column(List<Map<String, dynamic>> visible) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < visible.length; i++) ...[

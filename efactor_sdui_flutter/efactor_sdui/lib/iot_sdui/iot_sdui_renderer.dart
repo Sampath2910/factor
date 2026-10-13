@@ -135,9 +135,14 @@ class IotSduiRenderer {
   }
 
   Future<void> _refresh() async {
+    // Pull-to-refresh must fetch live IoT schema (reloadHandler uses
+    // forceRefresh: true), then refresh the device grid datasource.
     final reload = state.reloadHandler;
     if (reload != null) {
       await reload();
+    } else {
+      await state.refreshDeviceGrid();
+      return;
     }
     if (state.deviceGrid != null) {
       await state.refreshDeviceGrid();

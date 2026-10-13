@@ -8,15 +8,11 @@ import '../iot_sdui/iot_schema_repository.dart';
 import '../sdui/sdui_network_image_cache.dart';
 import 'json_http.dart';
 
-/// Saves a schema only when the user opens that screen.
+/// Loads schemas on demand and warms a small set after login for offline use.
 ///
-/// Login does not download Home, IoT, and every device document together.
-/// Each of those files is large, and parsing the whole account at once is
-/// what exhausts memory and kills the process. Home loads when Home is
-/// shown. IoT loads when IoT is opened, and that load is only the IoT
-/// screen. A device schema loads when that device is tapped. A saved copy
-/// is reused; it is not downloaded again. Two callers for the same schema
-/// share one in-flight request.
+/// Device schemas stay on-demand (opening every device at login exhausted
+/// memory). Home, Grid, and IoT list schemas are queued in the background
+/// after login so airplane mode still paints those shells.
 class SchemaLoadQueue {
   SchemaLoadQueue._();
 
@@ -32,8 +28,7 @@ class SchemaLoadQueue {
   bool _pumping = false;
   String? _runningKey;
 
-  /// Remembers the session. Does not download Home, IoT, or device schemas.
-  /// The screen the user is looking at loads its own schema.
+  /// Remembers the session and background-prefetches Home, Grid, and IoT.
   Future<void> startAfterLogin({
     required String accessToken,
     int? userId,
@@ -42,6 +37,11 @@ class SchemaLoadQueue {
     if (token.isEmpty) return Future<void>.value();
     _token = token;
     _userId = userId;
+    // Front-queue in reverse so Home runs first, then Grid, then IoT.
+    _enqueueFront(_PrefetchTask('iot', _runIot));
+    _enqueueFront(_PrefetchTask('grid:${userId ?? 0}', _runGrid));
+    _enqueueFront(_PrefetchTask('home:${userId ?? 0}', _runHome));
+    unawaited(_kick());
     return Future<void>.value();
   }
 
@@ -236,6 +236,18 @@ class SchemaLoadQueue {
     }
   }
 
+  Future<void> _runHome() async {
+    if (_token.isEmpty) return;
+    final schema = await loadHome(accessToken: _token, userId: _userId);
+    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
+  }
+
+  Future<void> _runIot() async {
+    if (_token.isEmpty) return;
+    final schema = await loadIot(accessToken: _token);
+    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
+  }
+
   Future<void> _runGrid() async {
     if (_token.isEmpty) return;
     final schema = await loadGrid(accessToken: _token, userId: _userId);
@@ -324,8 +336,7 @@ Future<Map<String, dynamic>> _fetchDevice({
   }
 }
 
-/// Keeps the session token. Home, IoT, Grid, and each device load when that
-/// screen is opened.
+/// Stores the session and warms Home / Grid / IoT schemas in the background.
 Future<void> prefetchAuthenticatedSchemas({
   required String accessToken,
   int? userId,

@@ -34,9 +34,18 @@ class AuthTemporaryApiOverlay {
     auth.putIfAbsent('userId', () => auth['user_id']);
     auth.putIfAbsent('notice', () => null);
 
+    final defaults = _writableMap(schema['app']?['defaults']) ??
+        _writableMap(schema['config']) ??
+        const <String, dynamic>{};
+    final defaultCountry =
+        (defaults['countryCode'] ?? defaults['country_code'] ?? '+91')
+            .toString();
+    final defaultUserType =
+        (defaults['userType'] ?? defaults['user_type'] ?? 'User').toString();
+
     final signupForm = _ensureMap(state, 'signupForm');
-    signupForm.putIfAbsent('country_code', () => '+91');
-    signupForm.putIfAbsent('user_type', () => 'User');
+    signupForm.putIfAbsent('country_code', () => defaultCountry);
+    signupForm.putIfAbsent('user_type', () => defaultUserType);
   }
 
   static Map<String, dynamic> _ensureMap(

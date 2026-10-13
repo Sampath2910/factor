@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,10 +10,14 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import '../sdui/schema_pull_to_refresh.dart';
+import 'grid_web_snapshot.dart';
+
 /// Full-screen in-app WebView for Grid schema `openIn: inAppWebView`.
 ///
-/// Always fetches live from the server without local caching. When internet
-/// is unavailable, renders a user-friendly offline illustration and message.
+/// Online visits save a script-stripped DOM snapshot. Offline opens restore
+/// that last view when available; otherwise show the offline illustration.
+/// Pull-to-refresh always reloads the live URL (not the snapshot).
 class GridInAppWebViewPage extends StatefulWidget {
   const GridInAppWebViewPage({
     super.key,
@@ -123,9 +128,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   late final WebViewController _controller;
   var _loading = true;
   var _hasInjectedSso = false;
+  var _showingSnapshot = false;
   String? _error;
+  Completer<void>? _navigationCompleter;
 
   Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
+
+  void _completeNavigation() {
+    final pending = _navigationCompleter;
+    if (pending != null && !pending.isCompleted) {
+      pending.complete();
+    }
+  }
 
   @override
   void initState() {
@@ -193,12 +207,16 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               _error = null;
             });
           },
-          onPageFinished: (_) {
+          onPageFinished: (url) {
             if (!mounted) return;
             setState(() {
               _loading = false;
               _error = null;
             });
+            _completeNavigation();
+            if (!_showingSnapshot) {
+              unawaited(_persistSnapshot());
+            }
           },
           onWebResourceError: (error) {
             if (!mounted) return;
@@ -212,10 +230,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               );
               return;
             }
-            setState(() {
-              _loading = false;
-              _error = error.description;
-            });
+            unawaited(_handleLoadFailure(error.description));
+            _completeNavigation();
           },
         ),
       );
@@ -367,7 +383,92 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
         await Permission.camera.request();
       }
     }
+    final online = await _isOnline();
+    if (!online) {
+      final restored = await _tryLoadSnapshot();
+      if (restored) return;
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'offline';
+      });
+      return;
+    }
+    _showingSnapshot = false;
     await _controller.loadRequest(_effectiveUri);
+  }
+
+  Future<bool> _isOnline() async {
+    try {
+      final results = await Connectivity().checkConnectivity();
+      if (results.isEmpty) return false;
+      return results.any((r) => r != ConnectivityResult.none);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<bool> _tryLoadSnapshot() async {
+    final html = await GridWebSnapshot.read(_effectiveUri);
+    if (html == null || html.trim().isEmpty) return false;
+    _showingSnapshot = true;
+    await _controller.loadHtmlString(
+      html,
+      baseUrl: _effectiveUri.origin,
+    );
+    if (!mounted) return true;
+    setState(() {
+      _loading = false;
+      _error = null;
+    });
+    return true;
+  }
+
+  Future<void> _persistSnapshot() async {
+    try {
+      final raw = await _controller.runJavaScriptReturningResult(
+        'document.documentElement.outerHTML',
+      );
+      final html = _unwrapJsString(raw);
+      if (html == null || html.length < 64) return;
+      await GridWebSnapshot.save(_effectiveUri, html);
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Snapshot save failed: $e');
+    }
+  }
+
+  Future<void> _handleLoadFailure(String description) async {
+    if (_showingSnapshot) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = description;
+      });
+      return;
+    }
+    final restored = await _tryLoadSnapshot();
+    if (restored) return;
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _error = description;
+    });
+  }
+
+  static String? _unwrapJsString(Object? raw) {
+    if (raw == null) return null;
+    var text = raw.toString().trim();
+    if (text.length >= 2 &&
+        ((text.startsWith('"') && text.endsWith('"')) ||
+            (text.startsWith("'") && text.endsWith("'")))) {
+      text = text.substring(1, text.length - 1);
+      text = text
+          .replaceAll(r'\"', '"')
+          .replaceAll(r"\'", "'")
+          .replaceAll(r'\n', '\n')
+          .replaceAll(r'\\', r'\');
+    }
+    return text;
   }
 
   void _showPermissionSettingsPrompt({
@@ -410,10 +511,55 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     setState(() {
       _error = null;
       _loading = true;
+      _showingSnapshot = false;
     });
     if (!mounted) return;
     _hasInjectedSso = false;
-    await _controller.loadRequest(_effectiveUri);
+    await _setupPermissionsAndLoad();
+  }
+
+  /// Pull-to-refresh always fetches the live page (skips snapshot restore).
+  Future<void> _pullRefreshLive() async {
+    _showingSnapshot = false;
+    _hasInjectedSso = false;
+    if (mounted) {
+      setState(() {
+        _error = null;
+        _loading = true;
+      });
+    }
+    final completer = Completer<void>();
+    _navigationCompleter = completer;
+    try {
+      final online = await _isOnline();
+      if (!online) {
+        final restored = await _tryLoadSnapshot();
+        if (!restored && mounted) {
+          setState(() {
+            _loading = false;
+            _error = 'offline';
+          });
+        }
+        return;
+      }
+      await _controller.loadRequest(_effectiveUri);
+      await completer.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {},
+      );
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Pull refresh failed: $e');
+      if (mounted && _error == null) {
+        await _handleLoadFailure(e.toString());
+      }
+    } finally {
+      if (identical(_navigationCompleter, completer)) {
+        _navigationCompleter = null;
+      }
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   Widget _buildOfflineState(BuildContext context) {
@@ -593,15 +739,40 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
         body: SafeArea(
           top: !widget.showAppBar,
           bottom: true,
-          child: Stack(
-            children: <Widget>[
-              if (_error == null)
-                WebViewWidget(controller: _controller)
-              else
-                _buildOfflineState(context),
-              if (_loading && _error == null)
-                const LinearProgressIndicator(minHeight: 2),
-            ],
+          child: SchemaPullToRefresh(
+            fillViewport: true,
+            onRefresh: _pullRefreshLive,
+            child: Stack(
+              children: <Widget>[
+                if (_error == null)
+                  WebViewWidget(controller: _controller)
+                else
+                  _buildOfflineState(context),
+                if (_showingSnapshot && _error == null)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    top: 8,
+                    child: Material(
+                      color: const Color(0xCC1E293B),
+                      borderRadius: BorderRadius.circular(10),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          'Showing last saved view (offline). Calls and live chat need internet.',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_loading && _error == null)
+                  const LinearProgressIndicator(minHeight: 2),
+              ],
+            ),
           ),
         ),
       ),
