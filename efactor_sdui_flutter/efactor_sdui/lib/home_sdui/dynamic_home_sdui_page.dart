@@ -65,8 +65,9 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     with WidgetsBindingObserver {
   final HomeSchemaRepository _repository = HomeSchemaRepository();
 
-  static const Duration _resumeRefreshAfter = Duration(minutes: 2);
+  static const Duration _resumeRefreshAfter = Duration(seconds: 30);
   static const Duration _schemaEventDebounce = Duration(milliseconds: 250);
+  static const Duration _autoRefreshInterval = Duration(seconds: 10);
 
   DateTime? _lastSchemaLoadAt;
   bool _schemaRefreshInProgress = false;
@@ -75,8 +76,10 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
   StreamSubscription<bool>? _cloudConnectionSubscription;
   StreamSubscription<Map<String, dynamic>>? _nodeStatusSubscription;
   Timer? _schemaEventDebounceTimer;
+  Timer? _autoRefreshTimer;
   bool _cloudDisconnectedAfterConnect = false;
   int _loadGeneration = 0;
+  int _homeRenderEpoch = 0;
 
   HomeSduiState? _state;
   HomeSduiRenderer? _renderer;
@@ -98,7 +101,21 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _subscribeToSchemaInvalidations();
+    _startAutoRefreshTimer();
     _load(forceRefresh: false);
+  }
+
+  void _startAutoRefreshTimer() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) {
+      if (!mounted || !_hostAuthenticated || _state == null) return;
+      // Do not poll if currently inside embedded IoT or Grid sub-surface
+      if (_state?.shouldEmbedLiveIot() == true ||
+          _state?.shouldEmbedLiveGrid() == true) {
+        return;
+      }
+      _refreshLiveSchema(showFeedback: false, forceFull: false);
+    });
   }
 
   void _subscribeToSchemaInvalidations() {
@@ -214,62 +231,108 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     return schemaFingerprint(schema);
   }
 
+  Future<void> _applyHomeSchema(
+    Map<String, dynamic> schema, {
+    required String fingerprint,
+  }) async {
+    _activeSchemaFingerprint = fingerprint;
+
+    final next = HomeSduiState(
+      schema: schema,
+      accessToken: widget.accessToken,
+      refreshToken: widget.refreshToken,
+      userId: widget.userId,
+      email: widget.email,
+      username: widget.username,
+      roles: widget.roles,
+    );
+
+    if (_hostAuthenticated) {
+      next.writeSecureState(
+        'session.accessToken',
+        widget.accessToken,
+        notify: false,
+      );
+      next.writeSecureState(
+        'session.iotAccessToken',
+        widget.accessToken,
+        notify: false,
+      );
+      next.writeState('session.authenticated', true, notify: false);
+    }
+
+    next.presentationHandler = _present;
+    next.hostActionHandler = _handleHostAction;
+
+    final renderer = HomeSduiRenderer(next);
+
+    final oldState = _state;
+    _state = next;
+    _renderer = renderer;
+    _homeRenderEpoch++;
+
+    oldState?.dispose();
+
+    setState(() {
+      _error = null;
+      _loading = false;
+    });
+
+    await _guardAuthenticatedRoute(next);
+    await next.loadRouteData();
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   Future<void> _refreshLiveSchema({
     bool showFeedback = false,
     bool forceFull = false,
   }) async {
-    if (!mounted ||
-        _schemaRefreshInProgress ||
-        _state == null ||
-        !_hostAuthenticated) {
+    if (!mounted || _schemaRefreshInProgress) {
+      return;
+    }
+    if (!_hostAuthenticated) {
+      logDebug(
+        '[HOME_SDUI][DIRECT_UPDATE] Skipped: authenticated access token is empty.',
+      );
       return;
     }
 
     _schemaRefreshInProgress = true;
 
     try {
-      final result = await _repository.revalidate(
+      // Direct live fetch for Home page: loads, parses, validates, and
+      // normalizes the authoritative server schema silently in the background
+      // without showing full-screen spinners or interrupting user interaction.
+      final incoming = await _repository.load(
+        forceRefresh: true,
         accessToken: widget.accessToken,
         userId: widget.userId,
-        forceFull: forceFull,
       );
-      if (!mounted || _state == null) return;
-
-      _lastSchemaLoadAt = DateTime.now();
-      if (!result.changed) {
-        logDebug(
-          '[HOME_SDUI][AUTO_REFRESH] schema unchanged '
-          'source=${result.source}',
-        );
-        return;
-      }
-
-      final incoming = result.schema;
-      final fingerprint = _schemaFingerprint(incoming);
-
-      if (fingerprint == _activeSchemaFingerprint) {
-        logDebug('[HOME_SDUI][AUTO_REFRESH] schema unchanged');
-        return;
-      }
-
-      logDebug(
-        '[HOME_SDUI][AUTO_REFRESH] schema changed '
-        'delta=${result.usedDelta} source=${result.source}',
-      );
-      _activeSchemaFingerprint = fingerprint;
-
-      final patch = await _state!.replaceSchema(incoming);
       if (!mounted) return;
 
-      if (patch.structural) {
-        _renderer = HomeSduiRenderer(_state!);
-      }
+      _lastSchemaLoadAt = DateTime.now();
+      final fingerprint = _schemaFingerprint(incoming);
+      final hasChanged = fingerprint != _activeSchemaFingerprint;
 
-      setState(() {
-        _error = null;
-      });
+      logDebug(
+        '[HOME_SDUI][DIRECT_UPDATE] Checked schema: '
+        'changed=$hasChanged forced=$forceFull '
+        'previousHash=$_activeSchemaFingerprint incomingHash=$fingerprint',
+      );
+
+      if (hasChanged || forceFull || _state == null) {
+        logDebug(
+          '[HOME_SDUI][DIRECT_UPDATE] Updating Home UI! '
+          'reason=${hasChanged ? "schema-hash-changed" : (forceFull ? "manual-forced-refresh" : "initial")}',
+        );
+        await _applyHomeSchema(incoming, fingerprint: fingerprint);
+      } else {
+        logDebug('[HOME_SDUI][DIRECT_UPDATE] Schema unchanged ($fingerprint)');
+      }
     } catch (error, stackTrace) {
-      logDebug('[HOME_SDUI][AUTO_REFRESH_ERROR] $error');
+      logDebug('[HOME_SDUI][DIRECT_UPDATE_ERROR] $error');
       if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
 
       if (showFeedback && mounted) {
@@ -309,63 +372,7 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         return;
       }
 
-      _activeSchemaFingerprint = fingerprint;
-
-      if (_state != null) {
-        final patch = await _state!.replaceSchema(schema);
-        if (!mounted || generation != _loadGeneration) return;
-        if (patch.structural) {
-          _renderer = HomeSduiRenderer(_state!);
-        }
-        setState(() {
-          _error = null;
-          _loading = false;
-        });
-      } else {
-        final next = HomeSduiState(
-          schema: schema,
-          accessToken: widget.accessToken,
-          refreshToken: widget.refreshToken,
-          userId: widget.userId,
-          email: widget.email,
-          username: widget.username,
-          roles: widget.roles,
-        );
-
-        if (_hostAuthenticated) {
-          next.writeSecureState(
-            'session.accessToken',
-            widget.accessToken,
-            notify: false,
-          );
-          next.writeSecureState(
-            'session.iotAccessToken',
-            widget.accessToken,
-            notify: false,
-          );
-          next.writeState('session.authenticated', true, notify: false);
-        }
-
-        next.presentationHandler = _present;
-        next.hostActionHandler = _handleHostAction;
-
-        final renderer = HomeSduiRenderer(next);
-
-        if (!mounted || generation != _loadGeneration) {
-          next.dispose();
-          return;
-        }
-
-        setState(() {
-          _state = next;
-          _renderer = renderer;
-          _error = null;
-          _loading = false;
-        });
-
-        await _guardAuthenticatedRoute(next);
-        await next.loadRouteData();
-      }
+      await _applyHomeSchema(schema, fingerprint: fingerprint);
 
       if (schema['_clientHomeSchemaCacheHit'] == true && mounted) {
         _refreshLiveSchema();
@@ -675,6 +682,7 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
   @override
   void dispose() {
     _loadGeneration++;
+    _autoRefreshTimer?.cancel();
     _schemaEventDebounceTimer?.cancel();
     _schemaInvalidationSubscription?.cancel();
     _cloudConnectionSubscription?.cancel();
@@ -866,12 +874,15 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
 
     // Only attach Home pull-to-refresh when Home is the visible tab so
     // embedded IoT/Grid own their own live schema pull indicators.
-    final homeContent = renderer.buildComponent(context, rootId);
+    final homeContent = KeyedSubtree(
+      key: ValueKey<String>('home-shell-epoch-$_homeRenderEpoch'),
+      child: renderer.buildComponent(context, rootId),
+    );
     final showingHome = !embedIot && !embedGrid;
     final homeBody = showingHome
         ? SchemaPullToRefresh(
             // Pull-to-refresh reloads the LIVE Home schema itself,
-            // not only the current route's data source.
+            // and refreshes the current route's dynamic data sources.
             onRefresh: () => _refreshLiveSchema(
               showFeedback: false,
               forceFull: true,

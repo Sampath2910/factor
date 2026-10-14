@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../sdui/schema_guard.dart';
-import '../sdui/schema_pull_to_refresh.dart';
 import '../sdui/sdui_network_image_cache.dart';
 import '../services/json_http.dart';
 import '../services/schema_incremental_sync.dart';
@@ -224,23 +223,19 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage> {
     }
 
     if (_error != null && state == null) {
-      return SchemaPullToRefresh(
-        fillViewport: true,
-        onRefresh: () => _load(forceRefresh: true),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(_error!, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => _load(forceRefresh: true),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => _load(forceRefresh: true),
+                child: const Text('Retry'),
+              ),
+            ],
           ),
         ),
       );
@@ -293,12 +288,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage> {
                 ),
               ),
             Expanded(
-              child: SchemaPullToRefresh(
-                fillViewport: true,
-                // Pull always forces a full live schema fetch (not cache/delta).
-                onRefresh: () => _revalidateInBackground(forceFull: true),
-                child: renderer.buildRoot(context),
-              ),
+              child: renderer.buildRoot(context),
             ),
           ],
         );

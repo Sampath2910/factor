@@ -373,7 +373,26 @@ class HomeSchemaRepository {
       );
     }
 
+    final hasDeltaEndpoints = cached['metadataEndpoint'] != null ||
+        cached['deltaEndpoint'] != null;
+
     try {
+      if (forceFull || !hasDeltaEndpoints) {
+        final full = await _fetchAndStoreLive(
+          forceRefresh: true,
+          accessToken: token,
+          userId: userId,
+        );
+        final changed =
+            schemaFingerprint(cached) != schemaFingerprint(full);
+        return SchemaSyncResult(
+          schema: changed ? full : cached,
+          changed: changed,
+          usedDelta: false,
+          source: forceFull ? 'full-forced' : 'full-no-delta-endpoints',
+        );
+      }
+
       return await SchemaIncrementalSync.revalidate(
         client: _client,
         localSchema: cached,
@@ -564,6 +583,7 @@ class HomeSchemaRepository {
       '[HomeSchemaRepository] LIVE SCHEMA LOADED '
       'source=${_redactUri(requestUri)} '
       'bytes=${response.bodyBytes.length} '
+      'hash=${schema['_clientHomeSchemaHash']} '
       'selectedPath=${schema['_clientHomeSchemaSelectedPath'] ?? '-'} '
       'schemaType=${schema['schemaType'] ?? '-'} '
       'schemaVersion=${schema['schemaVersion'] ?? '-'} '

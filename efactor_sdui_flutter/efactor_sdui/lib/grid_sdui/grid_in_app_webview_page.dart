@@ -10,7 +10,6 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
-import '../sdui/schema_pull_to_refresh.dart';
 import 'grid_web_snapshot.dart';
 
 /// Full-screen in-app WebView for Grid schema `openIn: inAppWebView`.
@@ -518,50 +517,6 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     await _setupPermissionsAndLoad();
   }
 
-  /// Pull-to-refresh always fetches the live page (skips snapshot restore).
-  Future<void> _pullRefreshLive() async {
-    _showingSnapshot = false;
-    _hasInjectedSso = false;
-    if (mounted) {
-      setState(() {
-        _error = null;
-        _loading = true;
-      });
-    }
-    final completer = Completer<void>();
-    _navigationCompleter = completer;
-    try {
-      final online = await _isOnline();
-      if (!online) {
-        final restored = await _tryLoadSnapshot();
-        if (!restored && mounted) {
-          setState(() {
-            _loading = false;
-            _error = 'offline';
-          });
-        }
-        return;
-      }
-      await _controller.loadRequest(_effectiveUri);
-      await completer.future.timeout(
-        const Duration(seconds: 45),
-        onTimeout: () {},
-      );
-    } catch (e) {
-      debugPrint('[GridInAppWebView] Pull refresh failed: $e');
-      if (mounted && _error == null) {
-        await _handleLoadFailure(e.toString());
-      }
-    } finally {
-      if (identical(_navigationCompleter, completer)) {
-        _navigationCompleter = null;
-      }
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
   Widget _buildOfflineState(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -739,15 +694,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
         body: SafeArea(
           top: !widget.showAppBar,
           bottom: true,
-          child: SchemaPullToRefresh(
-            fillViewport: true,
-            onRefresh: _pullRefreshLive,
-            child: Stack(
-              children: <Widget>[
-                if (_error == null)
-                  WebViewWidget(controller: _controller)
-                else
-                  _buildOfflineState(context),
+          child: Stack(
+            children: <Widget>[
+              if (_error == null)
+                WebViewWidget(controller: _controller)
+              else
+                _buildOfflineState(context),
                 if (_showingSnapshot && _error == null)
                   Positioned(
                     left: 12,
@@ -775,8 +727,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
             ),
           ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
