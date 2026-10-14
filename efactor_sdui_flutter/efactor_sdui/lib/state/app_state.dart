@@ -3480,29 +3480,38 @@ class AppState extends ChangeNotifier {
   /// Resolves clean enum/dropdown options for a control from all available schema sources:
   /// control.props.options, widgetTree.options, control.options, protocolMeta.items, or deviceFrame.
   static List<Map<String, dynamic>> optionsFor(Map<String, dynamic> control) {
-    final treeProps =
-        control['component']?['widgetTree']?['properties']?['props'] as Map?;
-    final controlProps = control['props'] as Map?;
-    final compProps = control['component']?['props'] as Map?;
+    final rawTreeProps =
+        control['component'] is Map && control['component']['widgetTree'] is Map && control['component']['widgetTree']['properties'] is Map
+            ? control['component']['widgetTree']['properties']['props']
+            : null;
+    final treeProps = rawTreeProps is Map ? rawTreeProps : null;
+    final controlProps = control['props'] is Map ? control['props'] as Map : null;
+    final compProps = control['component'] is Map && control['component']['props'] is Map
+        ? control['component']['props'] as Map
+        : null;
 
     final candidates = <dynamic>[
       controlProps?['options'],
       treeProps?['options'],
       compProps?['options'],
       control['options'],
-      control['component']?['options'],
-      control['rightAccessory']?['options'],
+      control['component'] is Map ? control['component']['options'] : null,
+      control['rightAccessory'] is Map ? control['rightAccessory']['options'] : null,
     ];
 
     final treeChildren =
-        control['component']?['widgetTree']?['children'] as List?;
-    final directChildren = control['widgetTree']?['children'] as List?;
+        control['component'] is Map && control['component']['widgetTree'] is Map && control['component']['widgetTree']['children'] is List
+            ? control['component']['widgetTree']['children'] as List
+            : null;
+    final directChildren = control['widgetTree'] is Map && control['widgetTree']['children'] is List
+        ? control['widgetTree']['children'] as List
+        : null;
     for (final list in [treeChildren, directChildren]) {
       if (list != null) {
         for (final ch in list) {
           if (ch is Map) {
-            final chProps =
-                ch['properties']?['props'] as Map? ?? ch['props'] as Map?;
+            final rawChProps = (ch['properties'] is Map ? ch['properties']['props'] : null) ?? ch['props'];
+            final chProps = rawChProps is Map ? rawChProps : null;
             if (chProps?['options'] != null) {
               candidates.add(chProps!['options']);
             }

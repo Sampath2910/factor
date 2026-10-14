@@ -519,11 +519,12 @@ class ParameterCard extends StatelessWidget {
                   (child) => _normalizedType(child?['type']) == 'metachip',
                   orElse: () => null,
                 );
-        final metaChipProps = rawMetaChipNode == null
-            ? const <String, dynamic>{}
-            : Map<String, dynamic>.from(
-                (rawMetaChipNode['properties']?['props'] as Map?) ?? const {},
-              );
+        final rawMetaProps = rawMetaChipNode?['properties'] is Map
+            ? rawMetaChipNode!['properties']['props']
+            : null;
+        final metaChipProps = rawMetaProps is Map
+            ? Map<String, dynamic>.from(rawMetaProps as Map)
+            : const <String, dynamic>{};
         final showMetaChip = () {
           final explicit = _boolOrNull(_cardProps['showMetaChip']) ??
               _boolOrNull(metaChipProps['visible']) ??
@@ -617,8 +618,16 @@ class ParameterCard extends StatelessWidget {
                       ))
                 : ComponentRegistry.instance.hasBuilder(componentType)
                     ? () {
-                        final treeProps = control['component']?['widgetTree']?['properties']?['props'] as Map?;
-                        final compProps = control['component']?['props'] as Map?;
+                        final rawTreeProps = control['component'] is Map &&
+                                control['component']['widgetTree'] is Map &&
+                                control['component']['widgetTree']['properties'] is Map
+                            ? control['component']['widgetTree']['properties']['props']
+                            : null;
+                        final treeProps = rawTreeProps is Map ? rawTreeProps as Map : null;
+                        final rawCompProps = control['component'] is Map
+                            ? control['component']['props']
+                            : null;
+                        final compProps = rawCompProps is Map ? rawCompProps as Map : null;
                         List<dynamic>? resolveCleanOptions() {
                           final clean = AppState.optionsFor(control);
                           if (clean.isNotEmpty) return clean;
@@ -719,7 +728,12 @@ class ParameterCard extends StatelessWidget {
         // so the header does not paint the same string a second time.
         final explicitHeaderValue =
             _boolOrNull(_cardProps['showValueInHeader']);
+        final isTrigger = normalizedComponentType == 'trigger' ||
+            normalizedComponentType == 'elevatedbutton' ||
+            normalizedComponentType == 'button' ||
+            control['valueType']?.toString().toLowerCase() == 'trigger';
         final showHeaderValue = !isTerminalConsole &&
+            !isTrigger &&
             displayValue.isNotEmpty &&
             (explicitHeaderValue ?? !textFieldShowsValue);
 
@@ -1417,9 +1431,10 @@ class ParameterCard extends StatelessWidget {
     );
     properties['binding'] = binding;
 
-    final props = Map<String, dynamic>.from(
-      (properties['props'] as Map?) ?? const {},
-    );
+    final rawProps = properties['props'];
+    final props = rawProps is Map
+        ? Map<String, dynamic>.from(rawProps as Map)
+        : <String, dynamic>{};
 
     // Merge the copied component props only when that copied component is the
     // same catalog component selected by the API-generated control. If the two
@@ -1919,8 +1934,13 @@ class ParameterCard extends StatelessWidget {
       return '';
     }
 
-    final treeProps = control['component']?['widgetTree']?['properties']?['props'] as Map?;
-    final controlProps = control['props'] as Map?;
+    final rawTreeProps = control['component'] is Map &&
+            control['component']['widgetTree'] is Map &&
+            control['component']['widgetTree']['properties'] is Map
+        ? control['component']['widgetTree']['properties']['props']
+        : null;
+    final treeProps = rawTreeProps is Map ? rawTreeProps as Map : null;
+    final controlProps = control['props'] is Map ? control['props'] as Map : null;
     final candidates = <dynamic>[
       controlProps?['options'],
       treeProps?['options'],

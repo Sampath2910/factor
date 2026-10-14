@@ -951,7 +951,9 @@ class ComponentRegistry {
             ? AppState.resolveEnumOption(triggerControl, value)
             : null;
         final optionLabel = matched?['label']?.toString().trim();
-        if (optionLabel != null && optionLabel.isNotEmpty) {
+        final isRawCode = optionLabel != null &&
+            RegExp(r'^(0x)?[0-9a-fA-F]+$').hasMatch(optionLabel);
+        if (optionLabel != null && optionLabel.isNotEmpty && !isRawCode) {
           mappedTriggerLabel = staticLabel != null &&
                   staticLabel.toLowerCase() != optionLabel.toLowerCase()
               ? '$staticLabel: $optionLabel'
