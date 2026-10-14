@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import '../services/incoming_call_service.dart';
+import '../services/push_notification_bootstrap.dart';
 import 'grid_web_snapshot.dart';
 
 /// Full-screen in-app WebView for Grid schema `openIn: inAppWebView`.
@@ -119,6 +122,60 @@ class GridInAppWebViewPage extends StatefulWidget {
     return false;
   }
 
+  /// Currently visible/active WebView instance for Circle Connect & Professional Space.
+  static _GridInAppWebViewPageState? _activeState;
+
+  /// Returns true if GRID Chat / Circle Connect / Professional Space is currently open in the foreground.
+  static bool get isPageOpen =>
+      _activeState != null && (_activeState?.mounted ?? false);
+
+  /// Dispatches call action to active web page via window.gridChatCallAction({action, call_id, ...})
+  static Future<void> handleCallAction({
+    required String action,
+    required String callId,
+    String? gridId,
+    String? userId,
+    String? callType,
+  }) async {
+    if (!isPageOpen) return;
+    final payload = <String, dynamic>{
+      'action': action,
+      'call_id': callId,
+      if (gridId != null && gridId.isNotEmpty) 'grid_id': gridId,
+      if (userId != null && userId.isNotEmpty) 'user_id': userId,
+      if (callType != null && callType.isNotEmpty) 'call_type': callType,
+    };
+    final js =
+        'if (window.gridChatCallAction) { window.gridChatCallAction(${jsonEncode(payload)}); }';
+    try {
+      await _activeState?._controller.runJavaScript(js);
+    } catch (e) {
+      debugPrint('[GridInAppWebView] gridChatCallAction JS failed: $e');
+    }
+  }
+
+  /// Dispatches open chat event to active web page via window.gridChatOpenChat({conversation_id})
+  static Future<void> openChat({required String conversationId}) async {
+    if (!isPageOpen) return;
+    final js =
+        'if (window.gridChatOpenChat) { window.gridChatOpenChat(${jsonEncode({'conversation_id': conversationId})}); }';
+    try {
+      await _activeState?._controller.runJavaScript(js);
+    } catch (e) {
+      debugPrint('[GridInAppWebView] gridChatOpenChat JS failed: $e');
+    }
+  }
+
+  /// Refreshes FCM token in the active web page bridge
+  static Future<void> updatePushTokenInWeb(String token) async {
+    if (!isPageOpen) return;
+    final js =
+        'window.__efactor_fcm_token = ${jsonEncode(token)}; if (window.CircleConnectPush) { window.CircleConnectPush._token = ${jsonEncode(token)}; }';
+    try {
+      await _activeState?._controller.runJavaScript(js);
+    } catch (_) {}
+  }
+
   @override
   State<GridInAppWebViewPage> createState() => _GridInAppWebViewPageState();
 }
@@ -143,8 +200,17 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   @override
   void initState() {
     super.initState();
+    GridInAppWebViewPage._activeState = this;
     _initController();
     _setupPermissionsAndLoad();
+  }
+
+  @override
+  void dispose() {
+    if (GridInAppWebViewPage._activeState == this) {
+      GridInAppWebViewPage._activeState = null;
+    }
+    super.dispose();
   }
 
   void _initController() {
@@ -160,6 +226,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
     _controller = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        'CircleConnectPushBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          _handleCircleConnectPushBridgeMessage(msg.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) async {
@@ -205,6 +277,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               _loading = true;
               _error = null;
             });
+            unawaited(_injectCircleConnectPushBridge());
           },
           onPageFinished: (url) {
             if (!mounted) return;
@@ -213,6 +286,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               _error = null;
             });
             _completeNavigation();
+            unawaited(_injectCircleConnectPushBridge());
             if (!_showingSnapshot) {
               unawaited(_persistSnapshot());
             }
@@ -263,6 +337,95 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
           return _handleAndroidFileSelection(params);
         },
       );
+    }
+  }
+
+  /// Injects the `window.CircleConnectPush` bridge into the web page.
+  Future<void> _injectCircleConnectPushBridge() async {
+    final token = IncomingCallService.instance.deviceToken ?? '';
+    final tokenJson = jsonEncode(token);
+    final js = '''
+(function() {
+  var fcmToken = $tokenJson;
+  window.__efactor_fcm_token = fcmToken;
+  if (!window.CircleConnectPush) {
+    window.CircleConnectPush = {};
+  }
+  window.CircleConnectPush._token = fcmToken;
+  window.CircleConnectPush.getToken = function() {
+    return window.__efactor_fcm_token || "";
+  };
+  window.CircleConnectPush.startRinging = function(callId, callerName, callType) {
+    try {
+      if (window.CircleConnectPushBridge) {
+        window.CircleConnectPushBridge.postMessage(JSON.stringify({
+          action: 'startRinging',
+          callId: String(callId || ''),
+          callerName: String(callerName || ''),
+          callType: String(callType || 'audio')
+        }));
+      }
+    } catch (e) {
+      console.error('startRinging error:', e);
+    }
+  };
+  window.CircleConnectPush.stopRinging = function(callId) {
+    try {
+      if (window.CircleConnectPushBridge) {
+        window.CircleConnectPushBridge.postMessage(JSON.stringify({
+          action: 'stopRinging',
+          callId: String(callId || '')
+        }));
+      }
+    } catch (e) {
+      console.error('stopRinging error:', e);
+    }
+  };
+  window.CircleConnectPush.clearChatNotifications = function(conversationId) {
+    try {
+      if (window.CircleConnectPushBridge) {
+        window.CircleConnectPushBridge.postMessage(JSON.stringify({
+          action: 'clearChatNotifications',
+          conversationId: String(conversationId || '')
+        }));
+      }
+    } catch (e) {
+      console.error('clearChatNotifications error:', e);
+    }
+  };
+})();
+''';
+    try {
+      await _controller.runJavaScript(js);
+    } catch (e) {
+      debugPrint('[GridInAppWebView] CircleConnectPush bridge inject failed: $e');
+    }
+  }
+
+  /// Processes messages posted from the web page through `CircleConnectPushBridge`.
+  void _handleCircleConnectPushBridgeMessage(String rawJson) {
+    try {
+      final data = jsonDecode(rawJson) as Map<String, dynamic>;
+      final action = data['action']?.toString();
+      if (action == 'startRinging') {
+        final callId = data['callId']?.toString() ?? '';
+        final callerName = data['callerName']?.toString() ?? 'Caller';
+        final callType = data['callType']?.toString() ?? 'audio';
+        IncomingCallService.instance.startRingingFromWeb(
+          callId: callId,
+          callerName: callerName,
+          callType: callType,
+          url: widget.uri.toString(),
+        );
+      } else if (action == 'stopRinging') {
+        final callId = data['callId']?.toString() ?? '';
+        IncomingCallService.instance.stopRingingFromWeb(callId);
+      } else if (action == 'clearChatNotifications') {
+        final conversationId = data['conversationId']?.toString() ?? '';
+        PushNotificationBootstrap.instance.clearChatNotifications(conversationId);
+      }
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Failed parsing CircleConnectPushBridge msg: $e');
     }
   }
 

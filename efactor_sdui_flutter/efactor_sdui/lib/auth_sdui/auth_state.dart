@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth_secure_storage.dart';
 import '../services/app_cache_manager.dart';
 import '../services/json_http.dart';
+import '../services/user_location_service.dart';
 
 class AuthState extends ChangeNotifier {
   AuthState(
@@ -580,6 +581,19 @@ class AuthState extends ChangeNotifier {
       final success = _responseSucceeded(response, action, _lastResponseBody);
 
       if (success) {
+        if (source.toLowerCase().contains('signup')) {
+          final email = read('signupForm.email')?.toString() ?? '';
+          final phone = read('signupForm.phone')?.toString() ?? '';
+          if (email.isNotEmpty || phone.isNotEmpty) {
+            unawaited(
+              UserLocationService.instance.sendSignupLocation(
+                email: email,
+                mobileNumber: phone,
+              ),
+            );
+          }
+        }
+
         final successAction = _map(action['success']);
 
         if (successAction != null) {

@@ -96,7 +96,7 @@
         <!-- Default FCM tray channel (must match PushNotificationBootstrap). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="efactor_messages" />
+            android:value="grid_messages" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />

@@ -6,26 +6,58 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 
 import 'incoming_call_service.dart';
 import 'json_http.dart';
 
-const AndroidNotificationChannel _kMessagesChannel = AndroidNotificationChannel(
-  'efactor_messages',
-  'Messages',
-  description: 'Circle Connect and chat message notifications',
-  importance: Importance.high,
-);
-
-const AndroidNotificationChannel _kCallsChannel = AndroidNotificationChannel(
-  'efactor_incoming_calls',
+/// Call notification channel configured with system default ringtone and USAGE_NOTIFICATION_RINGTONE.
+const AndroidNotificationChannel kCallsChannel = AndroidNotificationChannel(
+  'grid_calls',
   'Incoming calls',
   description: 'Alerts for incoming Circle Connect calls',
   importance: Importance.max,
   playSound: true,
   enableVibration: true,
+  audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
 );
+
+/// Message notification channel configured with system message sound.
+const AndroidNotificationChannel kMessagesChannel = AndroidNotificationChannel(
+  'grid_messages',
+  'Messages',
+  description: 'Circle Connect chat message notifications',
+  importance: Importance.high,
+  playSound: true,
+  enableVibration: true,
+);
+
+/// Background notification response handler (runs in background isolate).
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse response) async {
+  final payload = response.payload;
+  if (payload == null || payload.isEmpty) return;
+
+  try {
+    final data = jsonDecode(payload) as Map<String, dynamic>;
+    final actionId = response.actionId ?? '';
+
+    if (actionId == 'decline') {
+      final call = IncomingCallData.fromJson(data);
+      await IncomingCallService.instance.declineCall(call);
+    } else if (actionId == 'mark_as_read') {
+      await handleMarkAsReadFromNotification(data);
+    } else if (actionId == 'reply') {
+      final input = response.input ?? '';
+      if (input.isNotEmpty) {
+        await handleSendReplyFromNotification(data, input);
+      }
+    }
+  } catch (e) {
+    debugPrint('[PushBootstrap] notificationTapBackground error: $e');
+  }
+}
 
 /// Top-level FCM background handler (must stay top-level for the isolate).
 @pragma('vm:entry-point')
@@ -46,74 +78,317 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       android: androidInit,
       iOS: DarwinInitializationSettings(),
     ),
+    onDidReceiveNotificationResponse: (response) {
+      notificationTapBackground(response);
+    },
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
   );
+
   final android = plugin.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
-  await android?.createNotificationChannel(_kMessagesChannel);
-  await android?.createNotificationChannel(_kCallsChannel);
+  await android?.createNotificationChannel(kMessagesChannel);
+  await android?.createNotificationChannel(kCallsChannel);
 
   if (type == 'INCOMING_CALL' || type == 'CALL') {
     final call = IncomingCallData.fromJson(data);
+    await showIncomingCallNotificationOnPlugin(plugin, call, rawData: data);
+    return;
+  }
+
+  if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
+    final call = IncomingCallData.fromJson(data);
+    await showMissedCallNotificationOnPlugin(plugin, call, rawData: data);
+    return;
+  }
+
+  if (type == 'CALL_HANDLED' ||
+      type == 'CALL_CANCELLED' ||
+      type == 'HANGUP') {
+    final callId = (data['call_id'] ?? data['callId'] ?? '').toString();
+    await plugin.cancel(callId.hashCode);
+    return;
+  }
+
+  // Chat message or notification payload
+  await showMessageNotificationOnPlugin(plugin, data, notification: message.notification);
+}
+
+/// Posts ringing call notification with FLAG_INSISTENT, 45s timeout, and Answer/Decline buttons.
+Future<void> showIncomingCallNotificationOnPlugin(
+  FlutterLocalNotificationsPlugin plugin,
+  IncomingCallData call, {
+  Map<String, dynamic>? rawData,
+}) async {
+  final payload = rawData != null ? jsonEncode(rawData) : jsonEncode(call.toJson());
+
+  await plugin.show(
+    call.callId.hashCode,
+    call.callerName,
+    call.body.isNotEmpty
+        ? call.body
+        : (call.isVideo ? 'Incoming video call' : 'Incoming voice call'),
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        kCallsChannel.id,
+        kCallsChannel.name,
+        channelDescription: kCallsChannel.description,
+        importance: Importance.max,
+        priority: Priority.max,
+        category: AndroidNotificationCategory.call,
+        fullScreenIntent: true,
+        ongoing: true,
+        autoCancel: true,
+        timeoutAfter: 45000,
+        additionalFlags: Int32List.fromList([4]), // Notification.FLAG_INSISTENT loops ringtone
+        actions: const <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            'decline',
+            'Decline',
+            showsUserInterface: false,
+            cancelNotification: true,
+          ),
+          AndroidNotificationAction(
+            'answer',
+            'Answer',
+            showsUserInterface: true,
+            cancelNotification: true,
+          ),
+        ],
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
+    ),
+    payload: payload,
+  );
+}
+
+/// Posts missed call notification with Call back and Message action buttons.
+Future<void> showMissedCallNotificationOnPlugin(
+  FlutterLocalNotificationsPlugin plugin,
+  IncomingCallData call, {
+  Map<String, dynamic>? rawData,
+}) async {
+  // Cancel previous ringing notification with same callId
+  await plugin.cancel(call.callId.hashCode);
+
+  final payloadMap = rawData != null ? Map<String, dynamic>.from(rawData) : call.toJson();
+  payloadMap['type'] = 'MISSED_CALL';
+
+  await plugin.show(
+    call.callId.hashCode,
+    call.callerName,
+    call.body.isNotEmpty
+        ? call.body
+        : (call.isVideo ? 'Missed video call' : 'Missed voice call'),
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        kMessagesChannel.id,
+        kMessagesChannel.name,
+        channelDescription: kMessagesChannel.description,
+        importance: Importance.high,
+        priority: Priority.high,
+        category: AndroidNotificationCategory.missedCall,
+        autoCancel: true,
+        actions: const <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            'callback',
+            'Call back',
+            showsUserInterface: true,
+            cancelNotification: true,
+          ),
+          AndroidNotificationAction(
+            'message',
+            'Message',
+            showsUserInterface: true,
+            cancelNotification: true,
+          ),
+        ],
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+      ),
+    ),
+    payload: jsonEncode(payloadMap),
+  );
+}
+
+/// Posts chat message notification with inline Reply and Mark as read buttons.
+Future<void> showMessageNotificationOnPlugin(
+  FlutterLocalNotificationsPlugin plugin,
+  Map<String, dynamic> data, {
+  RemoteNotification? notification,
+}) async {
+  final convId =
+      (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
+  final notifId = int.tryParse(convId) ??
+      (convId.isNotEmpty
+          ? convId.hashCode
+          : DateTime.now().millisecondsSinceEpoch ~/ 1000);
+
+  final isLocked = data['locked'] == true || data['locked'] == 'true';
+  final title = notification?.title ??
+      (data['title'] ?? data['sender_name'] ?? 'GRID Chat').toString();
+  final body = notification?.body ??
+      (data['body'] ?? data['message'] ?? 'New message').toString();
+
+  if (isLocked) {
     await plugin.show(
-      call.callId.hashCode,
-      call.callerName,
-      call.isVideo ? 'Incoming video call' : 'Incoming voice call',
+      notifId,
+      'GRID Chat',
+      'New message',
       NotificationDetails(
         android: AndroidNotificationDetails(
-          _kCallsChannel.id,
-          _kCallsChannel.name,
-          channelDescription: _kCallsChannel.description,
-          importance: Importance.max,
-          priority: Priority.max,
-          category: AndroidNotificationCategory.call,
-          fullScreenIntent: true,
-          visibility: NotificationVisibility.public,
+          kMessagesChannel.id,
+          kMessagesChannel.name,
+          channelDescription: kMessagesChannel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          autoCancel: true,
         ),
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentSound: true,
-          interruptionLevel: InterruptionLevel.timeSensitive,
-        ),
+        iOS: const DarwinNotificationDetails(),
       ),
       payload: jsonEncode(data),
     );
     return;
   }
 
-  if (type == 'CALL_CANCELLED' ||
-      type == 'CALL_MISSED' ||
-      type == 'HANGUP') {
-    await plugin.cancel((data['call_id'] ?? data['callId'] ?? '').hashCode);
-    return;
-  }
-
-  // Data-only message (or notification+data): ensure a tray entry when killed.
-  final title = message.notification?.title ??
-      data['title']?.toString() ??
-      'Efactor';
-  final body = message.notification?.body ??
-      data['body']?.toString() ??
-      data['message']?.toString() ??
-      '';
-  if (body.isEmpty && message.notification == null && type.isEmpty) {
-    return;
-  }
   await plugin.show(
-    message.messageId?.hashCode ?? message.hashCode,
-    title,
-    body.isEmpty ? 'New notification' : body,
+    notifId,
+    title.isNotEmpty ? title : 'GRID Chat',
+    body.isNotEmpty ? body : 'New message',
     NotificationDetails(
       android: AndroidNotificationDetails(
-        _kMessagesChannel.id,
-        _kMessagesChannel.name,
-        channelDescription: _kMessagesChannel.description,
+        kMessagesChannel.id,
+        kMessagesChannel.name,
+        channelDescription: kMessagesChannel.description,
         importance: Importance.high,
         priority: Priority.high,
+        autoCancel: true,
+        actions: const <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            'reply',
+            'Reply',
+            showsUserInterface: true,
+            inputs: <AndroidNotificationActionInput>[
+              AndroidNotificationActionInput(label: 'Type a reply...'),
+            ],
+          ),
+          AndroidNotificationAction(
+            'mark_as_read',
+            'Mark as read',
+            showsUserInterface: false,
+            cancelNotification: true,
+          ),
+        ],
       ),
       iOS: const DarwinNotificationDetails(),
     ),
     payload: jsonEncode(data),
   );
+}
+
+/// Sends Mark as read request to server with WebView cookies.
+Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
+  final convId =
+      (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
+  final msgId = (data['message_id'] ?? data['messageId'] ?? '').toString();
+  final targetUrl =
+      (data['url'] ?? IncomingCallData.defaultCallUrl).toString();
+
+  final cookies =
+      await IncomingCallService.instance.getCookiesForUrl(targetUrl);
+  final cleanUrl = targetUrl.split('?').first.replaceAll(RegExp(r'/+$'), '');
+  final primaryUri = Uri.tryParse('$cleanUrl/api/chat/read');
+  final originUri = Uri.tryParse(targetUrl);
+  final fallbackUri = originUri != null
+      ? Uri.tryParse('${originUri.origin}/index.php/grid-chat/api/chat/read')
+      : null;
+
+  final headers = <String, String>{
+    'Content-Type': 'application/x-www-form-urlencoded',
+    if (cookies.isNotEmpty) 'Cookie': cookies,
+    if (IncomingCallService.instance.activeAccessToken != null)
+      'Authorization':
+          'Bearer ${IncomingCallService.instance.activeAccessToken}',
+  };
+
+  final bodyFields = <String, String>{
+    'conversation_id': convId,
+    'message_id': msgId,
+  };
+
+  try {
+    if (primaryUri != null) {
+      final resp = await http
+          .post(primaryUri, headers: headers, body: bodyFields)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode >= 200 && resp.statusCode < 300) return;
+    }
+    if (fallbackUri != null && fallbackUri != primaryUri) {
+      await http
+          .post(fallbackUri, headers: headers, body: bodyFields)
+          .timeout(const Duration(seconds: 10));
+    }
+  } catch (e) {
+    debugPrint('[PushBootstrap] markAsRead error: $e');
+  }
+}
+
+/// Sends Reply request to server with WebView cookies.
+Future<void> handleSendReplyFromNotification(
+  Map<String, dynamic> data,
+  String replyText,
+) async {
+  final convId =
+      (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
+  final targetUrl =
+      (data['url'] ?? IncomingCallData.defaultCallUrl).toString();
+  final clientId =
+      'reply_${DateTime.now().millisecondsSinceEpoch}_${convId.hashCode}';
+
+  final cookies =
+      await IncomingCallService.instance.getCookiesForUrl(targetUrl);
+  final cleanUrl = targetUrl.split('?').first.replaceAll(RegExp(r'/+$'), '');
+  final primaryUri = Uri.tryParse('$cleanUrl/api/chat/send');
+  final originUri = Uri.tryParse(targetUrl);
+  final fallbackUri = originUri != null
+      ? Uri.tryParse('${originUri.origin}/index.php/grid-chat/api/chat/send')
+      : null;
+
+  final headers = <String, String>{
+    'Content-Type': 'application/x-www-form-urlencoded',
+    if (cookies.isNotEmpty) 'Cookie': cookies,
+    if (IncomingCallService.instance.activeAccessToken != null)
+      'Authorization':
+          'Bearer ${IncomingCallService.instance.activeAccessToken}',
+  };
+
+  final bodyFields = <String, String>{
+    'conversation_id': convId,
+    'message_type': 'text',
+    'body': replyText,
+    'client_id': clientId,
+  };
+
+  try {
+    if (primaryUri != null) {
+      final resp = await http
+          .post(primaryUri, headers: headers, body: bodyFields)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode >= 200 && resp.statusCode < 300) return;
+    }
+    if (fallbackUri != null && fallbackUri != primaryUri) {
+      await http
+          .post(fallbackUri, headers: headers, body: bodyFields)
+          .timeout(const Duration(seconds: 10));
+    }
+  } catch (e) {
+    debugPrint('[PushBootstrap] sendReply error: $e');
+  }
 }
 
 /// Wires FCM + local notifications into [IncomingCallService].
@@ -258,121 +533,189 @@ class PushNotificationBootstrap {
     const ios = DarwinInitializationSettings();
     await _local.initialize(
       const InitializationSettings(android: android, iOS: ios),
-      onDidReceiveNotificationResponse: (response) {
-        final payload = response.payload;
-        if (payload == null || payload.isEmpty) return;
-        try {
-          final map = jsonDecode(payload) as Map<String, dynamic>;
-          _routeFromPayload(map);
-        } catch (_) {}
-      },
+      onDidReceiveNotificationResponse: _handleNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     final androidPlugin = _local.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.createNotificationChannel(_kMessagesChannel);
-    await androidPlugin?.createNotificationChannel(_kCallsChannel);
+    await androidPlugin?.createNotificationChannel(kMessagesChannel);
+    await androidPlugin?.createNotificationChannel(kCallsChannel);
   }
 
   void _onForegroundMessage(RemoteMessage message) {
     final data = Map<String, dynamic>.from(message.data);
     final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+
     if (type == 'INCOMING_CALL' || type == 'CALL') {
+      final call = IncomingCallData.fromJson(data);
       IncomingCallService.instance.handleIncomingPayload(data);
-      unawaited(_showCallNotification(data));
+      unawaited(showIncomingCallNotification(call));
       return;
     }
-    if (type == 'CALL_CANCELLED' ||
-        type == 'CALL_MISSED' ||
+    if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
+      final call = IncomingCallData.fromJson(data);
+      IncomingCallService.instance.handleIncomingPayload(data);
+      unawaited(showMissedCallNotification(call));
+      return;
+    }
+    if (type == 'CALL_HANDLED' ||
+        type == 'CALL_CANCELLED' ||
         type == 'HANGUP') {
+      final callId = (data['call_id'] ?? data['callId'] ?? '').toString();
       IncomingCallService.instance.handleIncomingPayload(data);
-      unawaited(
-        _local.cancel((data['call_id'] ?? data['callId'] ?? '').hashCode),
-      );
+      unawaited(handleCallHandled(callId));
       return;
     }
-    unawaited(_showMessageNotification(message));
+    unawaited(showMessageNotificationOnPlugin(_local, data, notification: message.notification));
   }
 
   void _onMessageOpened(RemoteMessage message) {
-    _routeFromPayload(Map<String, dynamic>.from(message.data));
+    _handlePayloadMap(Map<String, dynamic>.from(message.data));
   }
 
-  void _routeFromPayload(Map<String, dynamic> data) {
-    final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+  Future<void> _handleNotificationResponse(
+    NotificationResponse response,
+  ) async {
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+
+    try {
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      final type =
+          (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+      final actionId = response.actionId;
+
+      if (actionId == 'decline') {
+        final call = IncomingCallData.fromJson(data);
+        await IncomingCallService.instance.declineCall(call);
+        return;
+      }
+      if (actionId == 'answer') {
+        final call = IncomingCallData.fromJson(data);
+        await IncomingCallService.instance.answerCall(call);
+        return;
+      }
+      if (actionId == 'callback') {
+        final call = IncomingCallData.fromJson(data);
+        await IncomingCallService.instance.callbackCall(call);
+        return;
+      }
+      if (actionId == 'message') {
+        final call = IncomingCallData.fromJson(data);
+        await IncomingCallService.instance.messageCall(call);
+        return;
+      }
+      if (actionId == 'mark_as_read') {
+        await handleMarkAsReadFromNotification(data);
+        final convId = (data['conversation_id'] ??
+                data['conversationId'] ??
+                '')
+            .toString();
+        final notifId = int.tryParse(convId) ?? convId.hashCode;
+        await _local.cancel(notifId);
+        return;
+      }
+      if (actionId == 'reply') {
+        final input = response.input ?? '';
+        if (input.isNotEmpty) {
+          await handleSendReplyFromNotification(data, input);
+          final convId = (data['conversation_id'] ??
+                  data['conversationId'] ??
+                  '')
+              .toString();
+          final notifId = int.tryParse(convId) ?? convId.hashCode;
+          await _local.cancel(notifId);
+        }
+        return;
+      }
+
+      // No button clicked -> user tapped notification banner / full-screen intent
+      if (type == 'INCOMING_CALL' || type == 'CALL') {
+        final call = IncomingCallData.fromJson(data);
+        await IncomingCallService.instance.openCallScreenWithoutAction(call);
+      } else if (type == 'MISSED_CALL') {
+        final call = IncomingCallData.fromJson(data);
+        await IncomingCallService.instance.openCallScreenWithoutAction(call);
+      } else {
+        // Message notification tap
+        final convId = (data['conversation_id'] ??
+                data['conversationId'] ??
+                '')
+            .toString();
+        final url = (data['url'] ?? '').toString();
+        await IncomingCallService.instance.openChatFromNotification(
+          conversationId: convId,
+          url: url,
+        );
+      }
+    } catch (e) {
+      debugPrint('[PushBootstrap] _handleNotificationResponse error: $e');
+    }
+  }
+
+  void _handlePayloadMap(Map<String, dynamic> data) {
+    final type =
+        (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
     if (type == 'INCOMING_CALL' || type == 'CALL') {
       final call = IncomingCallData.fromJson(data);
       unawaited(
-        IncomingCallService.instance.acceptCallFromNotification(call),
+        IncomingCallService.instance.openCallScreenWithoutAction(call),
       );
       return;
     }
-    final url = (data['room_url'] ??
-            data['url'] ??
-            data['deep_link'] ??
-            IncomingCallData.defaultCallUrl)
-        .toString();
-    final call = IncomingCallData(
-      callId: 'message_${DateTime.now().millisecondsSinceEpoch}',
-      callerId: (data['sender_id'] ?? '').toString(),
-      callerName:
-          (data['title'] ?? data['sender_name'] ?? 'Message').toString(),
-      roomUrl: url,
-    );
-    unawaited(IncomingCallService.instance.acceptCallFromNotification(call));
-  }
-
-  Future<void> _showCallNotification(Map<String, dynamic> data) async {
-    final call = IncomingCallData.fromJson(data);
-    await _local.show(
-      call.callId.hashCode,
-      call.callerName,
-      call.isVideo ? 'Incoming video call' : 'Incoming voice call',
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _kCallsChannel.id,
-          _kCallsChannel.name,
-          channelDescription: _kCallsChannel.description,
-          importance: Importance.max,
-          priority: Priority.max,
-          category: AndroidNotificationCategory.call,
-          fullScreenIntent: true,
-          visibility: NotificationVisibility.public,
-        ),
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentSound: true,
-          interruptionLevel: InterruptionLevel.timeSensitive,
-        ),
+    if (type == 'MISSED_CALL') {
+      final call = IncomingCallData.fromJson(data);
+      unawaited(
+        IncomingCallService.instance.openCallScreenWithoutAction(call),
+      );
+      return;
+    }
+    final convId =
+        (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
+    final url = (data['url'] ?? '').toString();
+    unawaited(
+      IncomingCallService.instance.openChatFromNotification(
+        conversationId: convId,
+        url: url,
       ),
-      payload: jsonEncode(data),
     );
   }
 
-  Future<void> _showMessageNotification(RemoteMessage message) async {
-    final title = message.notification?.title ??
-        message.data['title']?.toString() ??
-        'Efactor';
-    final body = message.notification?.body ??
-        message.data['body']?.toString() ??
-        message.data['message']?.toString() ??
-        '';
-    await _local.show(
-      message.hashCode,
-      title,
-      body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _kMessagesChannel.id,
-          _kMessagesChannel.name,
-          channelDescription: _kMessagesChannel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-      payload: jsonEncode(message.data),
-    );
+  /// Public API called by [IncomingCallService] and [GridInAppWebViewPage].
+  Future<void> showIncomingCallNotification(IncomingCallData call) async {
+    try {
+      await showIncomingCallNotificationOnPlugin(_local, call);
+    } catch (e) {
+      debugPrint('[PushBootstrap] showIncomingCallNotification error: $e');
+    }
+  }
+
+  Future<void> showMissedCallNotification(IncomingCallData call) async {
+    try {
+      await showMissedCallNotificationOnPlugin(_local, call);
+    } catch (e) {
+      debugPrint('[PushBootstrap] showMissedCallNotification error: $e');
+    }
+  }
+
+  Future<void> handleCallHandled(String callId) async {
+    try {
+      await _local.cancel(callId.hashCode);
+    } catch (_) {}
+  }
+
+  Future<void> cancelCallNotification(String callId) async {
+    try {
+      await _local.cancel(callId.hashCode);
+    } catch (_) {}
+  }
+
+  Future<void> clearChatNotifications(String conversationId) async {
+    try {
+      final notifId = int.tryParse(conversationId) ?? conversationId.hashCode;
+      await _local.cancel(notifId);
+    } catch (_) {}
   }
 
   Future<void> dispose() async {

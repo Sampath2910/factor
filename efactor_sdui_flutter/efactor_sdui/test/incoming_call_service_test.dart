@@ -172,7 +172,7 @@ void main() {
 
       final call = IncomingCallData.fromJson(<String, dynamic>{
         'call_id': 'call_777',
-        'caller_id': '444',
+        'caller_grid_id': 'GRID-444',
         'caller_name': 'Alice',
       });
 
@@ -183,10 +183,9 @@ void main() {
       );
 
       expect(capturedRequest, isNotNull);
-      final body = jsonDecode(capturedRequest!.body) as Map<String, dynamic>;
-      expect(body['action'], 'call_rejected');
+      final body = Uri.splitQueryString(capturedRequest!.body);
       expect(body['call_id'], 'call_777');
-      expect(body['caller_id'], '444');
+      expect(body['caller_grid_id'], 'GRID-444');
     });
   });
 }

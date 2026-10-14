@@ -17,6 +17,7 @@ import 'services/incoming_call_service.dart';
 import 'services/location_startup_gate.dart';
 import 'services/push_notification_bootstrap.dart';
 import 'services/schema_prefetch.dart';
+import 'services/user_location_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -120,6 +121,9 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
         ),
       );
     }
+
+    // Report current user location and device metadata on session establishment.
+    unawaited(UserLocationService.instance.sendCurrentLocation());
   }
 
   int? _authenticatedUserId() {

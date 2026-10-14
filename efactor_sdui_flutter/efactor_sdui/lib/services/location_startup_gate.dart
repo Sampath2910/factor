@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+
+import 'user_location_service.dart';
 
 /// Blocks the application shell until foreground location permission is
 /// available and the system Location service is enabled.
@@ -101,11 +105,16 @@ class _LocationStartupGateState extends State<LocationStartupGate>
       if (!mounted) return;
 
       _lastEvaluatedAt = DateTime.now();
+      final isReady = serviceEnabled;
       setState(
-        () => _state = serviceEnabled
+        () => _state = isReady
             ? _LocationGateState.ready
             : _LocationGateState.serviceDisabled,
       );
+
+      if (isReady) {
+        unawaited(UserLocationService.instance.sendCurrentLocation());
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
