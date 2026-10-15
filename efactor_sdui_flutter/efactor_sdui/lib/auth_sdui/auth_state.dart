@@ -545,6 +545,8 @@ class AuthState extends ChangeNotifier {
 
       late http.Response response;
 
+      debugPrint('[AUTH][HTTP][REQ] $source $method $uri payload=$payload');
+
       if (method == 'POST') {
         if (contentType == 'application/json') {
           response = await _client
@@ -576,6 +578,10 @@ class AuthState extends ChangeNotifier {
           'is unsupported.',
         );
       }
+
+      debugPrint(
+        '[AUTH][HTTP][RESP] $source status=${response.statusCode} body=${response.body}',
+      );
 
       _lastResponseBody = _decodeResponse(response, action);
       _lastResponseStatusCode = response.statusCode;
