@@ -11,6 +11,7 @@ import 'grid_in_app_webview_page.dart';
 import 'grid_schema_repository.dart';
 import 'grid_sdui_renderer.dart';
 import 'grid_sdui_state.dart';
+import 'grid_shell_pool.dart';
 
 class DynamicGridSduiPage extends StatefulWidget {
   const DynamicGridSduiPage({
@@ -163,11 +164,14 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage> {
     if (!mounted) return false;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => GridInAppWebViewPage(
+        builder: (_) => GridShellPool.instance.getOrCreateWarmShell(
           uri: authenticatedUri,
-          title: title,
-          accessToken: widget.accessToken,
-          userId: widget.userId,
+          shellBuilder: () => GridInAppWebViewPage(
+            uri: authenticatedUri,
+            title: title,
+            accessToken: widget.accessToken,
+            userId: widget.userId,
+          ),
         ),
       ),
     );

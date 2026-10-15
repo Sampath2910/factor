@@ -13,6 +13,8 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../services/incoming_call_service.dart';
 import '../services/push_notification_bootstrap.dart';
+import 'grid_media_cache_service.dart';
+import 'grid_offline_outbox_service.dart';
 import 'grid_web_snapshot.dart';
 
 /// Full-screen in-app WebView for Grid schema `openIn: inAppWebView`.
@@ -249,6 +251,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
           _handleCircleConnectPushBridgeMessage(msg.message);
         },
       )
+      ..addJavaScriptChannel(
+        'CircleConnectMediaBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          _handleCircleConnectMediaBridgeMessage(msg.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        'CircleConnectOutboxBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          _handleCircleConnectOutboxBridgeMessage(msg.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) async {
@@ -413,6 +427,65 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       console.error('clearChatNotifications error:', e);
     }
   };
+
+  // Offline Media Cache Bridge
+  window.CircleConnectMedia = {
+    getMedia: function(url) {
+      return new Promise(function(resolve) {
+        var id = 'med_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        window.__mediaCallbacks = window.__mediaCallbacks || {};
+        window.__mediaCallbacks[id] = resolve;
+        if (window.CircleConnectMediaBridge) {
+          window.CircleConnectMediaBridge.postMessage(JSON.stringify({
+            action: 'getMedia',
+            url: url,
+            callbackId: id
+          }));
+        } else {
+          resolve(url);
+        }
+      });
+    },
+    saveVoiceNote: function(base64, extension) {
+      return new Promise(function(resolve) {
+        var id = 'aud_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        window.__mediaCallbacks = window.__mediaCallbacks || {};
+        window.__mediaCallbacks[id] = resolve;
+        if (window.CircleConnectMediaBridge) {
+          window.CircleConnectMediaBridge.postMessage(JSON.stringify({
+            action: 'saveVoiceNote',
+            base64: base64,
+            extension: extension || 'm4a',
+            callbackId: id
+          }));
+        } else {
+          resolve('');
+        }
+      });
+    }
+  };
+
+  window.__onMediaResolved = function(cbId, path) {
+    if (window.__mediaCallbacks && window.__mediaCallbacks[cbId]) {
+      window.__mediaCallbacks[cbId](path);
+      delete window.__mediaCallbacks[cbId];
+    }
+  };
+
+  // Offline Outbox Sync Bridge
+  window.CircleConnectOutbox = {
+    enqueue: function(actionType, targetUrl, payload, actionId) {
+      if (window.CircleConnectOutboxBridge) {
+        window.CircleConnectOutboxBridge.postMessage(JSON.stringify({
+          action: 'enqueue',
+          actionType: actionType,
+          targetUrl: targetUrl,
+          payload: payload,
+          actionId: actionId
+        }));
+      }
+    }
+  };
 })();
 ''';
     try {
@@ -446,6 +519,64 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       }
     } catch (e) {
       debugPrint('[GridInAppWebView] Failed parsing CircleConnectPushBridge msg: $e');
+    }
+  }
+
+  /// Handles media requests from CircleConnectMediaBridge (cache/download/save voice note).
+  void _handleCircleConnectMediaBridgeMessage(String rawJson) async {
+    try {
+      final data = jsonDecode(rawJson) as Map<String, dynamic>;
+      final action = data['action']?.toString();
+      final callbackId = data['callbackId']?.toString();
+
+      if (action == 'getMedia') {
+        final url = data['url']?.toString() ?? '';
+        final localPath =
+            await GridMediaCacheService.instance.getOrDownloadMedia(url);
+        if (callbackId != null && callbackId.isNotEmpty) {
+          final js =
+              'window.__onMediaResolved && window.__onMediaResolved(${jsonEncode(callbackId)}, ${jsonEncode(localPath)});';
+          await _controller.runJavaScript(js);
+        }
+      } else if (action == 'saveVoiceNote') {
+        final base64Str = data['base64']?.toString() ?? '';
+        final ext = data['extension']?.toString() ?? 'm4a';
+        final bytes = base64Decode(base64Str);
+        final localPath =
+            await GridMediaCacheService.instance.saveLocalMediaBytes(
+          bytes: bytes,
+          extension: ext,
+        );
+        if (callbackId != null && callbackId.isNotEmpty) {
+          final js =
+              'window.__onMediaResolved && window.__onMediaResolved(${jsonEncode(callbackId)}, ${jsonEncode(localPath)});';
+          await _controller.runJavaScript(js);
+        }
+      }
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Media bridge error: $e');
+    }
+  }
+
+  /// Handles offline actions (messages, likes, comments) from CircleConnectOutboxBridge.
+  void _handleCircleConnectOutboxBridgeMessage(String rawJson) async {
+    try {
+      final data = jsonDecode(rawJson) as Map<String, dynamic>;
+      final action = data['action']?.toString();
+      if (action == 'enqueue') {
+        final actionType = data['actionType']?.toString() ?? 'send_message';
+        final targetUrl = data['targetUrl']?.toString() ?? '';
+        final payload =
+            Map<String, dynamic>.from(data['payload'] as Map? ?? {});
+        await GridOfflineOutboxService.instance.enqueue(
+          actionType: actionType,
+          targetUrl: targetUrl,
+          payload: payload,
+          customActionId: data['actionId']?.toString(),
+        );
+      }
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Outbox bridge error: $e');
     }
   }
 

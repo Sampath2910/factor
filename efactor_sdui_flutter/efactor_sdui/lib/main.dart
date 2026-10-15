@@ -8,6 +8,7 @@ import 'home_sdui/dynamic_home_sdui_page.dart';
 import 'iot_sdui/dynamic_iot_sdui_page.dart';
 import 'iot_sdui/iot_schema_repository.dart';
 import 'grid_sdui/dynamic_grid_sdui_page.dart';
+import 'grid_sdui/grid_offline_outbox_service.dart';
 import 'device_sdui/device_ui_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -41,8 +42,9 @@ Future<void> main() async {
     ),
   );
 
-  // Initialize push notifications asynchronously so app rendering is never blocked.
+  // Initialize push notifications and offline outbox sync asynchronously.
   unawaited(PushNotificationBootstrap.instance.initialize());
+  unawaited(GridOfflineOutboxService.instance.initialize());
 }
 
 Widget _buildAuthenticatedFlow(BuildContext context, AuthState authState) {
