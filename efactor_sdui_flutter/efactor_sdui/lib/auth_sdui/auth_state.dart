@@ -81,13 +81,15 @@ class AuthState extends ChangeNotifier {
 
   dynamic read(String path) => _read(_state, path);
 
-  void write(String path, dynamic value) {
+  void write(String path, dynamic value, {bool notify = true}) {
     _write(_state, path, value);
     fieldErrors.remove(path);
     if (path != 'auth.error' && authError.isNotEmpty) {
       _write(_state, 'auth.error', null);
     }
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   bool passwordVisible(String key) => _passwordVisible[key] == true;

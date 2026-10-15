@@ -1823,6 +1823,7 @@ class AuthRenderer {
     }
 
     return _SchemaOtpInput(
+      key: ValueKey('auth_otp_${component['id'] ?? stateKey}'),
       state: state,
       stateKey: stateKey,
       digitCount: count,
@@ -2846,6 +2847,7 @@ class _AuthBoundFieldState extends State<_AuthBoundField> {
 
 class _SchemaOtpInput extends StatefulWidget {
   const _SchemaOtpInput({
+    super.key,
     required this.state,
     required this.stateKey,
     required this.digitCount,
@@ -2890,10 +2892,12 @@ class _SchemaOtpInputState extends State<_SchemaOtpInput> {
     );
   }
 
-  void _sync() {
+  void _sync({bool forceNotify = false}) {
     final value = _controllers.map((controller) => controller.text).join();
+    final isComplete = value.length == widget.digitCount;
+    final shouldNotify = forceNotify || isComplete || value.isEmpty;
 
-    widget.state.write(widget.stateKey, value);
+    widget.state.write(widget.stateKey, value, notify: shouldNotify);
 
     final event = widget.lengthEvent;
     final length = (event?['length'] as num?)?.toInt();
@@ -2974,7 +2978,7 @@ class _SchemaOtpInputState extends State<_SchemaOtpInput> {
               focusNode: _focusNodes[i],
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              maxLength: 1,
+              maxLength: 6,
               inputFormatters: <TextInputFormatter>[
                 FilteringTextInputFormatter.digitsOnly,
               ],
@@ -3000,14 +3004,29 @@ class _SchemaOtpInputState extends State<_SchemaOtpInput> {
                 fontSize: (widget.style['fontSize'] as num?)?.toDouble(),
                 fontWeight: FontWeight.w800,
               ),
-              onChanged: (value) {
+              onChanged: (raw) {
+                // If user pasted multi-digit string (e.g. from SMS)
+                if (raw.length > 1) {
+                  final digits = raw.replaceAll(RegExp(r'\D'), '');
+                  for (var d = 0; d < widget.digitCount; d++) {
+                    final idx = i + d;
+                    if (idx < widget.digitCount && d < digits.length) {
+                      _controllers[idx].text = digits[d];
+                    }
+                  }
+                  final target = (i + digits.length).clamp(0, widget.digitCount - 1);
+                  _focusNodes[target].requestFocus();
+                  _sync(forceNotify: true);
+                  return;
+                }
+
                 _sync();
 
-                if (value.isNotEmpty && i < widget.digitCount - 1) {
+                if (raw.isNotEmpty && i < widget.digitCount - 1) {
                   _focusNodes[i + 1].requestFocus();
                 }
 
-                if (value.isEmpty && i > 0) {
+                if (raw.isEmpty && i > 0) {
                   _focusNodes[i - 1].requestFocus();
                 }
               },
