@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "870386246990",
+    "project_id": "grid-factor",
+    "storage_bucket": "grid-factor.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:870386246990:android:1d874dc0d427fa40b52a1f",
+        "android_client_info": {
+          "package_name": "com.example.efactor_sdui"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3CZozKjUcZc6f3HHAoT9myTnZibIS_j0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
