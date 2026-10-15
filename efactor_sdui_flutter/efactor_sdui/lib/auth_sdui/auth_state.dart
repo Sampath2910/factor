@@ -48,6 +48,34 @@ class AuthState extends ChangeNotifier {
   dynamic _lastResponseBody;
   int? _lastResponseStatusCode;
 
+  final Map<String, String> _cookies = <String, String>{};
+
+  String get cookieHeader =>
+      _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
+
+  void _saveCookies(http.Response response) {
+    final setCookie = response.headers['set-cookie'];
+    if (setCookie == null || setCookie.isEmpty) return;
+
+    final parts = setCookie.split(RegExp(r',(?=\s*[A-Za-z0-9_\-]+=)'));
+    for (final raw in parts) {
+      final nameVal = raw.split(';').first.trim();
+      final eq = nameVal.indexOf('=');
+      if (eq > 0) {
+        final name = nameVal.substring(0, eq).trim();
+        final value = nameVal.substring(eq + 1).trim();
+        if (name.isNotEmpty &&
+            !name.toLowerCase().startsWith('expires') &&
+            !name.toLowerCase().startsWith('max-age') &&
+            !name.toLowerCase().startsWith('path') &&
+            !name.toLowerCase().startsWith('domain') &&
+            !name.toLowerCase().startsWith('samesite')) {
+          _cookies[name] = value;
+        }
+      }
+    }
+  }
+
   String get pageId => _pageId;
 
   bool get isAuthenticated => read('auth.isAuthenticated') == true;
@@ -210,6 +238,7 @@ class AuthState extends ChangeNotifier {
       _write(_state, key, null);
     }
 
+    _cookies.clear();
     _write(_state, 'auth.isAuthenticated', false);
 
     if (notify) {
@@ -523,11 +552,14 @@ class AuthState extends ChangeNotifier {
       }
     }
 
+    final cookieStr = cookieHeader;
+
     final headers = <String, String>{
       'Accept': action['responseType']?.toString() == 'json'
           ? 'application/json'
           : '*/*',
       'Content-Type': contentType,
+      if (cookieStr.isNotEmpty) 'Cookie': cookieStr,
     };
 
     final loadingKey =
@@ -545,7 +577,7 @@ class AuthState extends ChangeNotifier {
 
       late http.Response response;
 
-      debugPrint('[AUTH][HTTP][REQ] $source $method $uri payload=$payload');
+      debugPrint('[AUTH][HTTP][REQ] $source $method $uri cookie=$cookieStr payload=$payload');
 
       if (method == 'POST') {
         if (contentType == 'application/json') {
@@ -579,8 +611,10 @@ class AuthState extends ChangeNotifier {
         );
       }
 
+      _saveCookies(response);
+
       debugPrint(
-        '[AUTH][HTTP][RESP] $source status=${response.statusCode} body=${response.body}',
+        '[AUTH][HTTP][RESP] $source status=${response.statusCode} set-cookie=${response.headers['set-cookie']} body=${response.body}',
       );
 
       _lastResponseBody = _decodeResponse(response, action);

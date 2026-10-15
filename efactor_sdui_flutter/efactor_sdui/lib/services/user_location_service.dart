@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
+import '../auth_sdui/auth_secure_storage.dart';
+
 /// Service responsible for sending location telemetry to eFactor backend APIs:
 ///
 /// 1. `user_currentLocation`
@@ -38,7 +40,7 @@ class UserLocationService {
 
   /// Sends the current device location and hardware details to `user_currentLocation`.
   /// Fully cross-platform: handles Android build details and iOS machine/vendor IDs.
-  Future<bool> sendCurrentLocation({bool force = false}) async {
+  Future<bool> sendCurrentLocation({bool force = false, String? accessToken}) async {
     final now = DateTime.now();
     if (!force &&
         _lastCurrentLocationSentAt != null &&
@@ -60,6 +62,9 @@ class UserLocationService {
 
       final deviceMeta = await _resolveDeviceMetadata();
 
+      final token = accessToken ??
+          (await AuthSecureStorage().loadSession())?['accessToken']?.toString();
+
       final payload = <String, dynamic>{
         'latitude': position.latitude.toString(),
         'longitude': position.longitude.toString(),
@@ -68,6 +73,7 @@ class UserLocationService {
         'handset_name': deviceMeta['handset_name'] ?? '',
         'model': deviceMeta['model'] ?? '',
         'os': deviceMeta['os'] ?? '',
+        if (token != null && token.isNotEmpty) 'access_token': token,
       };
 
       final uri = Uri.parse('$_baseUrl?action=user_currentLocation');
@@ -78,9 +84,11 @@ class UserLocationService {
       final response = await _client
           .post(
             uri,
-            headers: const <String, String>{
+            headers: <String, String>{
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              if (token != null && token.isNotEmpty)
+                'Authorization': 'Bearer $token',
             },
             body: jsonEncode(payload),
           )
@@ -107,6 +115,7 @@ class UserLocationService {
   Future<bool> sendSignupLocation({
     required String email,
     required String mobileNumber,
+    String? accessToken,
   }) async {
     final cleanEmail = email.trim();
     final cleanMobile = mobileNumber.trim();
@@ -130,12 +139,16 @@ class UserLocationService {
       final lat = position?.latitude.toString() ?? '';
       final lng = position?.longitude.toString() ?? '';
 
+      final token = accessToken ??
+          (await AuthSecureStorage().loadSession())?['accessToken']?.toString();
+
       final payload = <String, dynamic>{
         'latitude': lat,
         'longitude': lng,
         'app_version': appVersion,
         'email': cleanEmail,
         'mobile_number': cleanMobile,
+        if (token != null && token.isNotEmpty) 'access_token': token,
       };
 
       final uri = Uri.parse('$_baseUrl?action=user_signupLocation');
@@ -146,9 +159,11 @@ class UserLocationService {
       final response = await _client
           .post(
             uri,
-            headers: const <String, String>{
+            headers: <String, String>{
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              if (token != null && token.isNotEmpty)
+                'Authorization': 'Bearer $token',
             },
             body: jsonEncode(payload),
           )
@@ -162,7 +177,6 @@ class UserLocationService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         _lastReportedSignupEmail = cleanEmail;
         return true;
-      }
       return false;
     } catch (e) {
       debugPrint('[UserLocationService] Failed to send signup location: $e');
