@@ -63,7 +63,7 @@ class UserLocationService {
       final deviceMeta = await _resolveDeviceMetadata();
 
       final token = accessToken ??
-          (await AuthSecureStorage().loadSession())?['accessToken']?.toString();
+          (await AuthSecureStorage().readSession())['accessToken'];
 
       final payload = <String, dynamic>{
         'latitude': position.latitude.toString(),
@@ -140,7 +140,7 @@ class UserLocationService {
       final lng = position?.longitude.toString() ?? '';
 
       final token = accessToken ??
-          (await AuthSecureStorage().loadSession())?['accessToken']?.toString();
+          (await AuthSecureStorage().readSession())['accessToken'];
 
       final payload = <String, dynamic>{
         'latitude': lat,
@@ -177,6 +177,7 @@ class UserLocationService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         _lastReportedSignupEmail = cleanEmail;
         return true;
+      }
       return false;
     } catch (e) {
       debugPrint('[UserLocationService] Failed to send signup location: $e');
