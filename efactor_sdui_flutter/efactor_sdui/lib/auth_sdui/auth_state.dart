@@ -623,14 +623,21 @@ class AuthState extends ChangeNotifier {
       final success = _responseSucceeded(response, action, _lastResponseBody);
 
       if (success) {
-        if (source.toLowerCase().contains('signup')) {
+        if (source.toLowerCase().contains('submitsignup')) {
           final email = read('signupForm.email')?.toString() ?? '';
           final phone = read('signupForm.phone')?.toString() ?? '';
+          final token = _lastResponseBody is Map
+              ? (_lastResponseBody['accesstoken'] ??
+                      _lastResponseBody['accessToken'] ??
+                      _lastResponseBody['token'])
+                  ?.toString()
+              : null;
           if (email.isNotEmpty || phone.isNotEmpty) {
             unawaited(
               UserLocationService.instance.sendSignupLocation(
                 email: email,
                 mobileNumber: phone,
+                accessToken: token,
               ),
             );
           }

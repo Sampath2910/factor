@@ -175,8 +175,11 @@ class UserLocationService {
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        _lastReportedSignupEmail = cleanEmail;
-        return true;
+        final bodyStr = response.body.toLowerCase();
+        if (!bodyStr.contains('"error"') && !bodyStr.contains('not valid')) {
+          _lastReportedSignupEmail = cleanEmail;
+          return true;
+        }
       }
       return false;
     } catch (e) {
