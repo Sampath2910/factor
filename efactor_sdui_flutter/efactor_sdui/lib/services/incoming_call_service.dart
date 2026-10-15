@@ -524,22 +524,41 @@ class IncomingCallService {
           'Authorization': 'Bearer $activeAccessToken',
       };
 
+      final payload = jsonEncode(<String, dynamic>{
+        'action': 'register_device_token',
+        'user_id': userId,
+        'device_token': deviceToken,
+        'platform': resolvedPlatform,
+        'token_type': tokenType,
+        'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      });
+
       final response = await httpClient.post(
         uri,
         headers: headers,
-        body: jsonEncode(<String, dynamic>{
-          'action': 'register_device_token',
-          'user_id': userId,
-          'device_token': deviceToken,
-          'platform': resolvedPlatform,
-          'token_type': tokenType,
-          'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        }),
+        body: payload,
       );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (client == null) httpClient.close();
+        return true;
+      }
+
+      // Fallback: Check if backend registered under /v8/api.php
+      final fallbackUri = Uri.tryParse('https://efactor.tech/v8/api.php?action=register_device_token');
+      if (fallbackUri != null && fallbackUri != uri) {
+        final fallbackResp = await httpClient.post(
+          fallbackUri,
+          headers: headers,
+          body: payload,
+        );
+        if (client == null) httpClient.close();
+        return fallbackResp.statusCode >= 200 && fallbackResp.statusCode < 300;
+      }
+
       if (client == null) {
         httpClient.close();
       }
-      return response.statusCode >= 200 && response.statusCode < 300;
+      return false;
     } catch (_) {
       return false;
     }
