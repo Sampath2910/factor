@@ -1,4 +1,4 @@
-1package com.example.efactor_sdui
+package com.example.efactor_sdui
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
