@@ -437,9 +437,15 @@ class PushNotificationBootstrap {
 
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpened);
-    final initial = await messaging.getInitialMessage();
-    if (initial != null) {
-      _onMessageOpened(initial);
+    try {
+      final initial = await messaging
+          .getInitialMessage()
+          .timeout(const Duration(seconds: 2), onTimeout: () => null);
+      if (initial != null) {
+        _onMessageOpened(initial);
+      }
+    } catch (e) {
+      logDebug('[PushBootstrap] getInitialMessage error: $e');
     }
 
     _ready = true;

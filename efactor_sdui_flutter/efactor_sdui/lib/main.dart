@@ -34,14 +34,15 @@ Future<void> main() async {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
   EfactorCloudService.instance.configureLogs();
-  // Soft-fails when Firebase config files are missing.
-  await PushNotificationBootstrap.instance.initialize();
 
   runApp(
     const LocationStartupGate(
       child: AuthUiGate(authenticatedBuilder: _buildAuthenticatedFlow),
     ),
   );
+
+  // Initialize push notifications asynchronously so app rendering is never blocked.
+  unawaited(PushNotificationBootstrap.instance.initialize());
 }
 
 Widget _buildAuthenticatedFlow(BuildContext context, AuthState authState) {
