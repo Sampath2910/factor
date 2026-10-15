@@ -169,8 +169,25 @@ class GridInAppWebViewPage extends StatefulWidget {
   /// Refreshes FCM token in the active web page bridge
   static Future<void> updatePushTokenInWeb(String token) async {
     if (!isPageOpen) return;
-    final js =
-        'window.__efactor_fcm_token = ${jsonEncode(token)}; if (window.CircleConnectPush) { window.CircleConnectPush._token = ${jsonEncode(token)}; }';
+    final tokenJson = jsonEncode(token);
+    final js = '''
+(function() {
+  var t = $tokenJson;
+  window.__efactor_fcm_token = t;
+  if (window.CircleConnectPush) {
+    window.CircleConnectPush._token = t;
+    if (typeof window.CircleConnectPush.onTokenRefresh === 'function') {
+      try { window.CircleConnectPush.onTokenRefresh(t); } catch(e) { console.error(e); }
+    }
+  }
+  if (typeof window.onCircleConnectTokenRefresh === 'function') {
+    try { window.onCircleConnectTokenRefresh(t); } catch(e) { console.error(e); }
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('circleConnectPushTokenRefresh', { detail: { token: t } }));
+  } catch(e) {}
+})();
+''';
     try {
       await _activeState?._controller.runJavaScript(js);
     } catch (_) {}
@@ -354,6 +371,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   window.CircleConnectPush._token = fcmToken;
   window.CircleConnectPush.getToken = function() {
     return window.__efactor_fcm_token || "";
+  };
+  window.CircleConnectPush.getTokenPromise = function() {
+    return Promise.resolve(window.__efactor_fcm_token || "");
   };
   window.CircleConnectPush.startRinging = function(callId, callerName, callType) {
     try {
