@@ -13,7 +13,6 @@ analyzer:
   exclude:
     - 'backup_*/**'
     - 'efactor_*/**'
-    - 'model_page_fix_files/**'
     - 'build/**'
     - '.dart_tool/**'
     - android/**
