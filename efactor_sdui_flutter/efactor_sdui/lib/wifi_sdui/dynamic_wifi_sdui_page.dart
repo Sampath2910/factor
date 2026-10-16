@@ -7,6 +7,7 @@ import 'package:efactor_provisioning/efactor_provisioning.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -157,7 +158,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
   Future<void> _prepareIosWifiEnvironment() async {
     if (defaultTargetPlatform != TargetPlatform.iOS) return;
     try {
-      await _ensureWifiPermission();
+      await _ensureWifiPermission(interactive: false);
       await _native.primeLocalNetworkAccess();
     } catch (error) {
       debugPrint('[SDUI][WiFi][iOS] environment prime failed: $error');
@@ -438,32 +439,112 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     return _screenTarget(onEnter, key);
   }
 
-  Future<void> _ensureWifiPermission() async {
-    if (defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS) {
-      final status = await Permission.locationWhenInUse.request();
-      if (!status.isGranted) {
-        if (status.isPermanentlyDenied) {
-          unawaited(openAppSettings());
-        }
-        throw StateError(
-          'Location permission is required on iOS to read the current Wi‑Fi '
-          'network and provision the device. Please enable "While Using the App" '
-          'and "Precise Location" in iPhone Settings.',
-        );
+  Future<void> _ensureWifiPermission({bool interactive = true}) async {
+    final isApple = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
+    if (isApple) {
+      // 1. Direct query of native CLLocationManager via Geolocator.
+      // This bypasses CocoaPods stubbing and succeeds immediately if the user
+      // has already granted location permission in iPhone Settings.
+      var geoStatus = await geo.Geolocator.checkPermission();
+      if (geoStatus == geo.LocationPermission.whileInUse ||
+          geoStatus == geo.LocationPermission.always) {
+        return;
       }
+
+      // In silent/background preparation, do not show popups or interrupt
+      if (!interactive) return;
+
+      // 2. If permanently denied in Settings, show an in-app dialog directing the user to Settings
+      if (geoStatus == geo.LocationPermission.deniedForever) {
+        if (!mounted) {
+          throw StateError(
+            'Location permission is required on iOS to configure device Wi‑Fi. Please enable "While Using the App" in Settings.',
+          );
+        }
+        final openSettings = await _showLocationPermissionDialog(isPermanentlyDenied: true);
+        if (openSettings) {
+          await geo.Geolocator.openAppSettings();
+        }
+        throw const _WifiFlowCancelled();
+      }
+
+      // 3. Status is denied (not yet prompted). Present polite in-app pop-up rationale before triggering system prompt
+      if (!mounted) return;
+      final userAgreed = await _showLocationPermissionDialog(isPermanentlyDenied: false);
+      if (!userAgreed) {
+        throw const _WifiFlowCancelled();
+      }
+
+      // 4. User accepted our pop-up: trigger native iOS permission request
+      geoStatus = await geo.Geolocator.requestPermission();
+      try {
+        await Permission.locationWhenInUse.request();
+      } catch (_) {}
+
+      if (geoStatus == geo.LocationPermission.whileInUse ||
+          geoStatus == geo.LocationPermission.always) {
+        return; // Granted! Proceed smoothly
+      }
+
+      if (geoStatus == geo.LocationPermission.deniedForever) {
+        if (mounted) {
+          final openSettings = await _showLocationPermissionDialog(isPermanentlyDenied: true);
+          if (openSettings) {
+            await geo.Geolocator.openAppSettings();
+          }
+        }
+        throw const _WifiFlowCancelled();
+      }
+
+      throw StateError(
+        'Location permission is required by Apple iOS to read the Wi‑Fi network and provision your eFactor device.',
+      );
+    }
+
+    // Android: Check permission first
+    final locStatus = await Permission.locationWhenInUse.status;
+    if (locStatus.isGranted) {
+      try {
+        final android = await DeviceInfoPlugin().androidInfo;
+        if (android.version.sdkInt >= 33) {
+          await Permission.nearbyWifiDevices.request();
+        }
+      } catch (_) {}
       return;
     }
 
-    // Android: Location permission is required for scanResults & SoftAP connection
-    final locStatus = await Permission.locationWhenInUse.request();
-    if (!locStatus.isGranted) {
-      if (locStatus.isPermanentlyDenied) {
+    if (!interactive) return;
+
+    if (locStatus.isPermanentlyDenied) {
+      if (!mounted) {
+        throw StateError(
+          'Location permission is required to detect nearby Wi‑Fi networks on Android.',
+        );
+      }
+      final openSettings = await _showLocationPermissionDialog(isPermanentlyDenied: true);
+      if (openSettings) {
         unawaited(openAppSettings());
       }
-      throw StateError(
-        'Location permission is required to detect nearby Wi‑Fi networks on Android.',
-      );
+      throw const _WifiFlowCancelled();
+    }
+
+    if (!mounted) return;
+    final userAgreed = await _showLocationPermissionDialog(isPermanentlyDenied: false);
+    if (!userAgreed) {
+      throw const _WifiFlowCancelled();
+    }
+
+    final newLocStatus = await Permission.locationWhenInUse.request();
+    if (!newLocStatus.isGranted) {
+      if (newLocStatus.isPermanentlyDenied && mounted) {
+        final openSettings = await _showLocationPermissionDialog(isPermanentlyDenied: true);
+        if (openSettings) {
+          unawaited(openAppSettings());
+        }
+      }
+      throw const _WifiFlowCancelled();
     }
 
     try {
@@ -472,6 +553,126 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
         await Permission.nearbyWifiDevices.request();
       }
     } catch (_) {}
+  }
+
+  Future<bool> _showLocationPermissionDialog({
+    required bool isPermanentlyDenied,
+  }) async {
+    if (!mounted) return false;
+    final isIos = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+    final theme = Theme.of(context);
+    final platformName = isIos ? 'Apple iOS' : 'Android';
+    final settingsPath = isIos
+        ? 'Settings > Efactor IoE > Location > "While Using the App"'
+        : 'Settings > Apps > Efactor > Permissions > Location';
+
+    return (await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          title: Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.near_me_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  isPermanentlyDenied
+                      ? 'Location Required'
+                      : 'Location Permission',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                isPermanentlyDenied
+                    ? 'Location access was turned off for this app.\n\n'
+                      '$platformName requires location access to read the Wi‑Fi network and connect your eFactor device.\n\n'
+                      'Please open Settings and set Location to "While Using the App".'
+                    : '$platformName requires Location Permission to identify nearby Wi‑Fi networks and connect with your eFactor device during setup.\n\n'
+                      'Your location data is only used locally for Wi‑Fi device provisioning and is never stored or tracked.',
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
+                ),
+              ),
+              if (isPermanentlyDenied) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.settings_outlined,
+                        size: 20,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          settingsPath,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(
+                isPermanentlyDenied ? 'Open Settings' : 'Continue',
+              ),
+            ),
+          ],
+        );
+      },
+    )) ?? false;
   }
 
   Future<void> _runPrerequisites(Map<String, dynamic> screen) async {
@@ -946,7 +1147,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
       try {
         await _native.disconnectDeviceSoftAp().catchError((_) {});
         if (!mounted || !_isRetryingIosProvision || _provisionCancelled) break;
-        await _ensureWifiPermission().catchError((_) {});
+        await _ensureWifiPermission(interactive: false).catchError((_) {});
         if (!mounted || !_isRetryingIosProvision || _provisionCancelled) break;
         await _native.primeLocalNetworkAccess().catchError((_) {});
         if (!mounted || !_isRetryingIosProvision || _provisionCancelled) break;
@@ -999,7 +1200,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     );
     await _cloud.setProvisionStarted(true).catchError((_) {});
     if (defaultTargetPlatform == TargetPlatform.iOS) {
-      await _ensureWifiPermission().catchError((_) {});
+      await _ensureWifiPermission(interactive: false).catchError((_) {});
       await _native.primeLocalNetworkAccess();
     }
     _networkQuiescedForProvision = true;
