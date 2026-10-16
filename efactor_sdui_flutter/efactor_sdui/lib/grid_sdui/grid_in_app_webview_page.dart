@@ -131,7 +131,9 @@ class GridInAppWebViewPage extends StatefulWidget {
   static bool get isPageOpen =>
       _activeState != null && (_activeState?.mounted ?? false);
 
-  /// Dispatches call action to active web page via window.gridChatCallAction({action, call_id, ...})
+  /// Dispatches call action to active web page via both:
+  /// 1. CustomEvent 'circleConnectCallAction' with { action: 'ANSWER', callId }
+  /// 2. window.gridChatCallAction({ action: 'answer', call_id })
   static Future<void> handleCallAction({
     required String action,
     required String callId,
@@ -140,31 +142,70 @@ class GridInAppWebViewPage extends StatefulWidget {
     String? callType,
   }) async {
     if (!isPageOpen) return;
+    final upperAction = action.toUpperCase();
+    final lowerAction = action.toLowerCase();
     final payload = <String, dynamic>{
-      'action': action,
+      'action': lowerAction,
       'call_id': callId,
       if (gridId != null && gridId.isNotEmpty) 'grid_id': gridId,
       if (userId != null && userId.isNotEmpty) 'user_id': userId,
       if (callType != null && callType.isNotEmpty) 'call_type': callType,
     };
-    final js =
-        'if (window.gridChatCallAction) { window.gridChatCallAction(${jsonEncode(payload)}); }';
+    final js = '''
+(function() {
+  try {
+    window.dispatchEvent(new CustomEvent('circleConnectCallAction', {
+      detail: {
+        action: '$upperAction',
+        callId: '$callId',
+        call_id: '$callId'
+      }
+    }));
+  } catch(e) {
+    console.error('circleConnectCallAction event dispatch error:', e);
+  }
+  if (typeof window.gridChatCallAction === 'function') {
+    try {
+      window.gridChatCallAction(${jsonEncode(payload)});
+    } catch(e) {
+      console.error('gridChatCallAction error:', e);
+    }
+  }
+})();
+''';
     try {
       await _activeState?._controller.runJavaScript(js);
     } catch (e) {
-      debugPrint('[GridInAppWebView] gridChatCallAction JS failed: $e');
+      debugPrint('[GridInAppWebView] handleCallAction JS failed: $e');
     }
   }
 
-  /// Dispatches open chat event to active web page via window.gridChatOpenChat({conversation_id})
+  /// Dispatches open chat event to active web page via both:
+  /// 1. CustomEvent 'circleConnectOpenChat' with { conversationId }
+  /// 2. window.gridChatOpenChat({ conversation_id })
   static Future<void> openChat({required String conversationId}) async {
     if (!isPageOpen) return;
-    final js =
-        'if (window.gridChatOpenChat) { window.gridChatOpenChat(${jsonEncode({'conversation_id': conversationId})}); }';
+    final js = '''
+(function() {
+  try {
+    window.dispatchEvent(new CustomEvent('circleConnectOpenChat', {
+      detail: {
+        conversationId: '$conversationId',
+        conversation_id: '$conversationId'
+      }
+    }));
+  } catch(e) {}
+  if (typeof window.gridChatOpenChat === 'function') {
+    try {
+      window.gridChatOpenChat(${jsonEncode({'conversation_id': conversationId})});
+    } catch(e) {}
+  }
+})();
+''';
     try {
       await _activeState?._controller.runJavaScript(js);
     } catch (e) {
-      debugPrint('[GridInAppWebView] gridChatOpenChat JS failed: $e');
+      debugPrint('[GridInAppWebView] openChat JS failed: $e');
     }
   }
 
@@ -214,6 +255,47 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     final pending = _navigationCompleter;
     if (pending != null && !pending.isCompleted) {
       pending.complete();
+    }
+  }
+
+  /// Dispatches call action to the web page if the page was opened with
+  /// call parameters (e.g. from an Answer action on a background notification).
+  void _dispatchPendingCallActionIfPresent() {
+    final callAction = _effectiveUri.queryParameters['call_action'];
+    final callId = _effectiveUri.queryParameters['call_id'] ??
+        _effectiveUri.queryParameters['callId'];
+    if (callAction != null &&
+        callAction.isNotEmpty &&
+        callId != null &&
+        callId.isNotEmpty) {
+      final upperAction = callAction.toUpperCase();
+      final lowerAction = callAction.toLowerCase();
+      final js = '''
+(function() {
+  setTimeout(function() {
+    try {
+      window.dispatchEvent(new CustomEvent('circleConnectCallAction', {
+        detail: {
+          action: '$upperAction',
+          callId: '$callId',
+          call_id: '$callId'
+        }
+      }));
+    } catch(e) {
+      console.error('Pending circleConnectCallAction dispatch error:', e);
+    }
+    if (typeof window.gridChatCallAction === 'function') {
+      try {
+        window.gridChatCallAction({
+          action: '$lowerAction',
+          call_id: '$callId'
+        });
+      } catch(e) {}
+    }
+  }, 400);
+})();
+''';
+      unawaited(_controller.runJavaScript(js));
     }
   }
 
@@ -326,6 +408,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
             });
             _completeNavigation();
             unawaited(_injectCircleConnectPushBridge());
+            _dispatchPendingCallActionIfPresent();
             if (!_showingSnapshot) {
               unawaited(_persistSnapshot());
             }
