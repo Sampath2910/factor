@@ -636,72 +636,30 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
         schema['theme']?['typography']?['fontFamily']?.toString() ??
             schema['extensions']?['serverDrivenUi']?['theme']?['fontFamilies']
                     ?['body']?['family']
-                ?.toString();
+                ?.toString() ??
+            'Inter';
 
-    final backgroundColor = SduiStyle.color(colors['background']);
-    final primaryColor = SduiStyle.color(colors['primary']);
-
-    if (schemaFont == null || schemaFont.trim().isEmpty) {
-      return _wrapAppOrPage(
-        context: context,
-        child: const Scaffold(
-          body: Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: SchemaIssueWidget(
-                title: 'Schema typography missing',
-                details: [
-                  'Provide theme.typography.fontFamily '
-                      '(or extensions.serverDrivenUi.theme.fontFamilies.body.family).',
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (backgroundColor == null || primaryColor == null) {
-      return _wrapAppOrPage(
-        context: context,
-        child: const Scaffold(
-          body: Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: SchemaIssueWidget(
-                title: 'Schema color missing',
-                details: [
-                  'Provide theme.colors.background and theme.colors.primary '
-                      'as valid colors.',
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    final backgroundColor = SduiStyle.color(colors['background']) ??
+        const Color(0xFFF8FAFC);
+    final primaryColor = SduiStyle.color(colors['primary']) ??
+        SduiStyle.color(colors['accent']) ??
+        SduiStyle.color(colors['topbar']) ??
+        SduiStyle.color(colors['icon']) ??
+        const Color(0xFF2563EB);
 
     TextTheme textTheme;
     try {
       textTheme = GoogleFonts.getTextTheme(schemaFont);
     } catch (error) {
-      return _wrapAppOrPage(
-        context: context,
-        child: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: SchemaIssueWidget(
-                title: 'Schema typography unsupported',
-                details: [
-                  'theme.typography.fontFamily "$schemaFont" is not supported.',
-                  '$error',
-                ],
-              ),
-            ),
-          ),
-        ),
+      debugPrint(
+        '[SDUI][FONT] Unsupported schema font "$schemaFont": $error. '
+        'Falling back to Inter.',
       );
+      try {
+        textTheme = GoogleFonts.interTextTheme();
+      } catch (_) {
+        textTheme = Theme.of(context).textTheme;
+      }
     }
 
     final appTitle = schema['meta']?['app']?['name']?.toString();
@@ -1203,20 +1161,8 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
           final rootTree = _resolveRootTree(widget.schema);
 
           final background =
-              SduiStyle.color(widget.schema['theme']?['colors']?['background']);
-          if (background == null) {
-            return const Scaffold(
-              body: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: SchemaIssueWidget(
-                    title: 'Schema color missing',
-                    details: ['Provide theme.colors.background as a valid color.'],
-                  ),
-                ),
-              ),
-            );
-          }
+              SduiStyle.color(widget.schema['theme']?['colors']?['background']) ??
+                  const Color(0xFFF8FAFC);
 
           return PopScope(
             canPop: false,

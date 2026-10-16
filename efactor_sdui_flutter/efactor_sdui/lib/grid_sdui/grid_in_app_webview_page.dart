@@ -206,6 +206,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   var _showingSnapshot = false;
   String? _error;
   Completer<void>? _navigationCompleter;
+  StreamSubscription<OfflineOutboxAction>? _outboxSyncedSub;
 
   Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
 
@@ -220,12 +221,19 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   void initState() {
     super.initState();
     GridInAppWebViewPage._activeState = this;
+    if (widget.accessToken != null && widget.accessToken!.isNotEmpty) {
+      GridOfflineOutboxService.instance.setDefaultBearerToken(widget.accessToken);
+    }
+    _outboxSyncedSub = GridOfflineOutboxService.instance.onActionSynced.listen((action) {
+      _notifyWebActionSynced(action);
+    });
     _initController();
     _setupPermissionsAndLoad();
   }
 
   @override
   void dispose() {
+    _outboxSyncedSub?.cancel();
     if (GridInAppWebViewPage._activeState == this) {
       GridInAppWebViewPage._activeState = null;
     }
@@ -474,17 +482,19 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
   // Offline Outbox Sync Bridge
   window.CircleConnectOutbox = {
-    enqueue: function(actionType, targetUrl, payload, actionId) {
+    enqueue: function(actionType, targetUrl, payload, actionId, headers) {
       if (window.CircleConnectOutboxBridge) {
         window.CircleConnectOutboxBridge.postMessage(JSON.stringify({
           action: 'enqueue',
           actionType: actionType,
           targetUrl: targetUrl,
           payload: payload,
-          actionId: actionId
+          actionId: actionId,
+          headers: headers || null
         }));
       }
-    }
+    },
+    onActionSynced: null
   };
 })();
 ''';
@@ -492,6 +502,35 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       await _controller.runJavaScript(js);
     } catch (e) {
       debugPrint('[GridInAppWebView] CircleConnectPush bridge inject failed: $e');
+    }
+  }
+
+  /// Dispatches message sent / outbox flushed event to the active web page
+  /// so the React UI can update the status icon from 🕒 to ✓.
+  Future<void> _notifyWebActionSynced(OfflineOutboxAction action) async {
+    if (!mounted) return;
+    final payloadJson = jsonEncode({
+      'actionId': action.actionId,
+      'actionType': action.actionType,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    });
+    final js = '''
+(function() {
+  var d = $payloadJson;
+  try {
+    window.dispatchEvent(new CustomEvent('circleConnectActionSynced', { detail: d }));
+  } catch(e) {}
+  try {
+    if (window.CircleConnectOutbox && typeof window.CircleConnectOutbox.onActionSynced === 'function') {
+      window.CircleConnectOutbox.onActionSynced(d.actionId, d.actionType);
+    }
+  } catch(e) {}
+})();
+''';
+    try {
+      await _controller.runJavaScript(js);
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Notify synced action JS failed: $e');
     }
   }
 
@@ -568,10 +607,16 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
         final targetUrl = data['targetUrl']?.toString() ?? '';
         final payload =
             Map<String, dynamic>.from(data['payload'] as Map? ?? {});
+        final headers = data['headers'] is Map
+            ? Map<String, String>.from((data['headers'] as Map).map(
+                (k, v) => MapEntry(k.toString(), v.toString()),
+              ))
+            : null;
         await GridOfflineOutboxService.instance.enqueue(
           actionType: actionType,
           targetUrl: targetUrl,
           payload: payload,
+          headers: headers,
           customActionId: data['actionId']?.toString(),
         );
       }

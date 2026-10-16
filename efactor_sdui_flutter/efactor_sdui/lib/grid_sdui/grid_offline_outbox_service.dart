@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
@@ -13,6 +14,7 @@ class OfflineOutboxAction {
   final String actionType; // 'send_message', 'like_post', 'add_comment'
   final String targetUrl;
   final Map<String, dynamic> payload;
+  final Map<String, String>? headers;
   final int createdAtEpochMs;
   int retryCount;
 
@@ -21,6 +23,7 @@ class OfflineOutboxAction {
     required this.actionType,
     required this.targetUrl,
     required this.payload,
+    this.headers,
     required this.createdAtEpochMs,
     this.retryCount = 0,
   });
@@ -30,6 +33,7 @@ class OfflineOutboxAction {
     'actionType': actionType,
     'targetUrl': targetUrl,
     'payload': payload,
+    if (headers != null) 'headers': headers,
     'createdAtEpochMs': createdAtEpochMs,
     'retryCount': retryCount,
   };
@@ -40,6 +44,11 @@ class OfflineOutboxAction {
       actionType: json['actionType']?.toString() ?? 'send_message',
       targetUrl: json['targetUrl']?.toString() ?? '',
       payload: Map<String, dynamic>.from(json['payload'] as Map? ?? {}),
+      headers: json['headers'] is Map
+          ? Map<String, String>.from((json['headers'] as Map).map(
+              (k, v) => MapEntry(k.toString(), v.toString()),
+            ))
+          : null,
       createdAtEpochMs: (json['createdAtEpochMs'] as num?)?.toInt() ?? 0,
       retryCount: (json['retryCount'] as num?)?.toInt() ?? 0,
     );
@@ -56,14 +65,23 @@ class GridOfflineOutboxService {
   static final GridOfflineOutboxService instance =
       GridOfflineOutboxService._();
 
+  static const MethodChannel _nativeChannel =
+      MethodChannel('tech.efactor/circle_connect');
+
   File? _outboxFile;
   final List<OfflineOutboxAction> _pendingQueue = <OfflineOutboxAction>[];
   bool _isFlushing = false;
+  String? _defaultBearerToken;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   final StreamController<OfflineOutboxAction> _onActionSynced =
       StreamController<OfflineOutboxAction>.broadcast();
   Stream<OfflineOutboxAction> get onActionSynced => _onActionSynced.stream;
+
+  /// Sets the default bearer token to attach if no custom auth header is provided.
+  void setDefaultBearerToken(String? token) {
+    _defaultBearerToken = token;
+  }
 
   Future<File> get _file async {
     if (_outboxFile != null) return _outboxFile!;
@@ -95,6 +113,7 @@ class GridOfflineOutboxService {
     required String actionType,
     required String targetUrl,
     required Map<String, dynamic> payload,
+    Map<String, String>? headers,
     String? customActionId,
   }) async {
     final action = OfflineOutboxAction(
@@ -104,6 +123,7 @@ class GridOfflineOutboxService {
       actionType: actionType,
       targetUrl: targetUrl,
       payload: payload,
+      headers: headers,
       createdAtEpochMs: DateTime.now().millisecondsSinceEpoch,
     );
 
@@ -120,6 +140,19 @@ class GridOfflineOutboxService {
     }
   }
 
+  /// Retrieves cookies from native platform WebKit/Chromium cookie jar.
+  Future<String> _getCookies(String url) async {
+    try {
+      final cookies = await _nativeChannel.invokeMethod<String>(
+        'getCookies',
+        {'url': url},
+      );
+      return cookies ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   /// Flushes all pending outbox actions over HTTP.
   Future<void> flush() async {
     if (_isFlushing || _pendingQueue.isEmpty) return;
@@ -133,13 +166,31 @@ class GridOfflineOutboxService {
 
         try {
           final uri = Uri.parse(current.targetUrl);
+          final requestHeaders = <String, String>{
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            if (current.headers != null) ...current.headers!,
+          };
+
+          // Attach Bearer token if not explicitly provided
+          if (!requestHeaders.containsKey('Authorization') &&
+              _defaultBearerToken != null &&
+              _defaultBearerToken!.isNotEmpty) {
+            requestHeaders['Authorization'] = 'Bearer $_defaultBearerToken';
+          }
+
+          // Attach session cookies if not explicitly provided
+          if (!requestHeaders.containsKey('Cookie')) {
+            final cookies = await _getCookies(current.targetUrl);
+            if (cookies.isNotEmpty) {
+              requestHeaders['Cookie'] = cookies;
+            }
+          }
+
           final response = await client
               .post(
                 uri,
-                headers: <String, String>{
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                },
+                headers: requestHeaders,
                 body: jsonEncode(current.payload),
               )
               .timeout(const Duration(seconds: 15));
