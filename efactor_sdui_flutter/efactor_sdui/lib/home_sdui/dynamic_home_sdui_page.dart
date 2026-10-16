@@ -490,14 +490,21 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         return;
 
       case 'logout':
-        final handler = widget.onLogout;
-        if (handler == null) {
-          throw StateError(
-            'Home schema requested logout but the authenticated host '
-            'did not provide onLogout.',
+        if (mounted &&
+            (action['actionId'] == 'session-expired' ||
+                action['statusCode'] == '401' ||
+                action['reason'] == '401')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session expired. Please log in again.'),
+              duration: Duration(seconds: 3),
+            ),
           );
         }
-        await handler();
+        final handler = widget.onLogout;
+        if (handler != null) {
+          await handler();
+        }
         return;
 
       case 'apply-theme-preset':
@@ -519,6 +526,7 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
   ///   schema's own initial/default protected route is restored.
   Future<void> _guardAuthenticatedRoute(HomeSduiState state) async {
     if (!_hostAuthenticated) return;
+    if (state.readState('session.authenticated') == false) return;
 
     state.writeSecureState(
       'session.accessToken',
@@ -581,6 +589,7 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
 
   void _scheduleRouteGuard(HomeSduiState state) {
     if (!_hostAuthenticated || _routeGuardScheduled) return;
+    if (state.readState('session.authenticated') == false) return;
 
     final active = state.route(state.activeRouteId);
     if (active == null || active['public'] != true) return;
@@ -726,6 +735,18 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
                       icon: const Icon(Icons.refresh),
                       label: const Text('Retry'),
                     ),
+                    if (widget.onLogout != null &&
+                        (_error!.contains('401') ||
+                            _error!.contains('token') ||
+                            _error!.contains('Unauthorized') ||
+                            _error!.contains('session'))) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => widget.onLogout!(),
+                        icon: const Icon(Icons.logout),
+                        label: const Text('Log In Again'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -739,26 +760,37 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     final renderer = _renderer!;
 
     if (_hostAuthenticated) {
-      state.writeSecureState(
-        'session.accessToken',
-        widget.accessToken,
-        notify: false,
-      );
-      state.writeSecureState(
-        'session.iotAccessToken',
-        widget.accessToken,
-        notify: false,
-      );
-      state.writeState('session.authenticated', true, notify: false);
-      _scheduleRouteGuard(state);
+      final sessionAuth = state.readState('session.authenticated');
+      if (sessionAuth != false) {
+        state.writeSecureState(
+          'session.accessToken',
+          widget.accessToken,
+          notify: false,
+        );
+        state.writeSecureState(
+          'session.iotAccessToken',
+          widget.accessToken,
+          notify: false,
+        );
+        state.writeState('session.authenticated', true, notify: false);
+        _scheduleRouteGuard(state);
+      }
     }
 
     return AnimatedBuilder(
       animation: state,
       builder: (context, _) {
         final activeRoute = state.route(state.activeRouteId);
+        final isSessionInvalid =
+            state.readState('session.authenticated') == false;
 
-        if (_hostAuthenticated && activeRoute?['public'] == true) {
+        if (_hostAuthenticated &&
+            (activeRoute?['public'] == true || isSessionInvalid)) {
+          if (widget.onLogout != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              widget.onLogout?.call();
+            });
+          }
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );

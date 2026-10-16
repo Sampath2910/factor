@@ -1121,7 +1121,9 @@ class HomeSduiState extends ChangeNotifier {
   }) async {
     if (actionId.trim().isEmpty) return;
 
-    if (actionId == 'logout' || actionId == 'host-logout') {
+    if (actionId == 'logout' ||
+        actionId == 'host-logout' ||
+        actionId == 'session-expired') {
       final handler = hostActionHandler;
       if (handler != null) {
         await handler('logout', <String, dynamic>{'actionId': actionId});
@@ -1153,7 +1155,7 @@ class HomeSduiState extends ChangeNotifier {
         '"$actionId" to authenticated Flutter host.',
       );
 
-      await handler(configuredLogoutActionId, logoutAction);
+      await handler('logout', logoutAction);
       return;
     }
 
@@ -1205,6 +1207,22 @@ class HomeSduiState extends ChangeNotifier {
         final routeId = destination?['routeId']?.toString();
         if (routeId == null) {
           throw FormatException('$actionId destination.routeId is missing.');
+        }
+
+        final targetRoute = route(routeId);
+        if (targetRoute != null && targetRoute['public'] == true) {
+          final handler = hostActionHandler;
+          if (handler != null) {
+            logDebug(
+              '[HOME_SDUI][NAVIGATE] Navigating to public route "$routeId" in authenticated host. '
+              'Triggering host logout.',
+            );
+            await handler('logout', <String, dynamic>{
+              'actionId': actionId,
+              'routeId': routeId,
+            });
+            return;
+          }
         }
 
         final parameters = _resolveMap(
@@ -1476,6 +1494,21 @@ class HomeSduiState extends ChangeNotifier {
   }
 
   Future<void> _handleStandardError(String statusCode) async {
+    if (statusCode == '401') {
+      logDebug(
+        '[HOME_SDUI] HTTP 401 Unauthorized encountered. Invalidating session.',
+      );
+      writeState('session.authenticated', false);
+      writeSecureState('session.accessToken', null);
+      final handler = hostActionHandler;
+      if (handler != null) {
+        await handler('logout', <String, dynamic>{
+          'actionId': 'session-expired',
+          'statusCode': statusCode,
+        });
+        return;
+      }
+    }
     final actionId =
         schema['api']?['standardErrors']?[statusCode]?['actionId']?.toString();
     if (actionId != null) {

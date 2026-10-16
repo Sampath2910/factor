@@ -168,6 +168,24 @@ class AuthState extends ChangeNotifier {
     return key != null && key.isNotEmpty && read(key) == true;
   }
 
+  /// Returns true if a JWT token has expired based on its 'exp' claim.
+  static bool isJwtExpired(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return false;
+      final normalized = base64Url.normalize(parts[1]);
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(normalized)),
+      ) as Map<String, dynamic>;
+      final exp = (payload['exp'] as num?)?.toInt();
+      if (exp == null) return false;
+      final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      return nowSec >= exp;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> restoreSession() async {
     try {
       final stored = await _secureStorage.readSession();
@@ -175,6 +193,14 @@ class AuthState extends ChangeNotifier {
       final token = _nonEmpty(stored['accessToken']);
 
       if (token == null) {
+        return;
+      }
+
+      if (isJwtExpired(token)) {
+        debugPrint(
+          '[AuthState] Stored session accessToken is expired. Clearing stale session.',
+        );
+        await clearSession(notify: false);
         return;
       }
 
@@ -783,10 +809,12 @@ class AuthState extends ChangeNotifier {
 
     final accessToken = resolved['accesstoken'] ?? resolved['accessToken'];
     final userId = resolved['user_id'] ?? resolved['userId'];
-    if (accessToken == null)
+    if (accessToken == null) {
       throw FormatException('$source access token is missing.');
-    if (userId == null)
+    }
+    if (userId == null) {
       throw FormatException('$source authenticated user id is missing.');
+    }
 
     _write(_state, 'auth.accessToken', accessToken);
     _write(_state, 'auth.idToken', resolved['idtoken'] ?? resolved['idToken']);
