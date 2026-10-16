@@ -443,9 +443,13 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
         defaultTargetPlatform == TargetPlatform.macOS) {
       final status = await Permission.locationWhenInUse.request();
       if (!status.isGranted) {
+        if (status.isPermanentlyDenied) {
+          unawaited(openAppSettings());
+        }
         throw StateError(
           'Location permission is required on iOS to read the current Wi‑Fi '
-          'network and provision the device.',
+          'network and provision the device. Please enable "While Using the App" '
+          'and "Precise Location" in iPhone Settings.',
         );
       }
       return;
@@ -454,6 +458,9 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     // Android: Location permission is required for scanResults & SoftAP connection
     final locStatus = await Permission.locationWhenInUse.request();
     if (!locStatus.isGranted) {
+      if (locStatus.isPermanentlyDenied) {
+        unawaited(openAppSettings());
+      }
       throw StateError(
         'Location permission is required to detect nearby Wi‑Fi networks on Android.',
       );
