@@ -760,42 +760,7 @@ class ComponentRegistry {
             fontWeight: fontWeight,
           );
 
-      Map<String, dynamic>? selectedOption;
-      final isRawBracketString = value is String &&
-          RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(value.trim());
-      if (!isRawBracketString && value != null) {
-        Map<String, dynamic>? controlForBinding;
-        if (binding.isNotEmpty) {
-          for (final ctrl in state.controls) {
-            if (ctrl['binding']?.toString() == binding) {
-              controlForBinding = ctrl;
-              break;
-            }
-          }
-        }
-        if (controlForBinding != null) {
-          selectedOption =
-              AppState.resolveEnumOption(controlForBinding, value);
-        }
-        if (selectedOption == null) {
-          for (final option in options) {
-            if (AppState.enumOptionEntryMatches(option, value)) {
-              selectedOption = option;
-              break;
-            }
-          }
-        }
-      }
-      final currentValue = selectedOption?['value'];
-
-      // DropdownButton uses a 48 logical-pixel closed-button height when it is
-      // not dense. Some SDUI schemas intentionally declare a smaller field
-      // height (for example 44 logical pixels). Constraining a non-dense
-      // DropdownButton below kMinInteractiveDimension makes Flutter's internal
-      // vertical Flex overflow. Keep the schema's field height, but
-      // automatically use the compact DropdownButton layout whenever that
-      // height cannot contain the framework's normal interactive dimension.
-      // This is geometry-driven and applies to every schema/account.
+      // DropdownButton height: if schema height < kMinInteractiveDimension, use dense.
       final schemaDense = props['isDense'];
       final effectiveIsDense = schemaDense == true ||
           (fieldHeight != null && fieldHeight < kMinInteractiveDimension);
@@ -803,70 +768,31 @@ class ComponentRegistry {
       final rawHint = (props['hint'] ?? node['hint'])?.toString().trim() ?? '';
       final hintText = rawHint.isEmpty ? 'Choose' : rawHint;
 
-      final dropdown = DropdownButton<dynamic>(
-        value: options.isEmpty ? null : currentValue,
-        hint: Text(
-          hintText,
-          style: dropdownStyle.copyWith(
-            color: dropdownStyle.color?.withValues(alpha: 0.6),
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        underline: const SizedBox.shrink(),
+      // _SduiDropdown is a StatefulWidget that owns its own visual selection
+      // state. AppState.setBinding skips notifyListeners when the stored value
+      // already equals the incoming value (readingsAreEqual == true). Without
+      // local state the dropdown never rebuilds after the user taps an option
+      // the backend already holds — the hint keeps showing and clicks have no
+      // visible effect. _SduiDropdown fixes this by calling setState immediately.
+      return _SduiDropdown(
+        key: ValueKey('sdui_dd:$binding'),
+        binding: binding,
+        externalValue: value,
+        options: options,
+        state: state,
+        dropdownStyle: dropdownStyle,
+        hintText: hintText,
         isExpanded: props['isExpanded'] == true,
         isDense: effectiveIsDense,
-        dropdownColor: backgroundColor,
+        backgroundColor: backgroundColor,
+        borderColor: borderColor,
+        borderWidth: borderWidth,
+        borderRadius: borderRadius,
+        fieldHeight: fieldHeight,
         menuMaxHeight: menuMaxHeight,
-        itemHeight: itemHeight != null && itemHeight >= kMinInteractiveDimension
-            ? itemHeight
-            : null,
-        borderRadius: borderRadius == null
-            ? null
-            : BorderRadius.circular(borderRadius),
-        style: dropdownStyle,
-        items: options.isEmpty
-            ? const <DropdownMenuItem<dynamic>>[]
-            : [
-                for (final o in options)
-                  DropdownMenuItem(
-                    value: o['value'],
-                    child: Text(
-                      o['label']?.toString() ?? o['value'].toString(),
-                      style: dropdownStyle,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ),
-              ],
-        onChanged: binding.isNotEmpty && options.isNotEmpty
-            ? (v) => state.setBinding(binding, v)
-            : null,
+        itemHeight: itemHeight,
+        padding: padding,
       );
-
-      Widget result = dropdown;
-      if (padding != null ||
-          backgroundColor != null ||
-          borderColor != null ||
-          borderRadius != null) {
-        result = Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: borderRadius == null
-                ? null
-                : BorderRadius.circular(borderRadius),
-            border: borderColor == null
-                ? null
-                : Border.all(color: borderColor, width: borderWidth ?? 1),
-          ),
-          child: result,
-        );
-      }
-      if (fieldHeight != null) {
-        result = SizedBox(height: fieldHeight, child: result);
-      }
-      return result;
     });
 
     // ElevatedButton component. All visual values come from the schema.
@@ -4078,5 +4004,214 @@ class _GaugeNeedlePainter extends CustomPainter {
         oldDelegate.trackWidth != trackWidth ||
         oldDelegate.needleWidth != needleWidth ||
         oldDelegate.centerRadius != centerRadius;
+  }
+}
+
+/// A StatefulWidget wrapper for the SDUI dropdown.
+///
+/// Motivation: [AppState.setBinding] skips [ChangeNotifier.notifyListeners]
+/// when the stored parameter value is already equal to the incoming value
+/// (`readingsAreEqual == true`). A plain stateless dropdown never rebuilds
+/// after the user taps an option whose protocol value the device already
+/// reported — the hint keeps showing even though the correct option was
+/// selected. By keeping a local `_localSelected` state we apply the visual
+/// selection immediately on every user tap, independent of backend state.
+class _SduiDropdown extends StatefulWidget {
+  const _SduiDropdown({
+    super.key,
+    required this.binding,
+    required this.externalValue,
+    required this.options,
+    required this.state,
+    required this.dropdownStyle,
+    required this.hintText,
+    required this.isExpanded,
+    required this.isDense,
+    this.backgroundColor,
+    this.borderColor,
+    this.borderWidth,
+    this.borderRadius,
+    this.fieldHeight,
+    this.menuMaxHeight,
+    this.itemHeight,
+    this.padding,
+  });
+
+  final String binding;
+  final dynamic externalValue;
+  final List<Map<String, dynamic>> options;
+  final AppState state;
+  final TextStyle dropdownStyle;
+  final String hintText;
+  final bool isExpanded;
+  final bool isDense;
+  final Color? backgroundColor;
+  final Color? borderColor;
+  final double? borderWidth;
+  final double? borderRadius;
+  final double? fieldHeight;
+  final double? menuMaxHeight;
+  final double? itemHeight;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  State<_SduiDropdown> createState() => _SduiDropdownState();
+}
+
+class _SduiDropdownState extends State<_SduiDropdown> {
+  /// Value currently shown on the dropdown face.
+  /// Always one of the o['value'] objects from widget.options, or null.
+  dynamic _localSelected;
+
+  @override
+  void initState() {
+    super.initState();
+    _localSelected = _resolveFromOptions(widget.externalValue);
+  }
+
+  @override
+  void didUpdateWidget(_SduiDropdown old) {
+    super.didUpdateWidget(old);
+    // Sync from external changes (cloud / device push) only when the parent
+    // reports a different raw value. Avoids overwriting a local selection that
+    // the backend has not yet echoed back.
+    if (old.externalValue != widget.externalValue ||
+        old.options.length != widget.options.length) {
+      final incoming = _resolveFromOptions(widget.externalValue);
+      if (incoming != null || widget.externalValue == null) {
+        setState(() => _localSelected = incoming);
+      }
+    }
+  }
+
+  /// Finds the exact o['value'] object in widget.options that matches rawValue
+  /// using the same fuzzy comparison used everywhere else in SDUI.
+  dynamic _resolveFromOptions(dynamic rawValue) {
+    if (rawValue == null) return null;
+    final text = rawValue.toString().trim();
+    if (text.isEmpty) return null;
+
+    Map<String, dynamic>? controlForBinding;
+    if (widget.binding.isNotEmpty) {
+      for (final ctrl in widget.state.controls) {
+        if (ctrl['binding']?.toString() == widget.binding) {
+          controlForBinding = ctrl;
+          break;
+        }
+      }
+    }
+    Map<String, dynamic>? resolved;
+    if (controlForBinding != null) {
+      resolved = AppState.resolveEnumOption(controlForBinding, rawValue);
+    }
+    if (resolved == null) {
+      for (final o in widget.options) {
+        if (AppState.enumOptionEntryMatches(o, rawValue)) {
+          resolved = o;
+          break;
+        }
+      }
+    }
+    if (resolved == null) return null;
+
+    // Return the exact object from the list so Flutter's == check works.
+    final resolvedValue = resolved['value'];
+    for (final o in widget.options) {
+      if (AppState.enumOptionEntryMatches(o, resolvedValue)) {
+        return o['value'];
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveItemHeight =
+        widget.itemHeight != null &&
+                widget.itemHeight! >= kMinInteractiveDimension
+            ? widget.itemHeight
+            : null;
+
+    Widget dropdown = DropdownButton<dynamic>(
+      value: widget.options.isEmpty ? null : _localSelected,
+      hint: Text(
+        widget.hintText,
+        style: widget.dropdownStyle.copyWith(
+          color: widget.dropdownStyle.color?.withValues(alpha: 0.6),
+        ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+      ),
+      underline: const SizedBox.shrink(),
+      isExpanded: widget.isExpanded,
+      isDense: widget.isDense,
+      dropdownColor: widget.backgroundColor,
+      menuMaxHeight: widget.menuMaxHeight,
+      itemHeight: effectiveItemHeight,
+      borderRadius: widget.borderRadius == null
+          ? null
+          : BorderRadius.circular(widget.borderRadius!),
+      style: widget.dropdownStyle,
+      items: widget.options.isEmpty
+          ? const <DropdownMenuItem<dynamic>>[]
+          : [
+              for (final o in widget.options)
+                DropdownMenuItem(
+                  value: o['value'],
+                  child: Text(
+                    o['label']?.toString() ?? o['value'].toString(),
+                    style: widget.dropdownStyle,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+            ],
+      onChanged: widget.binding.isNotEmpty && widget.options.isNotEmpty
+          ? (v) {
+              // 1. Update local visual state immediately so the dropdown face
+              //    shows the new selection even when setBinding is a no-op
+              //    (readingsAreEqual == true blocks notifyListeners).
+              final exactValue = _resolveFromOptions(v) ?? v;
+              setState(() => _localSelected = exactValue);
+
+              // 2. Resolve canonical option value before writing to the binding
+              //    so the stored value stays consistent.
+              Map<String, dynamic>? matched;
+              for (final o in widget.options) {
+                if (AppState.enumOptionEntryMatches(o, v)) {
+                  matched = o;
+                  break;
+                }
+              }
+              widget.state.setBinding(widget.binding, matched?['value'] ?? v);
+            }
+          : null,
+    );
+
+    if (widget.padding != null ||
+        widget.backgroundColor != null ||
+        widget.borderColor != null ||
+        widget.borderRadius != null) {
+      dropdown = Container(
+        padding: widget.padding,
+        decoration: BoxDecoration(
+          color: widget.backgroundColor,
+          borderRadius: widget.borderRadius == null
+              ? null
+              : BorderRadius.circular(widget.borderRadius!),
+          border: widget.borderColor == null
+              ? null
+              : Border.all(
+                  color: widget.borderColor!,
+                  width: widget.borderWidth ?? 1,
+                ),
+        ),
+        child: dropdown,
+      );
+    }
+    if (widget.fieldHeight != null) {
+      dropdown = SizedBox(height: widget.fieldHeight, child: dropdown);
+    }
+    return dropdown;
   }
 }

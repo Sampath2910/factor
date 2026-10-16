@@ -705,15 +705,21 @@ class ParameterCard extends StatelessWidget {
           liveValue: liveValue,
           state: state,
         );
-        // A text field already paints the bound value. The schema card label
-        // (widgetTree.properties.props.label) is the caption web shows above
-        // that field — for example "tuning" — while protocol `label` is often
-        // the field role ("Data") and is not the caption. Switches and gauges
-        // keep the header value (ON / OFF) and do not repeat that caption.
+        // A text field or dropdown already presents its bound/selected value.
+        // The schema card label (widgetTree.properties.props.label) is the
+        // caption web shows above that field — for example "tuning" — while
+        // protocol `label` is often the field role ("Data") and is not the
+        // caption. Switches and gauges keep the header value (ON / OFF) and do
+        // not repeat that caption.
+        final isDropdown = normalizedComponentType == 'dropdown' ||
+            normalizedComponentType == 'dropdownbutton' ||
+            normalizedComponentType == 'select';
+        final controlAlreadyShowsValue = !isHeaderOnlyValue &&
+            (normalizedComponentType == 'textfield' || isDropdown);
         final textFieldShowsValue = !isHeaderOnlyValue &&
             normalizedComponentType == 'textfield';
         var caption = label;
-        if (caption.isEmpty && textFieldShowsValue) {
+        if (caption.isEmpty && (textFieldShowsValue || isDropdown)) {
           final treeLabel = _cardProps['label']?.toString().trim() ?? '';
           if (treeLabel.isNotEmpty && !_isUiComponentTypeName(treeLabel)) {
             caption = treeLabel;
@@ -724,8 +730,9 @@ class ParameterCard extends StatelessWidget {
             !_isUiComponentTypeName(caption);
         // Schema value first (including the published placeholder), then the
         // same text updates when the cloud replaces the binding. An explicit
-        // showValueInHeader wins. Otherwise a visible text field is the value,
-        // so the header does not paint the same string a second time.
+        // showValueInHeader wins. Otherwise a visible text field or dropdown
+        // already presents the value, so the header does not paint the same
+        // string a second time.
         final explicitHeaderValue =
             _boolOrNull(_cardProps['showValueInHeader']);
         final isTrigger = normalizedComponentType == 'trigger' ||
@@ -735,7 +742,7 @@ class ParameterCard extends StatelessWidget {
         final showHeaderValue = !isTerminalConsole &&
             !isTrigger &&
             displayValue.isNotEmpty &&
-            (explicitHeaderValue ?? !textFieldShowsValue);
+            (explicitHeaderValue ?? !controlAlreadyShowsValue);
 
         var iconName = control['icon']?.toString() ?? '';
         if (iconName.isEmpty) {
