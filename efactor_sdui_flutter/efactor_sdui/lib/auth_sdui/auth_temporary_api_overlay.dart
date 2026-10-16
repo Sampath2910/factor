@@ -13,12 +13,60 @@ class AuthTemporaryApiOverlay {
     defaultValue: true,
   );
 
+  static const bool useLegacyEndpoints = bool.fromEnvironment(
+    'AUTH_USE_LEGACY_ENDPOINTS',
+    defaultValue: true,
+  );
+
   static Map<String, dynamic> apply(Map<String, dynamic> source) {
     final schema = jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
     if (enabled) {
       _ensureCompatibilitySessionState(schema);
     }
+    if (useLegacyEndpoints) {
+      _remapLegacyAuthEndpoints(schema);
+    }
     return schema;
+  }
+
+  static void _remapLegacyAuthEndpoints(Map<String, dynamic> schema) {
+    final actions = schema['actions'];
+    if (actions is! Map) return;
+
+    // 1. sendSignupOtp: remap /sd-signup/otp -> /v8/api.php?action=user
+    final sendSignupOtp = actions['sendSignupOtp'];
+    if (sendSignupOtp is Map) {
+      final url = sendSignupOtp['url']?.toString() ?? '';
+      if (url.contains('/sd-signup/otp')) {
+        sendSignupOtp['url'] = 'https://efactor.tech/v8/api.php?action=user';
+      }
+    }
+
+    // 2. verifySignupOtp: remap /sd-signup/verify -> /v8/api.php?action=userverify
+    final verifySignupOtp = actions['verifySignupOtp'];
+    if (verifySignupOtp is Map) {
+      final url = verifySignupOtp['url']?.toString() ?? '';
+      if (url.contains('/sd-signup/verify')) {
+        verifySignupOtp['url'] =
+            'https://efactor.tech/v8/api.php?action=userverify';
+      }
+    }
+
+    // 3. submitSignup: remap /sd-signup/complete -> /v8/api.php?action=userlogin
+    final submitSignup = actions['submitSignup'];
+    if (submitSignup is Map) {
+      final url = submitSignup['url']?.toString() ?? '';
+      if (url.contains('/sd-signup/complete')) {
+        submitSignup['url'] =
+            'https://efactor.tech/v8/api.php?action=userlogin';
+        final payload = submitSignup['payload'];
+        if (payload is Map) {
+          payload['username'] = r'$state.signupForm.phone';
+          payload['password'] = r'$state.signupForm.password';
+          payload['user_type'] = r'$state.signupForm.user_type';
+        }
+      }
+    }
   }
 
   static void _ensureCompatibilitySessionState(Map<String, dynamic> schema) {
