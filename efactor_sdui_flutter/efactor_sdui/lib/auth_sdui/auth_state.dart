@@ -239,6 +239,11 @@ class AuthState extends ChangeNotifier {
 
     await _secureStorage.clearSession();
 
+    final rawState = schema['state'] is Map
+        ? schema['state'] as Map<String, dynamic>
+        : <String, dynamic>{};
+    _state = jsonDecode(jsonEncode(rawState)) as Map<String, dynamic>;
+
     for (final key in const <String>[
       'auth.accessToken',
       'auth.accesstoken',
@@ -257,6 +262,8 @@ class AuthState extends ChangeNotifier {
     }
 
     _cookies.clear();
+    fieldErrors.clear();
+    _passwordVisible.clear();
     _write(_state, 'auth.isAuthenticated', false);
 
     if (notify) {

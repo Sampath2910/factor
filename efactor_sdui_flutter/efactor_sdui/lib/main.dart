@@ -195,10 +195,13 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = _authenticatedUserId();
+    final currentToken = widget.authState.accessToken ?? '';
     return DynamicHomeSduiPage(
-      accessToken: widget.authState.accessToken ?? '',
+      key: ValueKey<String>('home_user_${currentUserId ?? 0}_$currentToken'),
+      accessToken: currentToken,
       refreshToken: widget.authState.refreshToken,
-      userId: _authenticatedUserId(),
+      userId: currentUserId,
       email: _authenticatedEmail(),
       username: _authenticatedUsername(),
       roles: _authenticatedRoles(),
