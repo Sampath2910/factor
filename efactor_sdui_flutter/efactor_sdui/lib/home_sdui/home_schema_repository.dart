@@ -312,10 +312,9 @@ class HomeSchemaRepository {
 
   /// Clears in-memory and persisted cache for this user on logout.
   static Future<void> clearUserCache({required int? userId}) async {
+    _memoryCache.clear();
+    _inFlight.clear();
     final key = 'efactor.home.server_schema.v4.user_${userId ?? 0}';
-    _memoryCache.remove(key);
-    _inFlight.remove('${userId ?? 0}|live');
-    _inFlight.remove('${userId ?? 0}|any');
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(key);
@@ -324,6 +323,24 @@ class HomeSchemaRepository {
       logDebug('[HomeSchemaRepository] Cleared schema cache for user=$userId');
     } catch (error) {
       logDebug('[HomeSchemaRepository] Failed to clear user schema cache: $error');
+    }
+  }
+
+  /// Completely purges all in-memory and disk cached Home schemas across all users.
+  static Future<void> clearAllCache() async {
+    _memoryCache.clear();
+    _inFlight.clear();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('efactor.home.')).toList();
+      for (final k in keys) {
+        await prefs.remove(k);
+        await prefs.remove('$k.savedAt');
+        await SchemaDiskCache.remove('$k.json');
+      }
+      logDebug('[HomeSchemaRepository] Cleared all home schema caches.');
+    } catch (error) {
+      logDebug('[HomeSchemaRepository] Failed to clear all home schema caches: $error');
     }
   }
 

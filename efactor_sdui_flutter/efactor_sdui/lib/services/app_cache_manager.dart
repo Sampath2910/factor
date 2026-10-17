@@ -1,7 +1,9 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../data/schema_repository.dart';
 import '../grid_sdui/grid_schema_repository.dart';
+import '../grid_sdui/grid_shell_pool.dart';
 import '../home_sdui/home_schema_repository.dart';
 import '../home_sdui/home_sdui_state.dart';
 import '../iot_sdui/iot_schema_repository.dart';
@@ -49,14 +51,16 @@ class AppCacheManager {
       logDebug('[AppCacheManager] Queue reset error: $e');
     }
 
-    // 3. Home SDUI schema and datasource cache
+    // 3. Home SDUI schema and datasource cache (both user-specific and global)
     try {
       await HomeSchemaRepository.clearUserCache(userId: userId);
+      await HomeSchemaRepository.clearAllCache();
     } catch (e) {
       logDebug('[AppCacheManager] HomeSchemaRepository clear error: $e');
     }
     try {
       await HomeSduiState.clearUserCache(userId: userId);
+      await HomeSduiState.clearAllCache();
     } catch (e) {
       logDebug('[AppCacheManager] HomeSduiState clear error: $e');
     }
@@ -73,49 +77,66 @@ class AppCacheManager {
       logDebug('[AppCacheManager] IotSchemaRepository clear error: $e');
     }
 
-    // 5. Grid schema cache
+    // 5. Grid schema cache & pre-warmed WebView shells
     try {
       await GridSchemaRepository.clearUserCache(userId: userId);
     } catch (e) {
       logDebug('[AppCacheManager] GridSchemaRepository clear error: $e');
     }
+    try {
+      GridShellPool.instance.clearAll();
+    } catch (e) {
+      logDebug('[AppCacheManager] GridShellPool clear error: $e');
+    }
 
-    // 6. Device schemas & known devices index
+    // 6. WebView session cookies & web storage
+    try {
+      final cookieManager = WebViewCookieManager();
+      await cookieManager.clearCookies();
+    } catch (e) {
+      logDebug('[AppCacheManager] WebViewCookieManager clear error: $e');
+    }
+
+    // 7. Device schemas & known devices index
     try {
       await SchemaRepository.clearAllCache();
     } catch (e) {
       logDebug('[AppCacheManager] SchemaRepository clear error: $e');
     }
 
-    // 7. Device parameter store
+    // 8. Device parameter store
     try {
       await DeviceParameterStore.clearAll();
     } catch (e) {
       logDebug('[AppCacheManager] DeviceParameterStore clear error: $e');
     }
 
-    // 8. Disk cache files
+    // 9. Disk cache files
     try {
       await SchemaDiskCache.clearAll();
     } catch (e) {
       logDebug('[AppCacheManager] SchemaDiskCache clear error: $e');
     }
 
-    // 9. Network and Auth image caches (disk + in-memory decoded image cache)
+    // 10. Network and Auth image caches (disk + in-memory decoded image cache)
     try {
       await SduiNetworkImageCache.clearAll();
     } catch (e) {
       logDebug('[AppCacheManager] Image cache clear error: $e');
     }
 
-    // 10. SharedPreferences cleanup for all remaining app cache keys
+    // 11. SharedPreferences cleanup for all remaining app cache keys
     try {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getKeys().toList();
       for (final key in keys) {
         if (key.startsWith('efactor.') ||
-            key.startsWith('home_sdui_cache_') ||
-            key.startsWith('sdui')) {
+            key.startsWith('home_sdui.') ||
+            key.startsWith('home_sdui_') ||
+            key.startsWith('sdui.') ||
+            key.startsWith('sdui_') ||
+            key.startsWith('grid.') ||
+            key.startsWith('iot.')) {
           await prefs.remove(key);
         }
       }

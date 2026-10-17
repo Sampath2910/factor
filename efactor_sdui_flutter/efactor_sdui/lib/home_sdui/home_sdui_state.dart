@@ -1098,19 +1098,32 @@ class HomeSduiState extends ChangeNotifier {
   /// Clears persisted datasource cache (e.g. dashboard, profile) for this user on logout.
   static Future<void> clearUserCache({required int? userId}) async {
     final uid = userId?.toString().trim();
-    if (uid == null || uid.isEmpty) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final keys = prefs.getKeys();
-      final prefix = 'home_sdui.cache.$uid.';
+      final keys = prefs.getKeys().toList();
+      final prefix = uid != null && uid.isNotEmpty ? 'home_sdui.cache.$uid.' : 'home_sdui.cache.';
       for (final key in keys) {
-        if (key.startsWith(prefix)) {
+        if (key.startsWith(prefix) || key.startsWith('home_sdui.cache.')) {
           await prefs.remove(key);
         }
       }
       logDebug('[HomeSduiState] Cleared datasource cache for user=$uid');
     } catch (error) {
       logDebug('[HomeSduiState] Failed to clear user cache: $error');
+    }
+  }
+
+  /// Completely purges all persisted datasource caches across all users.
+  static Future<void> clearAllCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('home_sdui.cache.') || k.startsWith('home_sdui.')).toList();
+      for (final key in keys) {
+        await prefs.remove(key);
+      }
+      logDebug('[HomeSduiState] Cleared all datasource caches.');
+    } catch (error) {
+      logDebug('[HomeSduiState] Failed to clear all datasource caches: $error');
     }
   }
 
