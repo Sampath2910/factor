@@ -526,7 +526,6 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
   ///   schema's own initial/default protected route is restored.
   Future<void> _guardAuthenticatedRoute(HomeSduiState state) async {
     if (!_hostAuthenticated) return;
-    if (state.readState('session.authenticated') == false) return;
 
     state.writeSecureState(
       'session.accessToken',
@@ -589,7 +588,6 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
 
   void _scheduleRouteGuard(HomeSduiState state) {
     if (!_hostAuthenticated || _routeGuardScheduled) return;
-    if (state.readState('session.authenticated') == false) return;
 
     final active = state.route(state.activeRouteId);
     if (active == null || active['public'] != true) return;
@@ -760,37 +758,26 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     final renderer = _renderer!;
 
     if (_hostAuthenticated) {
-      final sessionAuth = state.readState('session.authenticated');
-      if (sessionAuth != false) {
-        state.writeSecureState(
-          'session.accessToken',
-          widget.accessToken,
-          notify: false,
-        );
-        state.writeSecureState(
-          'session.iotAccessToken',
-          widget.accessToken,
-          notify: false,
-        );
-        state.writeState('session.authenticated', true, notify: false);
-        _scheduleRouteGuard(state);
-      }
+      state.writeSecureState(
+        'session.accessToken',
+        widget.accessToken,
+        notify: false,
+      );
+      state.writeSecureState(
+        'session.iotAccessToken',
+        widget.accessToken,
+        notify: false,
+      );
+      state.writeState('session.authenticated', true, notify: false);
+      _scheduleRouteGuard(state);
     }
 
     return AnimatedBuilder(
       animation: state,
       builder: (context, _) {
         final activeRoute = state.route(state.activeRouteId);
-        final isSessionInvalid =
-            state.readState('session.authenticated') == false;
 
-        if (_hostAuthenticated &&
-            (activeRoute?['public'] == true || isSessionInvalid)) {
-          if (widget.onLogout != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              widget.onLogout?.call();
-            });
-          }
+        if (_hostAuthenticated && activeRoute?['public'] == true) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );

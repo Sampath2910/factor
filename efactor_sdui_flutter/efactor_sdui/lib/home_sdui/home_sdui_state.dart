@@ -1209,22 +1209,6 @@ class HomeSduiState extends ChangeNotifier {
           throw FormatException('$actionId destination.routeId is missing.');
         }
 
-        final targetRoute = route(routeId);
-        if (targetRoute != null && targetRoute['public'] == true) {
-          final handler = hostActionHandler;
-          if (handler != null) {
-            logDebug(
-              '[HOME_SDUI][NAVIGATE] Navigating to public route "$routeId" in authenticated host. '
-              'Triggering host logout.',
-            );
-            await handler('logout', <String, dynamic>{
-              'actionId': actionId,
-              'routeId': routeId,
-            });
-            return;
-          }
-        }
-
         final parameters = _resolveMap(
           destination?['parameters'],
           event: event,
@@ -1494,21 +1478,6 @@ class HomeSduiState extends ChangeNotifier {
   }
 
   Future<void> _handleStandardError(String statusCode) async {
-    if (statusCode == '401') {
-      logDebug(
-        '[HOME_SDUI] HTTP 401 Unauthorized encountered. Invalidating session.',
-      );
-      writeState('session.authenticated', false);
-      writeSecureState('session.accessToken', null);
-      final handler = hostActionHandler;
-      if (handler != null) {
-        await handler('logout', <String, dynamic>{
-          'actionId': 'session-expired',
-          'statusCode': statusCode,
-        });
-        return;
-      }
-    }
     final actionId =
         schema['api']?['standardErrors']?[statusCode]?['actionId']?.toString();
     if (actionId != null) {

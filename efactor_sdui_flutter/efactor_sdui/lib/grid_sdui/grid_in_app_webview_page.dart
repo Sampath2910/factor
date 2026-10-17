@@ -243,7 +243,6 @@ class GridInAppWebViewPage extends StatefulWidget {
 class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   late final WebViewController _controller;
   var _loading = true;
-  var _hasInjectedSso = false;
   var _showingSnapshot = false;
   String? _error;
   Completer<void>? _navigationCompleter;
@@ -379,9 +378,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
             }
 
             // Defensively preserve SSO token on server /signin redirects
-            if (!_hasInjectedSso &&
-                GridInAppWebViewPage.shouldInjectSso(targetUri, initialUri: widget.uri)) {
-              _hasInjectedSso = true;
+            if (GridInAppWebViewPage.shouldInjectSso(targetUri, initialUri: widget.uri)) {
               final redirected = GridInAppWebViewPage.injectSso(
                 targetUri,
                 initialUri: widget.uri,
@@ -466,10 +463,25 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   Future<void> _injectCircleConnectPushBridge() async {
     final token = IncomingCallService.instance.deviceToken ?? '';
     final tokenJson = jsonEncode(token);
+    final bearerJson = jsonEncode(widget.accessToken ?? '');
     final js = '''
 (function() {
   var fcmToken = $tokenJson;
   window.__efactor_fcm_token = fcmToken;
+  var bearerToken = $bearerJson;
+  if (bearerToken) {
+    window.__efactor_access_token = bearerToken;
+    if (!window.CircleConnectAuth) {
+      window.CircleConnectAuth = {};
+    }
+    window.CircleConnectAuth.getAccessToken = function() {
+      return window.__efactor_access_token || "";
+    };
+    try {
+      localStorage.setItem('access_token', bearerToken);
+      localStorage.setItem('efactor_access_token', bearerToken);
+    } catch(e) {}
+  }
   if (!window.CircleConnectPush) {
     window.CircleConnectPush = {};
   }
@@ -955,7 +967,6 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       _showingSnapshot = false;
     });
     if (!mounted) return;
-    _hasInjectedSso = false;
     await _setupPermissionsAndLoad();
   }
 

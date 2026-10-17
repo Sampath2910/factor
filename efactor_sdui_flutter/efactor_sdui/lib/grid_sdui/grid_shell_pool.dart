@@ -10,6 +10,8 @@ class GridShellPool {
   static final GridShellPool instance = GridShellPool._();
 
   final Map<String, Widget> _warmedShells = <String, Widget>{};
+  final Map<String, DateTime> _shellCreationTimes = <String, DateTime>{};
+  static const Duration _maxWarmAge = Duration(minutes: 60);
 
   /// Normalizes the key based on host and path so Circle Connect and Professional Space
   /// map to consistent singleton instances.
@@ -29,17 +31,25 @@ class GridShellPool {
     return _warmedShells.containsKey(_poolKey(uri));
   }
 
-  /// Gets or creates a warmed shell widget.
+  /// Gets or creates a warmed shell widget, refreshing if older than [maxAge].
   Widget getOrCreateWarmShell({
     required Uri uri,
     required Widget Function() shellBuilder,
+    Duration maxAge = _maxWarmAge,
   }) {
     final key = _poolKey(uri);
+    final created = _shellCreationTimes[key];
+    if (created != null && DateTime.now().difference(created) > maxAge) {
+      _warmedShells.remove(key);
+      _shellCreationTimes.remove(key);
+    }
+    _shellCreationTimes.putIfAbsent(key, DateTime.now);
     return _warmedShells.putIfAbsent(key, shellBuilder);
   }
 
   /// Clears the warmed shells when logging out.
   void clearAll() {
     _warmedShells.clear();
+    _shellCreationTimes.clear();
   }
 }

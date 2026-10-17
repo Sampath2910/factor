@@ -196,14 +196,6 @@ class AuthState extends ChangeNotifier {
         return;
       }
 
-      if (isJwtExpired(token)) {
-        debugPrint(
-          '[AuthState] Stored session accessToken is expired. Clearing stale session.',
-        );
-        await clearSession(notify: false);
-        return;
-      }
-
       _write(_state, 'auth.accessToken', token);
       _write(_state, 'auth.accesstoken', token);
 
