@@ -13,31 +13,33 @@ class GridShellPool {
   final Map<String, DateTime> _shellCreationTimes = <String, DateTime>{};
   static const Duration _maxWarmAge = Duration(minutes: 60);
 
-  /// Normalizes the key based on host and path so Circle Connect and Professional Space
-  /// map to consistent singleton instances.
-  String _poolKey(Uri uri) {
+  /// Normalizes the key based on host, path, and userId so Circle Connect and Professional Space
+  /// map to consistent singleton instances scoped to the currently active user account.
+  String _poolKey(Uri uri, {int? userId}) {
+    final prefix = userId != null ? 'user_${userId}_' : '';
     final path = uri.path.toLowerCase();
     if (path.contains('circle') || path.contains('chat')) {
-      return 'circle_connect';
+      return '${prefix}circle_connect';
     }
     if (path.contains('professional') || path.contains('space') || path.contains('profile')) {
-      return 'professional_space';
+      return '${prefix}professional_space';
     }
-    return '${uri.host}_${uri.path}';
+    return '$prefix${uri.host}_${uri.path}';
   }
 
   /// Checks if an instance for this destination already exists in the pool.
-  bool hasWarmInstance(Uri uri) {
-    return _warmedShells.containsKey(_poolKey(uri));
+  bool hasWarmInstance(Uri uri, {int? userId}) {
+    return _warmedShells.containsKey(_poolKey(uri, userId: userId));
   }
 
   /// Gets or creates a warmed shell widget, refreshing if older than [maxAge].
   Widget getOrCreateWarmShell({
     required Uri uri,
     required Widget Function() shellBuilder,
+    int? userId,
     Duration maxAge = _maxWarmAge,
   }) {
-    final key = _poolKey(uri);
+    final key = _poolKey(uri, userId: userId);
     final created = _shellCreationTimes[key];
     if (created != null && DateTime.now().difference(created) > maxAge) {
       _warmedShells.remove(key);

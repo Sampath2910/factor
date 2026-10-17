@@ -166,6 +166,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage> {
       MaterialPageRoute<void>(
         builder: (_) => GridShellPool.instance.getOrCreateWarmShell(
           uri: authenticatedUri,
+          userId: widget.userId,
           shellBuilder: () => GridInAppWebViewPage(
             uri: authenticatedUri,
             title: title,

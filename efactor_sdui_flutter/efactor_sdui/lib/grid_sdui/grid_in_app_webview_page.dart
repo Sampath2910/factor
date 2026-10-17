@@ -91,12 +91,19 @@ class GridInAppWebViewPage extends StatefulWidget {
     Uri uri, {
     required Uri initialUri,
     String? ssoTokenFallback,
+    bool includeRedirectUrl = false,
   }) {
     final ssoToken =
         initialUri.queryParameters['grid_sso'] ?? ssoTokenFallback;
     if (ssoToken == null || ssoToken.isEmpty) return uri;
     final updated = Map<String, String>.from(uri.queryParameters);
     updated['grid_sso'] = ssoToken;
+    final initialRedirect = initialUri.queryParameters['redirect_url'];
+    if (initialRedirect != null && initialRedirect.isNotEmpty) {
+      updated['redirect_url'] = initialRedirect;
+    } else if (includeRedirectUrl && initialUri.path.isNotEmpty) {
+      updated['redirect_url'] = initialUri.path;
+    }
     return uri.replace(queryParameters: updated);
   }
 
@@ -378,12 +385,37 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
             }
 
             // Defensively preserve SSO token on server /signin redirects
-            if (GridInAppWebViewPage.shouldInjectSso(targetUri, initialUri: widget.uri)) {
+            if (GridInAppWebViewPage.shouldInjectSso(
+              targetUri,
+              initialUri: widget.uri,
+              ssoTokenFallback: widget.accessToken,
+            )) {
               final redirected = GridInAppWebViewPage.injectSso(
                 targetUri,
                 initialUri: widget.uri,
+                ssoTokenFallback: widget.accessToken,
+                includeRedirectUrl: true,
               );
               unawaited(_controller.loadRequest(redirected));
+              return NavigationDecision.prevent;
+            }
+
+            // Defensively intercept redirects to generic dashboard/home when the user
+            // opened a specific module (Circle Connect /grid-chat or Professional Space /grid).
+            final targetPath = targetUri.path.toLowerCase();
+            final initialPath = widget.uri.path.toLowerCase();
+            final isChatOrGrid = initialPath.contains('/grid-chat') ||
+                initialPath.contains('/grid');
+            if (isChatOrGrid &&
+                (targetPath.endsWith('/dashboard') ||
+                    targetPath.endsWith('/dashboard/') ||
+                    targetPath.contains('/index.php/dashboard') ||
+                    targetPath.endsWith('/home') ||
+                    targetPath.endsWith('/home/'))) {
+              debugPrint(
+                '[GridInAppWebView] Intercepting unwanted dashboard redirect -> re-routing to initial target: ${widget.uri}',
+              );
+              unawaited(_controller.loadRequest(_effectiveUri));
               return NavigationDecision.prevent;
             }
 
@@ -848,7 +880,13 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       return;
     }
     _showingSnapshot = false;
-    await _controller.loadRequest(_effectiveUri);
+    final token = widget.accessToken?.trim() ?? '';
+    final headers = <String, String>{
+      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (token.isNotEmpty) 'X-Efactor-Access-Token': token,
+      if (widget.userId != null) 'X-Efactor-User-Id': widget.userId.toString(),
+    };
+    await _controller.loadRequest(_effectiveUri, headers: headers);
   }
 
   Future<bool> _isOnline() async {

@@ -465,12 +465,9 @@ class GridSchemaRepository {
     }
 
     final existingSso = targetUri.queryParameters['grid_sso'];
-    if (existingSso != null && existingSso.isNotEmpty) {
-      return targetUri;
-    }
-
-    // 1. Try extracting from active in-memory schema
-    var ssoToken = extractSsoToken(activeSchema);
+    var ssoToken = (existingSso != null && existingSso.isNotEmpty)
+        ? existingSso
+        : extractSsoToken(activeSchema);
 
     // 2. Try peekMemory
     ssoToken ??= extractSsoToken(peekMemory());
@@ -493,13 +490,24 @@ class GridSchemaRepository {
       }
     }
 
+    final params = Map<String, String>.from(targetUri.queryParameters);
     if (ssoToken != null && ssoToken.isNotEmpty) {
-      final params = Map<String, String>.from(targetUri.queryParameters);
       params['grid_sso'] = ssoToken;
-      return targetUri.replace(queryParameters: params);
+    } else if (accessToken.isNotEmpty) {
+      // Industry fallback: provide access token if server supports Bearer SSO
+      params['access_token'] = accessToken;
     }
 
-    return targetUri;
+    // Always preserve deep-link return destination so server SSO hook
+    // redirects directly to this feature and never falls back to /dashboard
+    if (!params.containsKey('redirect_url')) {
+      params['redirect_url'] = targetUri.path;
+    }
+    if (!params.containsKey('target')) {
+      params['target'] = path.contains('grid-chat') ? 'chat' : 'grid';
+    }
+
+    return targetUri.replace(queryParameters: params);
   }
 
   void dispose() {
