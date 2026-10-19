@@ -43,9 +43,15 @@ class IncomingCallData {
   bool get isVideo => callType.toLowerCase() == 'video';
 
   factory IncomingCallData.fromJson(Map<String, dynamic> json) {
-    final rawUrl = (json['url'] ?? json['room_url'] ?? json['roomUrl'] ?? '')
+    var rawUrl = (json['url'] ?? json['room_url'] ?? json['roomUrl'] ?? '')
         .toString()
         .trim();
+    if (rawUrl.isNotEmpty &&
+        !rawUrl.startsWith('http://') &&
+        !rawUrl.startsWith('https://')) {
+      final sanitized = rawUrl.replaceAll(RegExp(r'^/+'), '');
+      rawUrl = 'https://efactor.tech/$sanitized';
+    }
     final callerName = (json['title'] ??
             json['caller_name'] ??
             json['callerName'] ??
@@ -134,7 +140,7 @@ class IncomingCallService {
   static final IncomingCallService instance = IncomingCallService._();
 
   static const String defaultRegisterTokenUrl =
-      'https://efactor.tech/api/register_device_token';
+      'https://efactor.tech/index.php/api/register_device_token';
 
   final ValueNotifier<IncomingCallData?> currentCall =
       ValueNotifier<IncomingCallData?>(null);
@@ -157,9 +163,10 @@ class IncomingCallService {
     unawaited(GridInAppWebViewPage.updatePushTokenInWeb(_deviceToken!));
   }
 
-  /// Read Android WebKit session cookies via native MethodChannel.
+  /// Read WebKit session cookies via native MethodChannel on Android and iOS.
   Future<String> getCookiesForUrl(String url) async {
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
       try {
         const channel = MethodChannel('tech.efactor/circle_connect');
         final cookies =
@@ -305,11 +312,13 @@ class IncomingCallService {
 
     final cleanUrl =
         targetUrl.split('?').first.replaceAll(RegExp(r'/+$'), '');
-    final primaryUri = Uri.tryParse('$cleanUrl/api/call/decline');
+    final primaryUri =
+        Uri.tryParse('https://efactor.tech/index.php/api/call/decline');
     final originUri = Uri.tryParse(targetUrl);
-    final fallbackUri = originUri != null
-        ? Uri.tryParse('${originUri.origin}/api/call/decline')
-        : null;
+    final fallbackUri = Uri.tryParse('$cleanUrl/api/call/decline') ??
+        (originUri != null
+            ? Uri.tryParse('${originUri.origin}/index.php/api/call/decline')
+            : null);
 
     final headers = <String, String>{
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -475,11 +484,18 @@ class IncomingCallService {
       return;
     }
 
-    final uri = Uri.parse(
-      url.isNotEmpty
-          ? url
-          : 'https://efactor.tech/index.php/grid-chat?conversation_id=$conversationId',
-    );
+    var effectiveUrl = url.trim();
+    if (effectiveUrl.isNotEmpty &&
+        !effectiveUrl.startsWith('http://') &&
+        !effectiveUrl.startsWith('https://')) {
+      final sanitized = effectiveUrl.replaceAll(RegExp(r'^/+'), '');
+      effectiveUrl = 'https://efactor.tech/$sanitized';
+    }
+    if (effectiveUrl.isEmpty) {
+      effectiveUrl =
+          'https://efactor.tech/index.php/grid-chat?conversation_id=$conversationId';
+    }
+    final uri = Uri.parse(effectiveUrl);
     final targetContext = context ?? navigatorKey.currentState?.context;
     if (targetContext != null && targetContext.mounted) {
       await Navigator.of(targetContext).push<void>(
@@ -514,6 +530,8 @@ class IncomingCallService {
 
       final resolvedPlatform = platform ??
           (defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android');
+      // Backend explicitly requires token_type to be 'fcm' on all platforms (apns_voip is skipped).
+      const resolvedTokenType = 'fcm';
 
       final httpClient = client ?? http.Client();
       final headers = <String, String>{
@@ -525,12 +543,10 @@ class IncomingCallService {
       };
 
       final payload = jsonEncode(<String, dynamic>{
-        'action': 'register_device_token',
-        'user_id': userId,
         'device_token': deviceToken,
         'platform': resolvedPlatform,
-        'token_type': tokenType,
-        'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        'token_type': resolvedTokenType,
+        'user_id': userId,
       });
 
       final response = await httpClient.post(

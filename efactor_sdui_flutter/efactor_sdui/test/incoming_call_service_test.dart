@@ -86,7 +86,7 @@ void main() {
       });
 
       final success = await service.registerDeviceTokenWithBackend(
-        backendUrl: 'https://efactor.tech/api/register_device_token',
+        backendUrl: 'https://efactor.tech/index.php/api/register_device_token',
         userId: '1234',
         deviceToken: 'mock_fcm_token_abc',
         platform: 'android',
@@ -97,12 +97,11 @@ void main() {
 
       expect(success, isTrue);
       expect(capturedRequest, isNotNull);
-      expect(capturedRequest!.url.toString(), 'https://efactor.tech/api/register_device_token');
+      expect(capturedRequest!.url.toString(), 'https://efactor.tech/index.php/api/register_device_token');
       expect(capturedRequest!.headers['Authorization'], 'Bearer bearer_token_xyz');
       expect(capturedRequest!.headers['Content-Type'], 'application/json');
 
       final body = jsonDecode(capturedRequest!.body) as Map<String, dynamic>;
-      expect(body['action'], 'register_device_token');
       expect(body['user_id'], '1234');
       expect(body['device_token'], 'mock_fcm_token_abc');
       expect(body['platform'], 'android');

@@ -40,7 +40,26 @@ class UserLocationService {
 
   /// Sends the current device location and hardware details to `user_currentLocation`.
   /// Fully cross-platform: handles Android build details and iOS machine/vendor IDs.
-  Future<bool> sendCurrentLocation({bool force = false, String? accessToken}) async {
+  Future<bool> sendCurrentLocation({
+    bool force = false,
+    String? accessToken,
+    String? userId,
+    String? email,
+    String? username,
+  }) async {
+    final rawToken = accessToken ??
+        (await AuthSecureStorage().readSession())['accessToken'];
+    if (rawToken == null || rawToken.trim().isEmpty) {
+      debugPrint(
+        '[UserLocationService] Skipped user_currentLocation: not authenticated (no access token)',
+      );
+      return false;
+    }
+
+    final token = rawToken
+        .trim()
+        .replaceFirst(RegExp(r'^Bearer\s+', caseSensitive: false), '');
+
     final now = DateTime.now();
     if (!force &&
         _lastCurrentLocationSentAt != null &&
@@ -62,9 +81,6 @@ class UserLocationService {
 
       final deviceMeta = await _resolveDeviceMetadata();
 
-      final token = accessToken ??
-          (await AuthSecureStorage().readSession())['accessToken'];
-
       final payload = <String, dynamic>{
         'latitude': position.latitude.toString(),
         'longitude': position.longitude.toString(),
@@ -73,7 +89,10 @@ class UserLocationService {
         'handset_name': deviceMeta['handset_name'] ?? '',
         'model': deviceMeta['model'] ?? '',
         'os': deviceMeta['os'] ?? '',
-        if (token != null && token.isNotEmpty) 'access_token': token,
+        'access_token': token,
+        if (userId != null && userId.isNotEmpty) 'user_id': userId,
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (username != null && username.isNotEmpty) 'username': username,
       };
 
       final uri = Uri.parse('$_baseUrl?action=user_currentLocation');
@@ -87,8 +106,8 @@ class UserLocationService {
             headers: <String, String>{
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              if (token != null && token.isNotEmpty)
-                'Authorization': 'Bearer $token',
+              'Authorization': token,
+              'access_token': token,
             },
             body: jsonEncode(payload),
           )
@@ -100,8 +119,11 @@ class UserLocationService {
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        _lastCurrentLocationSentAt = now;
-        return true;
+        final bodyStr = response.body.toLowerCase();
+        if (!bodyStr.contains('"error"') && !bodyStr.contains('not valid')) {
+          _lastCurrentLocationSentAt = now;
+          return true;
+        }
       }
       return false;
     } catch (e) {
@@ -139,8 +161,11 @@ class UserLocationService {
       final lat = position?.latitude.toString() ?? '';
       final lng = position?.longitude.toString() ?? '';
 
-      final token = accessToken ??
+      final rawToken = accessToken ??
           (await AuthSecureStorage().readSession())['accessToken'];
+      final token = rawToken
+          ?.trim()
+          .replaceFirst(RegExp(r'^Bearer\s+', caseSensitive: false), '');
 
       final payload = <String, dynamic>{
         'latitude': lat,
@@ -162,8 +187,10 @@ class UserLocationService {
             headers: <String, String>{
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              if (token != null && token.isNotEmpty)
-                'Authorization': 'Bearer $token',
+              if (token != null && token.isNotEmpty) ...<String, String>{
+                'Authorization': token,
+                'access_token': token,
+              },
             },
             body: jsonEncode(payload),
           )

@@ -21,6 +21,7 @@ import UserNotifications
     if !isBridgeRegistered, let controller = window?.rootViewController as? FlutterViewController {
       GeneratedPluginRegistrant.register(with: self)
       wifiNativeBridge.register(with: controller.binaryMessenger)
+      registerCircleConnectBridge(with: controller.binaryMessenger)
       isBridgeRegistered = true
     }
     return result
@@ -29,8 +30,27 @@ import UserNotifications
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if !isBridgeRegistered {
-      wifiNativeBridge.register(with: engineBridge.applicationRegistrar.messenger())
+      let messenger = engineBridge.applicationRegistrar.messenger()
+      wifiNativeBridge.register(with: messenger)
+      registerCircleConnectBridge(with: messenger)
       isBridgeRegistered = true
+    }
+  }
+
+  private func registerCircleConnectBridge(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: messenger)
+    channel.setMethodCallHandler { (call, result) in
+      if call.method == "getCookies" {
+        let urlStr = (call.arguments as? [String: Any])?["url"] as? String ?? "https://efactor.tech"
+        if let url = URL(string: urlStr), let cookies = HTTPCookieStorage.shared.cookies(for: url) {
+          let cookieHeader = cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+          result(cookieHeader)
+        } else {
+          result("")
+        }
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
     }
   }
 

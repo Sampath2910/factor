@@ -231,14 +231,18 @@ Future<void> showMessageNotificationOnPlugin(
 
   final isLocked = data['locked'] == true || data['locked'] == 'true';
   final title = notification?.title ??
-      (data['title'] ?? data['sender_name'] ?? 'GRID Chat').toString();
+      (data['title'] ??
+       data['caller_name'] ??
+       data['sender_name'] ??
+       'Circle Connect')
+          .toString();
   final body = notification?.body ??
       (data['body'] ?? data['message'] ?? 'New message').toString();
 
   if (isLocked) {
     await plugin.show(
       notifId,
-      'GRID Chat',
+      'Circle Connect',
       'New message',
       NotificationDetails(
         android: AndroidNotificationDetails(
@@ -258,7 +262,7 @@ Future<void> showMessageNotificationOnPlugin(
 
   await plugin.show(
     notifId,
-    title.isNotEmpty ? title : 'GRID Chat',
+    title.isNotEmpty ? title : 'Circle Connect',
     body.isNotEmpty ? body : 'New message',
     NotificationDetails(
       android: AndroidNotificationDetails(
@@ -296,8 +300,14 @@ Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
   final convId =
       (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
   final msgId = (data['message_id'] ?? data['messageId'] ?? '').toString();
-  final targetUrl =
-      (data['url'] ?? IncomingCallData.defaultCallUrl).toString();
+  var targetUrl =
+      (data['url'] ?? IncomingCallData.defaultCallUrl).toString().trim();
+  if (targetUrl.isNotEmpty &&
+      !targetUrl.startsWith('http://') &&
+      !targetUrl.startsWith('https://')) {
+    targetUrl =
+        'https://efactor.tech/${targetUrl.replaceAll(RegExp(r'^/+'), '')}';
+  }
 
   final cookies =
       await IncomingCallService.instance.getCookiesForUrl(targetUrl);
@@ -345,8 +355,14 @@ Future<void> handleSendReplyFromNotification(
 ) async {
   final convId =
       (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
-  final targetUrl =
-      (data['url'] ?? IncomingCallData.defaultCallUrl).toString();
+  var targetUrl =
+      (data['url'] ?? IncomingCallData.defaultCallUrl).toString().trim();
+  if (targetUrl.isNotEmpty &&
+      !targetUrl.startsWith('http://') &&
+      !targetUrl.startsWith('https://')) {
+    targetUrl =
+        'https://efactor.tech/${targetUrl.replaceAll(RegExp(r'^/+'), '')}';
+  }
   final clientId =
       'reply_${DateTime.now().millisecondsSinceEpoch}_${convId.hashCode}';
 

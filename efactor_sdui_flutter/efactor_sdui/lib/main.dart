@@ -126,7 +126,15 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
     }
 
     // Report current user location and device metadata on session establishment.
-    unawaited(UserLocationService.instance.sendCurrentLocation());
+    unawaited(
+      UserLocationService.instance.sendCurrentLocation(
+        force: true,
+        accessToken: token,
+        userId: uid.isNotEmpty ? uid : null,
+        email: identity?.contains('@') == true ? identity : null,
+        username: identity?.contains('@') == false ? identity : null,
+      ),
+    );
   }
 
   int? _authenticatedUserId() {

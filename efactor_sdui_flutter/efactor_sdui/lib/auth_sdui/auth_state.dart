@@ -668,6 +668,35 @@ class AuthState extends ChangeNotifier {
           }
         }
 
+        if (source.toLowerCase().contains('submitlogin')) {
+          final token = _lastResponseBody is Map
+              ? (_lastResponseBody['accesstoken'] ??
+                      _lastResponseBody['accessToken'] ??
+                      _lastResponseBody['token'])
+                  ?.toString()
+              : null;
+          final userId = _lastResponseBody is Map
+              ? (_lastResponseBody['user_id'] ??
+                      _lastResponseBody['userId'] ??
+                      _lastResponseBody['id'])
+                  ?.toString()
+              : null;
+          final identity = read('loginForm.identity')?.toString().trim() ?? '';
+          final email = identity.contains('@') ? identity : null;
+          final username = !identity.contains('@') && identity.isNotEmpty
+              ? identity
+              : null;
+          unawaited(
+            UserLocationService.instance.sendCurrentLocation(
+              force: true,
+              accessToken: token,
+              userId: userId,
+              email: email,
+              username: username,
+            ),
+          );
+        }
+
         final successAction = _map(action['success']);
 
         if (successAction != null) {

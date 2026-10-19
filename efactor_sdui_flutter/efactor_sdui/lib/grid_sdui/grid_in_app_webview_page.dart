@@ -867,6 +867,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       if (!cameraStatus.isGranted) {
         await Permission.camera.request();
       }
+      final micStatus = await Permission.microphone.status;
+      if (!micStatus.isGranted) {
+        await Permission.microphone.request();
+      }
     }
     final online = await _isOnline();
     if (!online) {
