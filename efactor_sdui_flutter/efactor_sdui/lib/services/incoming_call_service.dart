@@ -534,41 +534,96 @@ class IncomingCallService {
       const resolvedTokenType = 'fcm';
 
       final httpClient = client ?? http.Client();
+      final rawToken = (accessToken ?? activeAccessToken ?? '').trim();
+      final cleanToken = rawToken.startsWith('Bearer ')
+          ? rawToken.substring(7).trim()
+          : rawToken;
+
       final headers = <String, String>{
         'Content-Type': 'application/json',
-        if (accessToken != null && accessToken.isNotEmpty)
-          'Authorization': 'Bearer $accessToken'
-        else if (activeAccessToken != null && activeAccessToken!.isNotEmpty)
-          'Authorization': 'Bearer $activeAccessToken',
+        'Accept': 'application/json',
+        if (cleanToken.isNotEmpty) ...{
+          'Authorization': 'Bearer $cleanToken',
+          'access_token': cleanToken,
+        },
       };
 
-      final payload = jsonEncode(<String, dynamic>{
+      final payloadMap = <String, dynamic>{
         'device_token': deviceToken,
         'platform': resolvedPlatform,
         'token_type': resolvedTokenType,
         'user_id': userId,
-      });
+        if (cleanToken.isNotEmpty) 'access_token': cleanToken,
+      };
+      final payload = jsonEncode(payloadMap);
 
       final response = await httpClient.post(
         uri,
         headers: headers,
         body: payload,
       );
+
+      debugPrint(
+        '[IncomingCallService] registerDeviceToken POST $uri status=${response.statusCode} body=${response.body}',
+      );
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (client == null) httpClient.close();
-        return true;
+        final bodyLower = response.body.toLowerCase();
+        if (!bodyLower.contains('"error"') &&
+            !bodyLower.contains('"failure"') &&
+            response.body.trim() != '[]') {
+          if (client == null) httpClient.close();
+          return true;
+        }
+      }
+
+      // Try non-index primary URL if uri contains /index.php/api
+      if (targetUrl.contains('/index.php/api/register_device_token')) {
+        final directApiUri =
+            Uri.tryParse('https://efactor.tech/api/register_device_token');
+        if (directApiUri != null) {
+          final directResp = await httpClient.post(
+            directApiUri,
+            headers: headers,
+            body: payload,
+          );
+          debugPrint(
+            '[IncomingCallService] registerDeviceToken directApi POST $directApiUri status=${directResp.statusCode} body=${directResp.body}',
+          );
+          if (directResp.statusCode >= 200 && directResp.statusCode < 300) {
+            final directBodyLower = directResp.body.toLowerCase();
+            if (!directBodyLower.contains('"error"') &&
+                !directBodyLower.contains('"failure"') &&
+                directResp.body.trim() != '[]') {
+              if (client == null) httpClient.close();
+              return true;
+            }
+          }
+        }
       }
 
       // Fallback: Check if backend registered under /v8/api.php
-      final fallbackUri = Uri.tryParse('https://efactor.tech/v8/api.php?action=register_device_token');
+      final fallbackUri = Uri.tryParse(
+          'https://efactor.tech/v8/api.php?action=register_device_token');
       if (fallbackUri != null && fallbackUri != uri) {
         final fallbackResp = await httpClient.post(
           fallbackUri,
           headers: headers,
           body: payload,
         );
-        if (client == null) httpClient.close();
-        return fallbackResp.statusCode >= 200 && fallbackResp.statusCode < 300;
+        debugPrint(
+          '[IncomingCallService] registerDeviceToken fallback POST $fallbackUri status=${fallbackResp.statusCode} body=${fallbackResp.body}',
+        );
+        if (fallbackResp.statusCode >= 200 && fallbackResp.statusCode < 300) {
+          final fbLower = fallbackResp.body.toLowerCase();
+          // Note: v8/api.php returns [] for unhandled actions, which is NOT a valid registration.
+          if (!fbLower.contains('"error"') &&
+              !fbLower.contains('"failure"') &&
+              fallbackResp.body.trim() != '[]') {
+            if (client == null) httpClient.close();
+            return true;
+          }
+        }
       }
 
       if (client == null) {

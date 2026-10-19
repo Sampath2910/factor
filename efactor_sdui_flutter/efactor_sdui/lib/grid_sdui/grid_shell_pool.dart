@@ -21,7 +21,12 @@ class GridShellPool {
     if (path.contains('circle') || path.contains('chat')) {
       return '${prefix}circle_connect';
     }
-    if (path.contains('professional') || path.contains('space') || path.contains('profile')) {
+    if (path.contains('professional') ||
+        path.contains('space') ||
+        path.contains('profile') ||
+        path.endsWith('/grid') ||
+        path.contains('/grid/') ||
+        path.contains('/index.php/grid')) {
       return '${prefix}professional_space';
     }
     return '$prefix${uri.host}_${uri.path}';

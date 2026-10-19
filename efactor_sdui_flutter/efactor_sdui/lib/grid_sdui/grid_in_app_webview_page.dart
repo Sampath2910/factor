@@ -254,6 +254,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   String? _error;
   Completer<void>? _navigationCompleter;
   StreamSubscription<OfflineOutboxAction>? _outboxSyncedSub;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
 
@@ -315,6 +316,15 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     _outboxSyncedSub = GridOfflineOutboxService.instance.onActionSynced.listen((action) {
       _notifyWebActionSynced(action);
     });
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final isConnected = results.any((r) => r != ConnectivityResult.none);
+      if (isConnected && (_error != null || _showingSnapshot)) {
+        debugPrint('[GridInAppWebView] Network restored -> auto-retrying live connection');
+        if (mounted) {
+          _retry();
+        }
+      }
+    });
     _initController();
     _setupPermissionsAndLoad();
   }
@@ -322,6 +332,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   @override
   void dispose() {
     _outboxSyncedSub?.cancel();
+    _connectivitySub?.cancel();
+    if (!_showingSnapshot && _error == null) {
+      unawaited(_persistSnapshot());
+    }
     if (GridInAppWebViewPage._activeState == this) {
       GridInAppWebViewPage._activeState = null;
     }
@@ -341,6 +355,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
     _controller = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF0F172A))
       ..addJavaScriptChannel(
         'CircleConnectPushBridge',
         onMessageReceived: (JavaScriptMessage msg) {
@@ -400,12 +415,31 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               return NavigationDecision.prevent;
             }
 
-            // Defensively intercept redirects to generic dashboard/home when the user
-            // opened a specific module (Circle Connect /grid-chat or Professional Space /grid).
+            // Defensively intercept redirects between modules or to generic dashboard/home
             final targetPath = targetUri.path.toLowerCase();
             final initialPath = widget.uri.path.toLowerCase();
-            final isChatOrGrid = initialPath.contains('/grid-chat') ||
-                initialPath.contains('/grid');
+            final initialIsChat = initialPath.contains('/grid-chat') || initialPath.contains('chat');
+            final initialIsGrid = !initialIsChat && initialPath.contains('/grid');
+
+            // If user opened Professional Space (/grid), do not allow server to redirect to Circle Connect (/grid-chat)
+            if (initialIsGrid && targetPath.contains('/grid-chat')) {
+              debugPrint(
+                '[GridInAppWebView] Intercepting unwanted redirect to chat -> keeping Professional Space: ${widget.uri}',
+              );
+              unawaited(_controller.loadRequest(_effectiveUri));
+              return NavigationDecision.prevent;
+            }
+
+            // If user opened Circle Connect (/grid-chat), do not allow server to redirect to base Grid (/grid)
+            if (initialIsChat && (targetPath.endsWith('/grid') || targetPath.endsWith('/grid/'))) {
+              debugPrint(
+                '[GridInAppWebView] Intercepting unwanted redirect to grid -> keeping Circle Connect: ${widget.uri}',
+              );
+              unawaited(_controller.loadRequest(_effectiveUri));
+              return NavigationDecision.prevent;
+            }
+
+            final isChatOrGrid = initialIsChat || initialIsGrid;
             if (isChatOrGrid &&
                 (targetPath.endsWith('/dashboard') ||
                     targetPath.endsWith('/dashboard/') ||
@@ -440,6 +474,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
             _dispatchPendingCallActionIfPresent();
             if (!_showingSnapshot) {
               unawaited(_persistSnapshot());
+              // Schedule delayed snapshot capture after dynamic React/SPA rendering completes
+              Future.delayed(const Duration(milliseconds: 2500), () {
+                if (mounted && !_showingSnapshot && _error == null) {
+                  unawaited(_persistSnapshot());
+                }
+              });
             }
           },
           onWebResourceError: (error) {
@@ -873,7 +913,23 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       }
     }
     final online = await _isOnline();
+    final token = widget.accessToken?.trim() ?? '';
+    final headers = <String, String>{
+      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (token.isNotEmpty) 'X-Efactor-Access-Token': token,
+      if (widget.userId != null) 'X-Efactor-User-Id': widget.userId.toString(),
+    };
+
     if (!online) {
+      // First attempt to load via WebView request so any registered Service Worker / PWA cache runs with full interactivity
+      try {
+        _showingSnapshot = false;
+        await _controller.loadRequest(_effectiveUri, headers: headers);
+        return;
+      } catch (_) {
+        // If WebView direct load fails offline, fall back to snapshot
+      }
+
       final restored = await _tryLoadSnapshot();
       if (restored) return;
       if (!mounted) return;
@@ -884,12 +940,6 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       return;
     }
     _showingSnapshot = false;
-    final token = widget.accessToken?.trim() ?? '';
-    final headers = <String, String>{
-      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-      if (token.isNotEmpty) 'X-Efactor-Access-Token': token,
-      if (widget.userId != null) 'X-Efactor-User-Id': widget.userId.toString(),
-    };
     await _controller.loadRequest(_effectiveUri, headers: headers);
   }
 
@@ -904,11 +954,19 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   }
 
   Future<bool> _tryLoadSnapshot() async {
-    final html = await GridWebSnapshot.read(_effectiveUri);
+    var html = await GridWebSnapshot.read(_effectiveUri);
+    if (html == null || html.trim().isEmpty) {
+      final isChat = _effectiveUri.path.contains('grid-chat');
+      final fallbackUri = Uri.parse(
+        '${_effectiveUri.origin}/index.php/${isChat ? 'grid-chat' : 'grid'}',
+      );
+      html = await GridWebSnapshot.read(fallbackUri);
+    }
     if (html == null || html.trim().isEmpty) return false;
+    final normalized = GridWebSnapshot.normalizeHtml(html);
     _showingSnapshot = true;
     await _controller.loadHtmlString(
-      html,
+      normalized,
       baseUrl: _effectiveUri.origin,
     );
     if (!mounted) return true;
@@ -921,9 +979,44 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
   Future<void> _persistSnapshot() async {
     try {
-      final raw = await _controller.runJavaScriptReturningResult(
-        'document.documentElement.outerHTML',
-      );
+      const bundleCssJs = '''
+(function() {
+  try {
+    var cssText = '';
+    for (var i = 0; i < document.styleSheets.length; i++) {
+      try {
+        var sheet = document.styleSheets[i];
+        var rules = sheet.cssRules || sheet.rules;
+        if (rules) {
+          for (var j = 0; j < rules.length; j++) {
+            cssText += rules[j].cssText + '\\n';
+          }
+        }
+      } catch(e) {}
+    }
+    var inlineStyle = document.getElementById('__offline_compiled_styles');
+    if (!inlineStyle) {
+      inlineStyle = document.createElement('style');
+      inlineStyle.id = '__offline_compiled_styles';
+      document.head.appendChild(inlineStyle);
+    }
+    if (cssText.length > 50) {
+      inlineStyle.textContent = cssText;
+    }
+    var computedBg = window.getComputedStyle(document.body).backgroundColor;
+    var computedColor = window.getComputedStyle(document.body).color;
+    if (computedBg && computedBg !== 'rgba(0, 0, 0, 0)') {
+      document.body.style.backgroundColor = computedBg;
+      document.documentElement.style.backgroundColor = computedBg;
+    }
+    if (computedColor) {
+      document.body.style.color = computedColor;
+    }
+  } catch(err) {}
+  return document.documentElement.outerHTML;
+})();
+''';
+      final raw = await _controller.runJavaScriptReturningResult(bundleCssJs);
       final html = _unwrapJsString(raw);
       if (html == null || html.length < 64) return;
       await GridWebSnapshot.save(_effectiveUri, html);
@@ -934,11 +1027,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
   Future<void> _handleLoadFailure(String description) async {
     if (_showingSnapshot) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = description;
-      });
+      // Retain the cached snapshot view; do not overwrite with the error screen
       return;
     }
     final restored = await _tryLoadSnapshot();
@@ -952,18 +1041,15 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
   static String? _unwrapJsString(Object? raw) {
     if (raw == null) return null;
-    var text = raw.toString().trim();
-    if (text.length >= 2 &&
-        ((text.startsWith('"') && text.endsWith('"')) ||
-            (text.startsWith("'") && text.endsWith("'")))) {
-      text = text.substring(1, text.length - 1);
-      text = text
-          .replaceAll(r'\"', '"')
-          .replaceAll(r"\'", "'")
-          .replaceAll(r'\n', '\n')
-          .replaceAll(r'\\', r'\');
-    }
-    return text;
+    final text = raw.toString().trim();
+    if (text.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is String) {
+        return GridWebSnapshot.normalizeHtml(decoded);
+      }
+    } catch (_) {}
+    return GridWebSnapshot.normalizeHtml(text);
   }
 
   void _showPermissionSettingsPrompt({

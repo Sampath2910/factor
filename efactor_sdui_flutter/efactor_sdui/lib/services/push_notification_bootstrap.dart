@@ -514,6 +514,7 @@ class PushNotificationBootstrap {
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
         IncomingCallService.instance.setDeviceToken(token);
+        logDebug('[PushBootstrap] FCM TOKEN: $token');
         await IncomingCallService.instance.syncDeviceTokenOnLogin(
           userId: userId,
           accessToken: accessToken,
@@ -533,6 +534,7 @@ class PushNotificationBootstrap {
       if (token != null && token.isNotEmpty) {
         IncomingCallService.instance.setDeviceToken(token);
         logDebug('[PushBootstrap] FCM token acquired (${token.length} chars)');
+        logDebug('[PushBootstrap] FCM TOKEN: $token');
       }
     } catch (e) {
       logDebug('[PushBootstrap] getToken failed: $e');

@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:efactor_sdui/grid_sdui/grid_in_app_webview_page.dart';
 import 'package:efactor_sdui/grid_sdui/grid_schema_repository.dart';
 import 'package:efactor_sdui/grid_sdui/grid_sdui_state.dart';
+import 'package:efactor_sdui/grid_sdui/grid_web_snapshot.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -343,6 +344,23 @@ void main() {
 
       expect(openedUri, isNotNull);
       expect(openedUri!.queryParameters['grid_sso'], 'signed_token_999');
+    });
+
+    test('GridWebSnapshot.normalizeHtml properly converts Unicode escaped entities from WebView to real HTML', () {
+      const rawJsEscapedHtml = r'\u003C!-- Installable to phone --\u003E\u003Clink rel=\"stylesheet\" href=\"/test.css\"\u003E\u003Cdiv\u003EHello\u003C/div\u003E';
+      final cleaned = GridWebSnapshot.normalizeHtml(rawJsEscapedHtml);
+      expect(cleaned, contains('<!-- Installable to phone -->'));
+      expect(cleaned, contains('<link rel="stylesheet" href="/test.css">'));
+      expect(cleaned, contains('<div>Hello</div>'));
+      expect(cleaned.contains(r'\u003C'), isFalse);
+    });
+
+    test('GridWebSnapshot.stripScripts removes script tags even after normalizing escaped HTML', () {
+      const escapedWithScript = r'\u003Cscript src=\"https://cdn.tailwindcss.com\"\u003E\u003C/script\u003E\u003Cdiv\u003EContent\u003C/div\u003E';
+      final stripped = GridWebSnapshot.stripScripts(escapedWithScript);
+      expect(stripped, contains('<div>Content</div>'));
+      expect(stripped.contains('tailwindcss.com'), isFalse);
+      expect(stripped.contains('<script'), isFalse);
     });
   });
 }
