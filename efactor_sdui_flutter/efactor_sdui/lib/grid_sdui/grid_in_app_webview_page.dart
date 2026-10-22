@@ -385,6 +385,14 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
           _handleCircleConnectChannelsBridgeMessage(msg.message);
         },
       )
+      ..addJavaScriptChannel(
+        'CircleConnectNavBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          if (msg.message == 'go_back_to_grid') {
+            _backToGrid();
+          }
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) async {
@@ -473,6 +481,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               _error = null;
             });
             unawaited(_injectCircleConnectPushBridge());
+            unawaited(_injectGridBackButton());
           },
           onPageFinished: (url) {
             if (!mounted) return;
@@ -482,13 +491,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
             });
             _completeNavigation();
             unawaited(_injectCircleConnectPushBridge());
+            unawaited(_injectGridBackButton());
             _dispatchPendingCallActionIfPresent();
+            Future.delayed(const Duration(milliseconds: 600), () {
+              if (mounted) unawaited(_injectGridBackButton());
+            });
             if (!_showingSnapshot) {
               unawaited(_persistSnapshot());
               // Schedule delayed snapshot capture after dynamic React/SPA rendering completes
               Future.delayed(const Duration(milliseconds: 2500), () {
                 if (mounted && !_showingSnapshot && _error == null) {
                   unawaited(_persistSnapshot());
+                  unawaited(_injectGridBackButton());
                 }
               });
             }
@@ -1479,6 +1493,17 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
                 _buildOfflineState(context),
               if (_loading && _error == null)
                 const LinearProgressIndicator(minHeight: 2),
+              if (!widget.showAppBar)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  width: 120,
+                  height: 52,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _backToGrid,
+                  ),
+                ),
               if (_showReelsTutorial)
                 _buildReelsTutorialOverlay(),
             ],
@@ -1486,6 +1511,64 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
         ),
       ),
     );
+  }
+
+  void _backToGrid() {
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _injectGridBackButton() async {
+    const js = '''
+(function() {
+  function attachGridBack() {
+    var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      var txt = (el.innerText || el.textContent || '').trim();
+      if (txt === 'GRID' || txt === '::: GRID' || txt.indexOf('GRID') === 0) {
+        var rect = el.getBoundingClientRect();
+        if (rect.top >= 0 && rect.top < 80 && rect.left >= 0 && rect.left < 140) {
+          el.style.cursor = 'pointer';
+          el.style.display = 'inline-flex';
+          el.style.alignItems = 'center';
+          el.style.gap = '6px';
+          if (!el.querySelector('.grid-back-arrow')) {
+            var arrow = document.createElement('span');
+            arrow.className = 'grid-back-arrow';
+            arrow.innerHTML = '&#8592;';
+            arrow.style.fontSize = '20px';
+            arrow.style.fontWeight = '700';
+            arrow.style.color = 'currentColor';
+            arrow.style.marginRight = '4px';
+            arrow.style.display = 'inline-block';
+            arrow.style.verticalAlign = 'middle';
+            el.insertBefore(arrow, el.firstChild);
+          }
+          el.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.CircleConnectNavBridge) {
+              window.CircleConnectNavBridge.postMessage('go_back_to_grid');
+            }
+          };
+          break;
+        }
+      }
+    }
+  }
+  attachGridBack();
+  if (!window.__gridBackObserver && document.body) {
+    window.__gridBackObserver = new MutationObserver(function() {
+      attachGridBack();
+    });
+    window.__gridBackObserver.observe(document.body, { childList: true, subtree: true });
+  }
+})();
+''';
+    try {
+      await _controller.runJavaScript(js);
+    } catch (_) {}
   }
 
   bool get _isCircleConnect {
