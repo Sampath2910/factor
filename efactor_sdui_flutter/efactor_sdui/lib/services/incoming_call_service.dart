@@ -545,6 +545,8 @@ class IncomingCallService {
         if (cleanToken.isNotEmpty) ...{
           'Authorization': 'Bearer $cleanToken',
           'access_token': cleanToken,
+          'accesstoken': cleanToken,
+          'token': cleanToken,
         },
       };
 
@@ -553,7 +555,11 @@ class IncomingCallService {
         'platform': resolvedPlatform,
         'token_type': resolvedTokenType,
         'user_id': userId,
-        if (cleanToken.isNotEmpty) 'access_token': cleanToken,
+        if (cleanToken.isNotEmpty) ...{
+          'access_token': cleanToken,
+          'accesstoken': cleanToken,
+          'token': cleanToken,
+        },
       };
       final payload = jsonEncode(payloadMap);
 
@@ -567,14 +573,44 @@ class IncomingCallService {
         '[IncomingCallService] registerDeviceToken POST $uri status=${response.statusCode} body=${response.body}',
       );
 
+      var registered = false;
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final bodyLower = response.body.toLowerCase();
         if (!bodyLower.contains('"error"') &&
             !bodyLower.contains('"failure"') &&
             response.body.trim() != '[]') {
-          if (client == null) httpClient.close();
-          return true;
+          registered = true;
         }
+      }
+
+      // Also register with Circle Connect / GRID Chat native push token endpoint
+      // when using default production endpoints.
+      if (backendUrl == null) {
+        final gridChatUri = Uri.tryParse(
+          'https://efactor.tech/index.php/grid-chat/api/push/native-token',
+        );
+        if (gridChatUri != null) {
+          try {
+            final gcResp = await httpClient.post(
+              gridChatUri,
+              headers: headers,
+              body: payload,
+            );
+            debugPrint(
+              '[IncomingCallService] registerDeviceToken grid-chat POST $gridChatUri status=${gcResp.statusCode} body=${gcResp.body}',
+            );
+            if (gcResp.statusCode >= 200 && gcResp.statusCode < 300) {
+              registered = true;
+            }
+          } catch (e) {
+            debugPrint('[IncomingCallService] grid-chat native-token register error: $e');
+          }
+        }
+      }
+
+      if (registered) {
+        if (client == null) httpClient.close();
+        return true;
       }
 
       // Try non-index primary URL if uri contains /index.php/api
