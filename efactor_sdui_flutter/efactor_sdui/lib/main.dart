@@ -13,11 +13,11 @@ import 'device_sdui/device_ui_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'services/app_cache_manager.dart';
+import 'services/call_permission_helper.dart';
 import 'services/efactor_cloud_service.dart';
 import 'services/incoming_call_service.dart';
 import 'services/location_startup_gate.dart';
 import 'services/push_notification_bootstrap.dart';
-import 'services/push_notification_diagnostic_sheet.dart';
 import 'services/schema_prefetch.dart';
 import 'services/user_location_service.dart';
 
@@ -37,9 +37,15 @@ Future<void> main() async {
   }
   EfactorCloudService.instance.configureLogs();
 
+  Map<String, dynamic>? initialAuthSchema;
+  try {
+    initialAuthSchema = await SchemaLoadQueue.instance.loadAuth();
+  } catch (_) {}
+
   runApp(
-    const LocationStartupGate(
-      child: AuthUiGate(authenticatedBuilder: _buildAuthenticatedFlow),
+    AuthUiGate(
+      authenticatedBuilder: _buildAuthenticatedFlow,
+      initialSchema: initialAuthSchema,
     ),
   );
 
@@ -49,7 +55,9 @@ Future<void> main() async {
 }
 
 Widget _buildAuthenticatedFlow(BuildContext context, AuthState authState) {
-  return AuthenticatedHomeGate(authState: authState);
+  return LocationStartupGate(
+    child: AuthenticatedHomeGate(authState: authState),
+  );
 }
 
 /// Temporary post-authentication bridge:
@@ -99,6 +107,9 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
     _initializedToken = token;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_startAuthenticatedBackground(token, identity));
+      if (mounted) {
+        unawaited(CallPermissionHelper.checkAndPromptIfNeeded(context));
+      }
     });
   }
 
@@ -106,6 +117,18 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
     String token,
     String? identity,
   ) async {
+    final uid = _authenticatedUserId()?.toString() ?? '';
+    if (uid.isNotEmpty) {
+      // Prioritize push token registration immediately upon authentication
+      // so backend has device token ready without waiting for schema prefetches.
+      unawaited(
+        PushNotificationBootstrap.instance.ensureTokenSynced(
+          userId: uid,
+          accessToken: token,
+        ),
+      );
+    }
+
     await EfactorCloudService.instance.initialize(
       accessToken: token,
       username: identity,
@@ -114,17 +137,6 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
       accessToken: token,
       userId: _authenticatedUserId(),
     );
-
-    final uid = _authenticatedUserId()?.toString() ?? '';
-    if (uid.isNotEmpty) {
-      // Permission + FCM token + backend register (no-ops if Firebase missing).
-      unawaited(
-        PushNotificationBootstrap.instance.ensureTokenSynced(
-          userId: uid,
-          accessToken: token,
-        ),
-      );
-    }
 
     // Report current user location and device metadata on session establishment.
     unawaited(
@@ -206,9 +218,7 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
   Widget build(BuildContext context) {
     final currentUserId = _authenticatedUserId();
     final currentToken = widget.authState.accessToken ?? '';
-    return Stack(
-      children: <Widget>[
-        DynamicHomeSduiPage(
+    return DynamicHomeSduiPage(
           key: ValueKey<String>('home_user_${currentUserId ?? 0}_$currentToken'),
           accessToken: currentToken,
           refreshToken: widget.authState.refreshToken,
@@ -331,59 +341,6 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
               ),
             );
           },
-        ),
-        Positioned(
-          bottom: 96,
-          right: 16,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                PushNotificationDiagnosticSheet.show(
-                  context,
-                  userId: currentUserId?.toString(),
-                  accessToken: currentToken,
-                );
-              },
-              borderRadius: BorderRadius.circular(28),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.94),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: const Color(0xFF0284C7).withValues(alpha: 0.4),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      Icons.notifications_active,
-                      color: Color(0xFF38BDF8),
-                      size: 18,
-                    ),
-                    SizedBox(width: 6),
-                    Text(
-                      'Push Diagnostic',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -26,6 +26,10 @@ class AuthTemporaryApiOverlay {
     if (useLegacyEndpoints) {
       _remapLegacyAuthEndpoints(schema);
     }
+    final app = schema['app'];
+    if (app is Map) {
+      app['initialPageId'] = 'login';
+    }
     return schema;
   }
 

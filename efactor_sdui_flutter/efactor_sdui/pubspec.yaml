@@ -87,4 +87,5 @@ flutter:
   assets:
     - assets/branding/
     - assets/iot_schema_test.json
+    - assets/auth_ui_schema.json
 

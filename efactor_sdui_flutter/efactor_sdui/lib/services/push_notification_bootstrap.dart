@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -14,23 +15,25 @@ import 'json_http.dart';
 
 /// Call notification channel configured with system default ringtone and USAGE_NOTIFICATION_RINGTONE.
 const AndroidNotificationChannel kCallsChannel = AndroidNotificationChannel(
-  'grid_calls',
+  'grid_calls_v4',
   'Incoming calls',
   description: 'Alerts for incoming Circle Connect calls',
   importance: Importance.max,
   playSound: true,
   enableVibration: true,
+  enableLights: true,
   audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
 );
 
 /// Message notification channel configured with system message sound.
 const AndroidNotificationChannel kMessagesChannel = AndroidNotificationChannel(
-  'grid_messages',
+  'grid_messages_v4',
   'Messages',
   description: 'Circle Connect chat message notifications',
-  importance: Importance.high,
+  importance: Importance.max,
   playSound: true,
   enableVibration: true,
+  enableLights: true,
 );
 
 /// Background notification response handler (runs in background isolate).
@@ -73,8 +76,20 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final data = Map<String, dynamic>.from(message.data);
   final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
 
+  // Explicit, un-swallowable terminal diagnostic banner
+  // ignore: avoid_print
+  print('''
+========================================================================
+[FCM_DEBUG] >>> BACKGROUND FCM MESSAGE ARRIVED ON ANDROID! <<<
+Message ID: ${message.messageId}
+Detected Event/Type: $type
+Data Payload: $data
+System Notification Tray Payload: ${message.notification?.title} | ${message.notification?.body}
+========================================================================
+''');
+
   final plugin = FlutterLocalNotificationsPlugin();
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidInit = AndroidInitializationSettings('ic_notification');
   await plugin.initialize(
     const InitializationSettings(
       android: androidInit,
@@ -88,11 +103,33 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   final android = plugin.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
+  for (final oldId in const [
+    'grid_calls',
+    'grid_calls_v2',
+    'grid_calls_v3',
+    'grid_messages',
+    'grid_messages_v2',
+    'grid_messages_v3',
+  ]) {
+    try {
+      await android?.deleteNotificationChannel(oldId);
+    } catch (_) {}
+  }
   await android?.createNotificationChannel(kMessagesChannel);
   await android?.createNotificationChannel(kCallsChannel);
 
-  if (type == 'INCOMING_CALL' || type == 'CALL') {
+  final isCall = type == 'INCOMING_CALL' ||
+      type == 'CALL' ||
+      type == 'CALL_REQUEST' ||
+      type == 'RINGING' ||
+      type == 'VOIP_CALL' ||
+      data.containsKey('caller_name') ||
+      data.containsKey('callerName');
+
+  if (isCall) {
     final call = IncomingCallData.fromJson(data);
+    // ignore: avoid_print
+    print('[FCM_DEBUG] Rendering background incoming call notification for caller: ${call.callerName} (callId: ${call.callId})');
     await showIncomingCallNotificationOnPlugin(plugin, call, rawData: data);
     return;
   }
@@ -105,13 +142,17 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   if (type == 'CALL_HANDLED' ||
       type == 'CALL_CANCELLED' ||
+      type == 'CANCEL_CALL' ||
+      type == 'REJECTED' ||
       type == 'HANGUP') {
     final callId = (data['call_id'] ?? data['callId'] ?? '').toString();
-    await plugin.cancel(callId.hashCode);
+    await plugin.cancel(callId.hashCode.abs());
     return;
   }
 
   // Chat message or notification payload
+  // ignore: avoid_print
+  print('[FCM_DEBUG] Rendering chat message notification: $data');
   await showMessageNotificationOnPlugin(plugin, data, notification: message.notification);
 }
 
@@ -122,36 +163,55 @@ Future<void> showIncomingCallNotificationOnPlugin(
   Map<String, dynamic>? rawData,
 }) async {
   final payload = rawData != null ? jsonEncode(rawData) : jsonEncode(call.toJson());
+  final notifId = (call.callId.isNotEmpty
+          ? call.callId.hashCode
+          : DateTime.now().millisecondsSinceEpoch ~/ 1000)
+      .abs();
+  final callSubtitle = call.body.isNotEmpty
+      ? call.body
+      : (call.isVideo ? 'Incoming video call' : 'Incoming voice call');
 
   await plugin.show(
-    call.callId.hashCode,
+    notifId,
     call.callerName,
-    call.body.isNotEmpty
-        ? call.body
-        : (call.isVideo ? 'Incoming video call' : 'Incoming voice call'),
+    callSubtitle,
     NotificationDetails(
       android: AndroidNotificationDetails(
         kCallsChannel.id,
         kCallsChannel.name,
         channelDescription: kCallsChannel.description,
+        icon: 'ic_notification',
         importance: Importance.max,
         priority: Priority.max,
+        visibility: NotificationVisibility.public,
         category: AndroidNotificationCategory.call,
         fullScreenIntent: true,
         ongoing: true,
         autoCancel: true,
         timeoutAfter: 45000,
+        color: const Color(0xFF0284C7),
+        ticker: 'Incoming call from ${call.callerName}',
         additionalFlags: Int32List.fromList([4]), // Notification.FLAG_INSISTENT loops ringtone
+        styleInformation: BigTextStyleInformation(
+          callSubtitle,
+          htmlFormatBigText: true,
+          contentTitle: call.callerName,
+          htmlFormatContentTitle: true,
+          summaryText: call.isVideo ? 'Video Call' : 'Voice Call',
+          htmlFormatSummaryText: true,
+        ),
         actions: const <AndroidNotificationAction>[
           AndroidNotificationAction(
             'decline',
             'Decline',
+            icon: DrawableResourceAndroidBitmap('ic_notification'),
             showsUserInterface: false,
             cancelNotification: true,
           ),
           AndroidNotificationAction(
             'answer',
             'Answer',
+            icon: DrawableResourceAndroidBitmap('ic_notification'),
             showsUserInterface: true,
             cancelNotification: true,
           ),
@@ -159,6 +219,7 @@ Future<void> showIncomingCallNotificationOnPlugin(
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
+        presentBadge: true,
         presentSound: true,
         interruptionLevel: InterruptionLevel.timeSensitive,
       ),
@@ -173,37 +234,54 @@ Future<void> showMissedCallNotificationOnPlugin(
   IncomingCallData call, {
   Map<String, dynamic>? rawData,
 }) async {
+  final notifId = (call.callId.isNotEmpty
+          ? call.callId.hashCode
+          : DateTime.now().millisecondsSinceEpoch ~/ 1000)
+      .abs();
   // Cancel previous ringing notification with same callId
-  await plugin.cancel(call.callId.hashCode);
+  await plugin.cancel(notifId);
+  await plugin.cancel(call.callId.hashCode.abs());
 
   final payloadMap = rawData != null ? Map<String, dynamic>.from(rawData) : call.toJson();
   payloadMap['type'] = 'MISSED_CALL';
 
+  final subtitle = call.body.isNotEmpty
+      ? call.body
+      : (call.isVideo ? 'Missed video call' : 'Missed voice call');
+
   await plugin.show(
-    call.callId.hashCode,
+    notifId,
     call.callerName,
-    call.body.isNotEmpty
-        ? call.body
-        : (call.isVideo ? 'Missed video call' : 'Missed voice call'),
+    subtitle,
     NotificationDetails(
       android: AndroidNotificationDetails(
         kMessagesChannel.id,
         kMessagesChannel.name,
         channelDescription: kMessagesChannel.description,
-        importance: Importance.high,
+        icon: 'ic_notification',
+        importance: Importance.max,
         priority: Priority.high,
+        visibility: NotificationVisibility.public,
         category: AndroidNotificationCategory.missedCall,
         autoCancel: true,
+        color: const Color(0xFFEF4444),
+        styleInformation: BigTextStyleInformation(
+          subtitle,
+          contentTitle: call.callerName,
+          summaryText: 'Missed Call',
+        ),
         actions: const <AndroidNotificationAction>[
           AndroidNotificationAction(
             'callback',
             'Call back',
+            icon: DrawableResourceAndroidBitmap('ic_notification'),
             showsUserInterface: true,
             cancelNotification: true,
           ),
           AndroidNotificationAction(
             'message',
             'Message',
+            icon: DrawableResourceAndroidBitmap('ic_notification'),
             showsUserInterface: true,
             cancelNotification: true,
           ),
@@ -211,6 +289,7 @@ Future<void> showMissedCallNotificationOnPlugin(
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
+        presentBadge: true,
         presentSound: true,
       ),
     ),
@@ -226,10 +305,11 @@ Future<void> showMessageNotificationOnPlugin(
 }) async {
   final convId =
       (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
-  final notifId = int.tryParse(convId) ??
+  final rawNotifId = int.tryParse(convId) ??
       (convId.isNotEmpty
           ? convId.hashCode
           : DateTime.now().millisecondsSinceEpoch ~/ 1000);
+  final notifId = rawNotifId.abs();
 
   final isLocked = data['locked'] == true || data['locked'] == 'true';
   final title = notification?.title ??
@@ -249,6 +329,9 @@ Future<void> showMessageNotificationOnPlugin(
        'New message')
           .toString();
 
+  final effectiveTitle = title.isNotEmpty ? title : 'Circle Connect';
+  final effectiveBody = body.isNotEmpty ? body : 'New message';
+
   if (isLocked) {
     await plugin.show(
       notifId,
@@ -259,11 +342,23 @@ Future<void> showMessageNotificationOnPlugin(
           kMessagesChannel.id,
           kMessagesChannel.name,
           channelDescription: kMessagesChannel.description,
-          importance: Importance.high,
+          icon: 'ic_notification',
+          importance: Importance.max,
           priority: Priority.high,
+          visibility: NotificationVisibility.public,
           autoCancel: true,
+          color: const Color(0xFF0284C7),
+          styleInformation: const BigTextStyleInformation(
+            'New message',
+            contentTitle: 'Circle Connect',
+            summaryText: 'Locked Content',
+          ),
         ),
-        iOS: const DarwinNotificationDetails(),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       ),
       payload: jsonEncode(data),
     );
@@ -272,20 +367,30 @@ Future<void> showMessageNotificationOnPlugin(
 
   await plugin.show(
     notifId,
-    title.isNotEmpty ? title : 'Circle Connect',
-    body.isNotEmpty ? body : 'New message',
+    effectiveTitle,
+    effectiveBody,
     NotificationDetails(
       android: AndroidNotificationDetails(
         kMessagesChannel.id,
         kMessagesChannel.name,
         channelDescription: kMessagesChannel.description,
-        importance: Importance.high,
+        icon: 'ic_notification',
+        importance: Importance.max,
         priority: Priority.high,
+        visibility: NotificationVisibility.public,
+        category: AndroidNotificationCategory.message,
         autoCancel: true,
+        color: const Color(0xFF0284C7),
+        styleInformation: BigTextStyleInformation(
+          effectiveBody,
+          contentTitle: effectiveTitle,
+          summaryText: 'Circle Connect Chat',
+        ),
         actions: const <AndroidNotificationAction>[
           AndroidNotificationAction(
             'reply',
             'Reply',
+            icon: DrawableResourceAndroidBitmap('ic_notification'),
             showsUserInterface: true,
             inputs: <AndroidNotificationActionInput>[
               AndroidNotificationActionInput(label: 'Type a reply...'),
@@ -294,12 +399,17 @@ Future<void> showMessageNotificationOnPlugin(
           AndroidNotificationAction(
             'mark_as_read',
             'Mark as read',
+            icon: DrawableResourceAndroidBitmap('ic_notification'),
             showsUserInterface: false,
             cancelNotification: true,
           ),
         ],
       ),
-      iOS: const DarwinNotificationDetails(),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
     ),
     payload: jsonEncode(data),
   );
@@ -533,17 +643,31 @@ class PushNotificationBootstrap {
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
         IncomingCallService.instance.setDeviceToken(token);
-        logDebug('[PushBootstrap] FCM TOKEN: $token');
+        // ignore: avoid_print
+        print('''
+========================================================================
+[FCM_DEBUG] DEVICE FCM TOKEN ACQUIRED FOR USER: $userId
+Token: $token
+------------------------------------------------------------------------
+To test incoming call notification directly from terminal on Mac:
+curl -X POST "https://fcm.googleapis.com/fcm/send" \\
+  -H "Authorization: key=YOUR_FIREBASE_SERVER_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"to":"$token","priority":"high","data":{"type":"INCOMING_CALL","caller_name":"Direct Terminal Test","call_id":"test_${DateTime.now().millisecondsSinceEpoch}","call_type":"video"}}'
+========================================================================
+''');
         await IncomingCallService.instance.syncDeviceTokenOnLogin(
           userId: userId,
           accessToken: accessToken,
           tokenOverride: token,
         );
       } else {
-        logDebug('[PushBootstrap] No FCM token after login');
+        // ignore: avoid_print
+        print('[FCM_DEBUG] No FCM token returned from Firebase after login.');
       }
     } catch (e) {
-      logDebug('[PushBootstrap] ensureTokenSynced failed: $e');
+      // ignore: avoid_print
+      print('[FCM_DEBUG] ensureTokenSynced failed: $e');
     }
   }
 
@@ -552,11 +676,12 @@ class PushNotificationBootstrap {
       final token = await messaging.getToken();
       if (token != null && token.isNotEmpty) {
         IncomingCallService.instance.setDeviceToken(token);
-        logDebug('[PushBootstrap] FCM token acquired (${token.length} chars)');
-        logDebug('[PushBootstrap] FCM TOKEN: $token');
+        // ignore: avoid_print
+        print('[FCM_DEBUG] Startup FCM token captured (${token.length} chars): $token');
       }
     } catch (e) {
-      logDebug('[PushBootstrap] getToken failed: $e');
+      // ignore: avoid_print
+      print('[FCM_DEBUG] Startup getToken failed: $e');
     }
   }
 
@@ -572,7 +697,7 @@ class PushNotificationBootstrap {
   }
 
   Future<void> _initLocalNotifications() async {
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const android = AndroidInitializationSettings('ic_notification');
     const ios = DarwinInitializationSettings();
     await _local.initialize(
       const InitializationSettings(android: android, iOS: ios),
@@ -582,6 +707,18 @@ class PushNotificationBootstrap {
 
     final androidPlugin = _local.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
+    for (final oldId in const [
+      'grid_calls',
+      'grid_calls_v2',
+      'grid_calls_v3',
+      'grid_messages',
+      'grid_messages_v2',
+      'grid_messages_v3',
+    ]) {
+      try {
+        await androidPlugin?.deleteNotificationChannel(oldId);
+      } catch (_) {}
+    }
     await androidPlugin?.createNotificationChannel(kMessagesChannel);
     await androidPlugin?.createNotificationChannel(kCallsChannel);
   }
@@ -590,7 +727,26 @@ class PushNotificationBootstrap {
     final data = Map<String, dynamic>.from(message.data);
     final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
 
-    if (type == 'INCOMING_CALL' || type == 'CALL') {
+    // ignore: avoid_print
+    print('''
+========================================================================
+[FCM_DEBUG] >>> FOREGROUND FCM RECEIVED! <<<
+Message ID: ${message.messageId}
+Type: $type
+Data: $data
+Notification: ${message.notification?.title} | ${message.notification?.body}
+========================================================================
+''');
+
+    final isCall = type == 'INCOMING_CALL' ||
+        type == 'CALL' ||
+        type == 'CALL_REQUEST' ||
+        type == 'RINGING' ||
+        type == 'VOIP_CALL' ||
+        data.containsKey('caller_name') ||
+        data.containsKey('callerName');
+
+    if (isCall) {
       final call = IncomingCallData.fromJson(data);
       IncomingCallService.instance.handleIncomingPayload(data);
       unawaited(showIncomingCallNotification(call));
@@ -604,6 +760,8 @@ class PushNotificationBootstrap {
     }
     if (type == 'CALL_HANDLED' ||
         type == 'CALL_CANCELLED' ||
+        type == 'CANCEL_CALL' ||
+        type == 'REJECTED' ||
         type == 'HANGUP') {
       final callId = (data['call_id'] ?? data['callId'] ?? '').toString();
       IncomingCallService.instance.handleIncomingPayload(data);
@@ -742,21 +900,30 @@ class PushNotificationBootstrap {
     }
   }
 
+  /// Public API for chat message push notifications.
+  Future<void> showMessageNotification(Map<String, dynamic> data) async {
+    try {
+      await showMessageNotificationOnPlugin(_local, data);
+    } catch (e) {
+      debugPrint('[PushBootstrap] showMessageNotification error: $e');
+    }
+  }
+
   Future<void> handleCallHandled(String callId) async {
     try {
-      await _local.cancel(callId.hashCode);
+      await _local.cancel(callId.hashCode.abs());
     } catch (_) {}
   }
 
   Future<void> cancelCallNotification(String callId) async {
     try {
-      await _local.cancel(callId.hashCode);
+      await _local.cancel(callId.hashCode.abs());
     } catch (_) {}
   }
 
   Future<void> clearChatNotifications(String conversationId) async {
     try {
-      final notifId = int.tryParse(conversationId) ?? conversationId.hashCode;
+      final notifId = (int.tryParse(conversationId) ?? conversationId.hashCode).abs();
       await _local.cancel(notifId);
     } catch (_) {}
   }

@@ -563,14 +563,18 @@ class IncomingCallService {
       };
       final payload = jsonEncode(payloadMap);
 
+      // ignore: avoid_print
+      print('[IncomingCallService] Registering push token to backend for user $userId (endpoint: $uri)...');
+
       final response = await httpClient.post(
         uri,
         headers: headers,
         body: payload,
       );
 
-      debugPrint(
-        '[IncomingCallService] registerDeviceToken POST $uri status=${response.statusCode} body=${response.body}',
+      // ignore: avoid_print
+      print(
+        '[IncomingCallService] registerDeviceToken POST $uri -> status=${response.statusCode} body=${response.body}',
       );
 
       var registered = false;
@@ -596,19 +600,23 @@ class IncomingCallService {
               headers: headers,
               body: payload,
             );
-            debugPrint(
-              '[IncomingCallService] registerDeviceToken grid-chat POST $gridChatUri status=${gcResp.statusCode} body=${gcResp.body}',
+            // ignore: avoid_print
+            print(
+              '[IncomingCallService] registerDeviceToken grid-chat POST $gridChatUri -> status=${gcResp.statusCode} body=${gcResp.body}',
             );
             if (gcResp.statusCode >= 200 && gcResp.statusCode < 300) {
               registered = true;
             }
           } catch (e) {
-            debugPrint('[IncomingCallService] grid-chat native-token register error: $e');
+            // ignore: avoid_print
+            print('[IncomingCallService] grid-chat native-token register error: $e');
           }
         }
       }
 
       if (registered) {
+        // ignore: avoid_print
+        print('[IncomingCallService] Push token successfully registered on backend for user $userId');
         if (client == null) httpClient.close();
         return true;
       }
@@ -685,7 +693,8 @@ class IncomingCallService {
 
     final token = (tokenOverride ?? _deviceToken ?? '').trim();
     if (token.isEmpty) {
-      debugPrint('[IncomingCallService] No FCM/APNs token available yet to register.');
+      // ignore: avoid_print
+      print('[IncomingCallService] No FCM/APNs token available yet to register.');
       return false;
     }
 
@@ -696,9 +705,13 @@ class IncomingCallService {
       accessToken: accessToken,
       client: client,
     );
-    debugPrint(
-      '[IncomingCallService] Device token registered for user $userId (success=$success)',
-    );
+    // ignore: avoid_print
+    print('''
+------------------------------------------------------------------------
+[IncomingCallService] Device token registered for user $userId (success=$success)
+Token snippet: ${token.length > 25 ? token.substring(0, 25) : token}...
+------------------------------------------------------------------------
+''');
     return success;
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../services/json_http.dart';
@@ -73,6 +74,15 @@ class AuthSchemaRepository {
           cacheHit: true,
         );
       }
+
+      final bundled = await _loadBundledAsset();
+      if (bundled != null) {
+        return _finalize(
+          _cloneMap(bundled),
+          source: 'asset://assets/auth_ui_schema.json',
+          cacheHit: true,
+        );
+      }
     }
 
     try {
@@ -84,6 +94,14 @@ class AuthSchemaRepository {
         cacheHit: false,
       );
     } catch (error) {
+      final bundled = await _loadBundledAsset();
+      if (bundled != null) {
+        return _finalize(
+          _cloneMap(bundled),
+          source: 'asset://assets/auth_ui_schema.json-fallback',
+          cacheHit: true,
+        );
+      }
       if (!isTransientNetworkFailure(error)) rethrow;
       final stale = await _readUsableCache(allowStale: true);
       if (stale == null) rethrow;
@@ -94,6 +112,22 @@ class AuthSchemaRepository {
         cacheHit: true,
       );
     }
+  }
+
+  Future<Map<String, dynamic>?> _loadBundledAsset() async {
+    try {
+      final raw = await rootBundle.loadString('assets/auth_ui_schema.json');
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final map = Map<String, dynamic>.from(decoded.cast<dynamic, dynamic>());
+        final schema = _asMap(map['schema']) ?? map;
+        await _storeIfAllowed(schema);
+        return schema;
+      }
+    } catch (e) {
+      debugPrint('[AuthSchemaRepository] Bundled asset load error: $e');
+    }
+    return null;
   }
 
   /// Revalidates the cached Auth schema using only the contracts declared by
@@ -294,7 +328,7 @@ class AuthSchemaRepository {
             bearer: deltaConfig['auth']?.toString().toLowerCase() == 'bearer',
           ),
         )
-        .timeout(Duration(milliseconds: _timeoutMs));
+        .timeout(const Duration(milliseconds: _timeoutMs));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('Auth delta HTTP ${response.statusCode}.');
@@ -466,7 +500,7 @@ class AuthSchemaRepository {
             'Pragma': 'no-cache',
           },
         )
-        .timeout(Duration(milliseconds: _timeoutMs));
+        .timeout(const Duration(milliseconds: _timeoutMs));
 
     debugPrint('[AuthSchemaRepository] HTTP ${response.statusCode}');
 
@@ -501,7 +535,7 @@ class AuthSchemaRepository {
             bearer: config['auth']?.toString().toLowerCase() == 'bearer',
           ),
         )
-        .timeout(Duration(milliseconds: _timeoutMs));
+        .timeout(const Duration(milliseconds: _timeoutMs));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('Auth metadata HTTP ${response.statusCode}.');

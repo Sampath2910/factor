@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/efactor_cloud_diagnostic_sheet.dart';
-import '../services/push_notification_diagnostic_sheet.dart';
 import '../state/app_state.dart';
 
 /// Signature for custom SDUI action handlers.
@@ -123,58 +122,6 @@ class ActionRegistry {
         action: <String, dynamic>{
           ...action,
           'type': 'openCloudDiagnostic',
-        },
-        parameters: parameters,
-      );
-    });
-
-    // Push notification & incoming call diagnostic sheet
-    register('openPushDiagnostic', ({
-      context,
-      required state,
-      required action,
-      parameters,
-    }) async {
-      if (context != null) {
-        final uid = state.resolveDeviceIdentity().userId.isNotEmpty
-            ? state.resolveDeviceIdentity().userId
-            : null;
-        final token = state.accessToken.isNotEmpty ? state.accessToken : null;
-        await PushNotificationDiagnosticSheet.show(
-          context,
-          userId: uid,
-          accessToken: token,
-        );
-      }
-    });
-    register('openPushDiagnostics', ({
-      context,
-      required state,
-      required action,
-      parameters,
-    }) async {
-      await dispatch(
-        context: context,
-        state: state,
-        action: <String, dynamic>{
-          ...action,
-          'type': 'openPushDiagnostic',
-        },
-        parameters: parameters,
-      );
-    });
-    register('openNotificationDiagnostic', ({
-      context,
-      required state,
-      required action,
-      parameters,
-    }) async {
-      await dispatch(
-        context: context,
-        state: state,
-        action: <String, dynamic>{
-          ...action,
-          'type': 'openPushDiagnostic',
         },
         parameters: parameters,
       );

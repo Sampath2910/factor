@@ -520,7 +520,12 @@ class AuthRenderer {
                 : const ClampingScrollPhysics(),
             padding: pageInsets,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-            child: Align(alignment: Alignment.topCenter, child: phone),
+            child: Align(
+              alignment: (centered && !shortViewportNeedsScroll)
+                  ? Alignment.center
+                  : Alignment.topCenter,
+              child: phone,
+            ),
           );
         }
 
@@ -629,20 +634,8 @@ class AuthRenderer {
                     constraints.maxWidth,
                   )
                 : null;
-            final isKeyboardVisible =
-                _keyboardVisible ||
-                (View.of(context).viewInsets.bottom > 0) ||
-                (MediaQuery.maybeViewInsetsOf(context)?.bottom ?? 0) > 0;
-            final pageScrollable =
-                _page?['scrollable'] == true ||
-                _page?['verticalOverflow']?.toString().trim().toLowerCase() ==
-                    'scroll';
-            // Keep top alignment for scrollable auth forms so opening the IME
-            // does not flip center → topCenter and remount the form subtree.
             return Align(
-              alignment: (isKeyboardVisible || pageScrollable)
-                  ? Alignment.topCenter
-                  : Alignment.center,
+              alignment: Alignment.center,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: declaredMaxWidth ?? constraints.maxWidth,
@@ -2127,12 +2120,8 @@ class AuthRenderer {
       cacheManager: SduiAuthImageCache.manager,
       fit: _boxFit(raw['fit']),
       alignment: _alignment(raw['alignment']),
-      placeholder: (_, __) => const Center(
-        child: SizedBox(
-          width: 32,
-          height: 32,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+      placeholder: (_, __) => const ColoredBox(
+        color: Color(0xFF0D121C),
       ),
       errorWidget: (context, error, stack) => Image.asset(
         'assets/branding/efactor_app_logo.jpg',

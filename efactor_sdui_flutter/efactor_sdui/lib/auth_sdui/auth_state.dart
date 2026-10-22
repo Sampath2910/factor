@@ -25,10 +25,10 @@ class AuthState extends ChangeNotifier {
 
     _state = jsonDecode(jsonEncode(rawState)) as Map<String, dynamic>;
 
-    final initial = schema['app']?['initialPageId']?.toString().trim();
+    var initial = schema['app']?['initialPageId']?.toString().trim();
 
-    if (initial == null || initial.isEmpty) {
-      throw const FormatException('app.initialPageId is required.');
+    if (initial == null || initial.isEmpty || initial == 'welcome') {
+      initial = 'login';
     }
 
     _pageId = initial;

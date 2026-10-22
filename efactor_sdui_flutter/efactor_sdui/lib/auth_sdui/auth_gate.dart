@@ -26,9 +26,14 @@ typedef AuthenticatedBuilder =
 /// `schema_changed` is only an invalidation signal; authoritative schema bytes
 /// always come from HTTPS through AuthSchemaRepository.
 class AuthUiGate extends StatefulWidget {
-  const AuthUiGate({super.key, required this.authenticatedBuilder});
+  const AuthUiGate({
+    super.key,
+    required this.authenticatedBuilder,
+    this.initialSchema,
+  });
 
   final AuthenticatedBuilder authenticatedBuilder;
+  final Map<String, dynamic>? initialSchema;
 
   @override
   State<AuthUiGate> createState() => _AuthUiGateState();
@@ -52,6 +57,11 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.initialSchema != null) {
+      _state = AuthState(widget.initialSchema!);
+      _loading = false;
+      unawaited(_state!.restoreSession());
+    }
     _schemaInvalidationSubscription = EfactorCloudService
         .instance
         .schemaInvalidations
@@ -383,7 +393,10 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
     if (_loading && _state == null) {
       return const MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+        home: Scaffold(
+          backgroundColor: Color(0xFF0D121C),
+          body: SizedBox.expand(),
+        ),
       );
     }
 

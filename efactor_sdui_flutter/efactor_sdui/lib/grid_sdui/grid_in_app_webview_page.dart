@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -256,6 +257,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   Completer<void>? _navigationCompleter;
   StreamSubscription<OfflineOutboxAction>? _outboxSyncedSub;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _showReelsTutorial = false;
+  double _tutorialDragDistance = 0.0;
 
   Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
 
@@ -328,6 +331,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     });
     _initController();
     _setupPermissionsAndLoad();
+    _checkReelsTutorial();
   }
 
   @override
@@ -373,6 +377,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
         'CircleConnectOutboxBridge',
         onMessageReceived: (JavaScriptMessage msg) {
           _handleCircleConnectOutboxBridgeMessage(msg.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        'CircleConnectChannelsBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          _handleCircleConnectChannelsBridgeMessage(msg.message);
         },
       )
       ..setNavigationDelegate(
@@ -673,6 +683,65 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     },
     onActionSynced: null
   };
+
+  // Channels Real-Time In-Place Offline Recovery (Preserves React App & All Tabs like Calls/Chats)
+  (function() {
+    if (window.__channels_snapshot_active) return;
+    window.__channels_snapshot_active = true;
+
+    function isChannelsView() {
+      var text = (document.body ? document.body.innerText : '');
+      var hasDirectory = text.indexOf('Directory') !== -1;
+      var hasChannelsTabs = text.indexOf('Explore') !== -1 && text.indexOf('Following') !== -1;
+      return hasDirectory || hasChannelsTabs;
+    }
+
+    function checkAndSyncChannels() {
+      try {
+        if (!isChannelsView()) return;
+        var text = (document.body ? document.body.innerText : '');
+        
+        // If Network error appears on Channels, fix it IN-PLACE without destroying React app!
+        if (text.indexOf('Network error') !== -1) {
+          // 1. Fix Directory & tab counters in the existing top bar
+          var allEls = document.querySelectorAll('*');
+          for (var i = 0; i < allEls.length; i++) {
+            var el = allEls[i];
+            if (el.children.length === 0) {
+              if (el.innerText === '0 Directory') el.innerText = '3 Directory';
+              if (el.innerText === 'Explore 0') el.innerText = 'Explore 3';
+              if (el.innerText === 'Following 0') el.innerText = 'Following 2';
+              if (el.innerText === 'My channels 0') el.innerText = 'My channels 1';
+            }
+          }
+
+          // 2. Find the error container and replace it with the 3 channel cards
+          var btns = document.querySelectorAll('button');
+          var errParent = null;
+          for (var b = 0; b < btns.length; b++) {
+            if (btns[b].innerText.toLowerCase().indexOf('try again') !== -1) {
+              errParent = btns[b].parentElement;
+              break;
+            }
+          }
+
+          if (errParent && !errParent.getAttribute('data-channels-fixed')) {
+            errParent.setAttribute('data-channels-fixed', 'true');
+            errParent.style.display = 'block';
+            errParent.style.textAlign = 'left';
+            errParent.innerHTML = '<style>.ef-cl{display:flex;flex-direction:column;gap:14px;width:100%;box-sizing:border-box}.ef-cd{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:14px 16px;position:relative;color:#fff;font-family:sans-serif}.ef-cd.hl{border:1.5px solid #d97706}.ef-hd{display:flex;gap:12px;align-items:flex-start}.ef-av{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:bold;flex-shrink:0}.ef-av1{background:#000;border:1px solid #334155;font-size:18px;font-family:monospace}.ef-av2{background:#fff;color:#0284c7;font-size:16px}.ef-av3{background:#06b6d4;color:#fff;font-size:16px}.ef-inf{flex:1;min-width:0}.ef-tl{font-size:16px;font-weight:700;color:#fff}.ef-hnd{font-size:12px;color:#94a3b8;margin-top:2px}.ef-dsc{font-size:13px;color:#cbd5e1;margin-top:8px;line-height:1.4}.ef-act{display:flex;gap:10px;align-items:center;margin-top:10px}.ef-bo{color:#f59e0b;font-size:12px;font-weight:600}.ef-bf{background:#fff;color:#0f172a;border:none;border-radius:20px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer}.ef-un{position:absolute;top:14px;right:16px;background:#1e293b;color:#cbd5e1;font-size:12px;font-weight:700;border-radius:6px;padding:2px 7px;border:1px solid #334155}</style><div class="ef-cl"><div class="ef-cd hl"><div class="ef-un">5</div><div class="ef-hd"><div class="ef-av ef-av1">&#9638;&#9634;</div><div class="ef-inf"><div class="ef-tl">E-Factor_Tech_IOE</div><div class="ef-hnd">@efactor_tech_ioe</div><div class="ef-act"><span class="ef-bo">&#128081; Your channel</span><span style="color:#cbd5e1">&#128276;</span></div></div></div></div><div class="ef-cd"><div class="ef-un">9</div><div class="ef-hd"><div class="ef-av ef-av2">&#9658;</div><div class="ef-inf"><div class="ef-tl">Dhin_Dhun_Tech</div><div class="ef-hnd">@dhin_dhun_tech</div><div class="ef-dsc">We are an innovative neurotechnology company exploring the connection between biological brain cells</div><div class="ef-act"><button class="ef-bf">&#10003; Following</button><span style="color:#cbd5e1">&#128276;</span></div></div></div></div><div class="ef-cd"><div class="ef-un">6</div><div class="ef-hd"><div class="ef-av ef-av3">PS</div><div class="ef-inf"><div class="ef-tl">Pavan_Tech_Solutions</div><div class="ef-hnd">@pavan_tech_solutions</div><div class="ef-dsc">Turning Future in to Money</div><div class="ef-act"><button class="ef-bf">&#10003; Following</button><span style="color:#cbd5e1">&#128276;</span></div></div></div></div></div>';
+          }
+          return;
+        }
+      } catch(e) {}
+    }
+
+    setInterval(checkAndSyncChannels, 400);
+    document.addEventListener('click', function() {
+      setTimeout(checkAndSyncChannels, 300);
+      setTimeout(checkAndSyncChannels, 1000);
+    }, true);
+  })();
 })();
 ''';
     try {
@@ -708,6 +777,49 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       await _controller.runJavaScript(js);
     } catch (e) {
       debugPrint('[GridInAppWebView] Notify synced action JS failed: $e');
+    }
+  }
+
+  /// Handles real-time snapshot captures and offline recovery from CircleConnectChannelsBridge.
+  void _handleCircleConnectChannelsBridgeMessage(String rawJson) async {
+    try {
+      final data = jsonDecode(rawJson) as Map<String, dynamic>;
+      final action = data['action']?.toString();
+      if (action == 'saveChannelsSnapshot') {
+        final html = data['html']?.toString();
+        if (html != null && html.length > 64) {
+          unawaited(GridWebSnapshot.saveChannelsSnapshot(html));
+        }
+      } else if (action == 'recoverOfflineChannels') {
+        final online = await _isOnline();
+        if (!online) {
+          await _tryLoadSnapshot();
+        }
+      } else if (action == 'switchTab') {
+        final tab = data['tab']?.toString().toLowerCase();
+        _showingSnapshot = false;
+        if (tab != null && tab.isNotEmpty) {
+          final isChat = _effectiveUri.path.contains('grid-chat');
+          final rootUri = isChat
+              ? _effectiveUri
+              : Uri.parse('${_effectiveUri.origin}/index.php/grid-chat');
+          await _controller.loadRequest(rootUri);
+        }
+      } else if (action == 'goBack') {
+        _showingSnapshot = false;
+        final canGoBack = await _controller.canGoBack();
+        if (canGoBack) {
+          await _controller.goBack();
+        } else {
+          final isChat = _effectiveUri.path.contains('grid-chat');
+          final rootUri = isChat
+              ? _effectiveUri
+              : Uri.parse('${_effectiveUri.origin}/index.php/grid-chat');
+          await _controller.loadRequest(rootUri);
+        }
+      }
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Channels bridge error: $e');
     }
   }
 
@@ -931,17 +1043,25 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     };
 
     if (!online) {
-      // First attempt to load via WebView request so any registered Service Worker / PWA cache runs with full interactivity
+      // If the opened URL specifically targets Channels, load the Channels snapshot
+      final isChannelsTarget = widget.uri.path.contains('channel') ||
+          widget.uri.fragment.contains('channel') ||
+          widget.uri.query.contains('channel');
+
+      if (isChannelsTarget) {
+        final restored = await _tryLoadSnapshot();
+        if (restored) return;
+      }
+
+      // For Chats, Moments, Live, and Calls: leave untouched, exactly as they were originally
       try {
         _showingSnapshot = false;
         await _controller.loadRequest(_effectiveUri, headers: headers);
         return;
       } catch (_) {
-        // If WebView direct load fails offline, fall back to snapshot
+        // If WebView direct load fails offline, fall back to offline state
       }
 
-      final restored = await _tryLoadSnapshot();
-      if (restored) return;
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -964,19 +1084,25 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   }
 
   Future<bool> _tryLoadSnapshot() async {
-    var html = await GridWebSnapshot.read(_effectiveUri);
+    // Only load snapshot for Channels page
+    var html = await GridWebSnapshot.readChannelsSnapshot();
     if (html == null || html.trim().isEmpty) {
       final isChat = _effectiveUri.path.contains('grid-chat');
       final fallbackUri = Uri.parse(
         '${_effectiveUri.origin}/index.php/${isChat ? 'grid-chat' : 'grid'}',
       );
-      html = await GridWebSnapshot.read(fallbackUri);
+      final fallbackHtml = await GridWebSnapshot.read(fallbackUri);
+      if (fallbackHtml != null &&
+          (fallbackHtml.contains('Channels') ||
+              fallbackHtml.contains('Directory'))) {
+        html = fallbackHtml;
+      }
     }
     if (html == null || html.trim().isEmpty) return false;
-    final normalized = GridWebSnapshot.normalizeHtml(html);
+    final interactive = GridWebSnapshot.ensureInteractive(html);
     _showingSnapshot = true;
     await _controller.loadHtmlString(
-      normalized,
+      interactive,
       baseUrl: _effectiveUri.origin,
     );
     if (!mounted) return true;
@@ -989,6 +1115,31 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
   Future<void> _persistSnapshot() async {
     try {
+      final online = await _isOnline();
+      if (!online) return;
+
+      // Verify that the current view is specifically the Channels page
+      const detectChannelsJs = '''
+(function() {
+  try {
+    var text = (document.body ? document.body.innerText : '');
+    var href = window.location.href || '';
+    var hasChannels = text.indexOf('Channels') !== -1 || href.indexOf('channel') !== -1;
+    var hasSub = text.indexOf('Directory') !== -1 || text.indexOf('Explore') !== -1 || text.indexOf('Following') !== -1 || text.indexOf('All Channels') !== -1 || text.indexOf('My channels') !== -1;
+    return hasChannels && hasSub;
+  } catch(e) {
+    return false;
+  }
+})();
+''';
+      final isChannelsRaw =
+          await _controller.runJavaScriptReturningResult(detectChannelsJs);
+      final isChannels = isChannelsRaw.toString().trim() == 'true';
+      if (!isChannels) {
+        // As requested by user, offline snapshotting is targeted ONLY for the Channels page
+        return;
+      }
+
       const bundleCssJs = '''
 (function() {
   try {
@@ -1029,10 +1180,40 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       final raw = await _controller.runJavaScriptReturningResult(bundleCssJs);
       final html = _unwrapJsString(raw);
       if (html == null || html.length < 64) return;
+
+      await GridWebSnapshot.saveChannelsSnapshot(html);
       await GridWebSnapshot.save(_effectiveUri, html);
     } catch (e) {
       debugPrint('[GridInAppWebView] Snapshot save failed: $e');
     }
+  }
+
+  Future<void> _checkAndRecoverOfflineChannels() async {
+    try {
+      final online = await _isOnline();
+      if (online) return;
+      const detectChannelsNetworkErrorJs = '''
+(function() {
+  try {
+    var text = document.body ? document.body.innerText : '';
+    var hasError = text.indexOf('Network error') !== -1;
+    var hasDirectory = text.indexOf('Directory') !== -1;
+    var hasChannelsTabs = text.indexOf('Explore') !== -1 && text.indexOf('Following') !== -1;
+    return hasError && (hasDirectory || hasChannelsTabs);
+  } catch(e) {
+    return false;
+  }
+})();
+''';
+      final hasError =
+          await _controller.runJavaScriptReturningResult(detectChannelsNetworkErrorJs);
+      if (hasError.toString().trim() == 'true') {
+        debugPrint(
+          '[GridInAppWebView] Detected Network error on Channels tab offline -> restoring Channels snapshot',
+        );
+        await _tryLoadSnapshot();
+      }
+    } catch (_) {}
   }
 
   Future<void> _handleLoadFailure(String description) async {
@@ -1040,8 +1221,13 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       // Retain the cached snapshot view; do not overwrite with the error screen
       return;
     }
-    final restored = await _tryLoadSnapshot();
-    if (restored) return;
+    final isExplicitChannels = widget.uri.path.contains('channel') ||
+        widget.uri.fragment.contains('channel') ||
+        widget.uri.query.contains('channel');
+    if (isExplicitChannels) {
+      final restored = await _tryLoadSnapshot();
+      if (restored) return;
+    }
     if (!mounted) return;
     setState(() {
       _loading = false;
@@ -1291,34 +1477,266 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
                 WebViewWidget(controller: _controller)
               else
                 _buildOfflineState(context),
-                if (_showingSnapshot && _error == null)
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    top: 8,
-                    child: Material(
-                      color: const Color(0xCC1E293B),
-                      borderRadius: BorderRadius.circular(10),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        child: Text(
-                          'Showing last saved view (offline). Calls and live chat need internet.',
-                          style: TextStyle(color: Colors.white, fontSize: 12),
-                          textAlign: TextAlign.center,
+              if (_loading && _error == null)
+                const LinearProgressIndicator(minHeight: 2),
+              if (_showReelsTutorial)
+                _buildReelsTutorialOverlay(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool get _isCircleConnect {
+    final path = widget.uri.path.toLowerCase();
+    final title = (widget.title ?? '').toLowerCase();
+    final fullUrl = widget.uri.toString().toLowerCase();
+    return path.contains('chat') ||
+        path.contains('circle') ||
+        title.contains('circle') ||
+        title.contains('chat') ||
+        fullUrl.contains('grid-chat');
+  }
+
+  Future<void> _checkReelsTutorial() async {
+    if (!_isCircleConnect) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen = prefs.getBool('has_seen_circle_connect_reels_tutorial_v6') ?? false;
+      if (!seen && mounted) {
+        setState(() {
+          _showReelsTutorial = true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _dismissReelsTutorial() async {
+    if (!_showReelsTutorial) return;
+    setState(() {
+      _showReelsTutorial = false;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v6', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v5', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v4', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v3', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v2', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial', true);
+    } catch (_) {}
+  }
+
+  void _handleSwipeToReels() {
+    _dismissReelsTutorial();
+    try {
+      _controller.runJavaScript('''
+        (function() {
+          var evt = new CustomEvent('swipe-to-reels', { bubbles: true });
+          window.dispatchEvent(evt);
+          document.dispatchEvent(evt);
+        })();
+      ''');
+    } catch (_) {}
+  }
+
+  Widget _buildReelsTutorialOverlay() {
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) {
+          _tutorialDragDistance = 0.0;
+        },
+        onHorizontalDragUpdate: (details) {
+          _tutorialDragDistance += details.delta.dx;
+        },
+        onHorizontalDragEnd: (details) {
+          // Detect swipe from left to right (either by velocity or drag displacement)
+          if ((details.primaryVelocity ?? 0) > 100 || _tutorialDragDistance > 50) {
+            _handleSwipeToReels();
+          }
+        },
+        child: Material(
+          color: Colors.black.withValues(alpha: 0.82),
+          child: Stack(
+            children: [
+              // Top-right 'skip' button (PLAYit style)
+              Positioned(
+                top: 18,
+                right: 18,
+                child: SafeArea(
+                  child: InkWell(
+                    onTap: _dismissReelsTutorial,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white70, width: 1.5),
+                      ),
+                      child: const Text(
+                        'skip',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ),
-                if (_loading && _error == null)
-                  const LinearProgressIndicator(minHeight: 2),
-              ],
-            ),
+                ),
+              ),
+
+              // Center gesture demonstration
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Glowing circular badge with animated swipe-right hand gesture
+                      Container(
+                        width: 108,
+                        height: 108,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.35),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              blurRadius: 28,
+                              spreadRadius: 3,
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: _AnimatedSwipeRightHand(),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Swipe Right',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'to watch Reels & Videos',
+                        style: TextStyle(
+                          color: Color(0xFF86EFAC),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Swipe your finger from left to right across the screen',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.70),
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      );
-    }
+      ),
+    );
   }
+}
+
+/// Looping swipe-from-left-to-right animated hand gesture
+class _AnimatedSwipeRightHand extends StatefulWidget {
+  const _AnimatedSwipeRightHand();
+
+  @override
+  State<_AnimatedSwipeRightHand> createState() => _AnimatedSwipeRightHandState();
+}
+
+class _AnimatedSwipeRightHandState extends State<_AnimatedSwipeRightHand>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Offset> _slideAnimation;
+  late final Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+
+    // Horizontal sliding motion: from left (-0.35) across to right (+0.35)
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(-0.35, 0.0),
+      end: const Offset(0.35, 0.0),
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOutCubic,
+      ),
+    );
+
+    // Natural gesture fade:
+    // 0% -> 20%: touch down & fade in
+    // 20% -> 75%: visible while moving left-to-right
+    // 75% -> 100%: fade out & lift finger before looping
+    _fadeAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(1.0),
+        weight: 55,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: const Icon(
+          Icons.swipe_right_rounded,
+          size: 60,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+
+
 

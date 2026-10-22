@@ -356,7 +356,7 @@
     },
     "app": {
       "name": "Efactor",
-      "initialPageId": "welcome",
+      "initialPageId": "login",
       "safeArea": true,
       "orientation": "portrait|landscape",
       "keyboardAvoidance": true,
