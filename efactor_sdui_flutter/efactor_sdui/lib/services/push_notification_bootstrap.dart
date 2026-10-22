@@ -236,10 +236,18 @@ Future<void> showMessageNotificationOnPlugin(
       (data['title'] ??
        data['caller_name'] ??
        data['sender_name'] ??
+       data['name'] ??
+       data['user_name'] ??
+       data['sender'] ??
        'Circle Connect')
           .toString();
   final body = notification?.body ??
-      (data['body'] ?? data['message'] ?? 'New message').toString();
+      (data['body'] ??
+       data['message'] ??
+       data['text'] ??
+       data['content'] ??
+       'New message')
+          .toString();
 
   if (isLocked) {
     await plugin.show(

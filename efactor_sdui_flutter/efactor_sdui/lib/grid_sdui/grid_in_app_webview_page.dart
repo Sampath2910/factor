@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -533,7 +534,16 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
   /// Injects the `window.CircleConnectPush` bridge into the web page.
   Future<void> _injectCircleConnectPushBridge() async {
-    final token = IncomingCallService.instance.deviceToken ?? '';
+    var token = (IncomingCallService.instance.deviceToken ?? '').trim();
+    if (token.isEmpty && !kIsWeb) {
+      try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null && fcmToken.isNotEmpty) {
+          token = fcmToken.trim();
+          IncomingCallService.instance.setDeviceToken(token);
+        }
+      } catch (_) {}
+    }
     final tokenJson = jsonEncode(token);
     final bearerJson = jsonEncode(widget.accessToken ?? '');
     final js = '''
