@@ -17,6 +17,7 @@ import 'services/efactor_cloud_service.dart';
 import 'services/incoming_call_service.dart';
 import 'services/location_startup_gate.dart';
 import 'services/push_notification_bootstrap.dart';
+import 'services/push_notification_diagnostic_sheet.dart';
 import 'services/schema_prefetch.dart';
 import 'services/user_location_service.dart';
 
@@ -205,129 +206,184 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
   Widget build(BuildContext context) {
     final currentUserId = _authenticatedUserId();
     final currentToken = widget.authState.accessToken ?? '';
-    return DynamicHomeSduiPage(
-      key: ValueKey<String>('home_user_${currentUserId ?? 0}_$currentToken'),
-      accessToken: currentToken,
-      refreshToken: widget.authState.refreshToken,
-      userId: currentUserId,
-      email: _authenticatedEmail(),
-      username: _authenticatedUsername(),
-      roles: _authenticatedRoles(),
-      onLogout: () async {
-        final currentUserId = _authenticatedUserId();
-        final currentToken = widget.authState.accessToken;
-        await IncomingCallService.instance.unregisterDeviceTokenOnLogout(
-          userId: currentUserId?.toString(),
+    return Stack(
+      children: <Widget>[
+        DynamicHomeSduiPage(
+          key: ValueKey<String>('home_user_${currentUserId ?? 0}_$currentToken'),
           accessToken: currentToken,
-        );
-        await AppCacheManager.clearAllOnLogout(
+          refreshToken: widget.authState.refreshToken,
           userId: currentUserId,
-          accessToken: currentToken,
-        );
-        await widget.authState.clearSession();
-      },
-      onOpenDevice: ({
-        required String modelId,
-        required String nodeId,
-        bool? online,
-      }) async {
-        SchemaLoadQueue.instance.prioritizeDevice(
-          modelId: modelId,
-          nodeId: nodeId,
-        );
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (deviceContext) => DeviceUiScreen(
+          email: _authenticatedEmail(),
+          username: _authenticatedUsername(),
+          roles: _authenticatedRoles(),
+          onLogout: () async {
+            final currentUserId = _authenticatedUserId();
+            final currentToken = widget.authState.accessToken;
+            await IncomingCallService.instance.unregisterDeviceTokenOnLogout(
+              userId: currentUserId?.toString(),
+              accessToken: currentToken,
+            );
+            await AppCacheManager.clearAllOnLogout(
+              userId: currentUserId,
+              accessToken: currentToken,
+            );
+            await widget.authState.clearSession();
+          },
+          onOpenDevice: ({
+            required String modelId,
+            required String nodeId,
+            bool? online,
+          }) async {
+            SchemaLoadQueue.instance.prioritizeDevice(
               modelId: modelId,
               nodeId: nodeId,
-              accessToken: widget.authState.accessToken ?? '',
-              initialOnline: online,
-              onAuthenticationFailure: () async {
-                final currentUserId = _authenticatedUserId();
-                final currentToken = widget.authState.accessToken;
-                await AppCacheManager.clearAllOnLogout(
-                  userId: currentUserId,
-                  accessToken: currentToken,
-                );
-                await widget.authState.clearSession();
-              },
-              onDisconnect: () {
-                if (Navigator.of(deviceContext).canPop()) {
-                  Navigator.of(deviceContext).pop();
-                }
-              },
-            ),
-          ),
-        );
-      },
-      onOpenGrid: () async {
-        final token = widget.authState.accessToken?.trim() ?? '';
-        if (token.isEmpty) {
-          throw StateError(
-            'Cannot open Grid because the authenticated access token is empty.',
-          );
-        }
-        SchemaLoadQueue.instance.prioritizeGrid(
-          accessToken: token,
-          userId: _authenticatedUserId(),
-        );
-
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => DynamicGridSduiPage(
-              accessToken: token,
-              userId: _authenticatedUserId(),
-            ),
-          ),
-        );
-      },
-      onOpenIot: () async {
-        final token = widget.authState.accessToken?.trim() ?? '';
-        if (token.isEmpty) {
-          throw StateError(
-            'Cannot open IoT because the authenticated access token is empty.',
-          );
-        }
-        SchemaLoadQueue.instance.prioritizeIot(accessToken: token);
-
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => DynamicIotSduiPage(
-              accessToken: token,
-              source: IotSchemaSource.fromEnvironment(),
-              onOpenDevice: ({
-                required String modelId,
-                required String nodeId,
-                bool? online,
-              }) async {
-                SchemaLoadQueue.instance.prioritizeDevice(
+            );
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (deviceContext) => DeviceUiScreen(
                   modelId: modelId,
                   nodeId: nodeId,
-                );
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (deviceContext) => DeviceUiScreen(
+                  accessToken: widget.authState.accessToken ?? '',
+                  initialOnline: online,
+                  onAuthenticationFailure: () async {
+                    final currentUserId = _authenticatedUserId();
+                    final currentToken = widget.authState.accessToken;
+                    await AppCacheManager.clearAllOnLogout(
+                      userId: currentUserId,
+                      accessToken: currentToken,
+                    );
+                    await widget.authState.clearSession();
+                  },
+                  onDisconnect: () {
+                    if (Navigator.of(deviceContext).canPop()) {
+                      Navigator.of(deviceContext).pop();
+                    }
+                  },
+                ),
+              ),
+            );
+          },
+          onOpenGrid: () async {
+            final token = widget.authState.accessToken?.trim() ?? '';
+            if (token.isEmpty) {
+              throw StateError(
+                'Cannot open Grid because the authenticated access token is empty.',
+              );
+            }
+            SchemaLoadQueue.instance.prioritizeGrid(
+              accessToken: token,
+              userId: _authenticatedUserId(),
+            );
+
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => DynamicGridSduiPage(
+                  accessToken: token,
+                  userId: _authenticatedUserId(),
+                ),
+              ),
+            );
+          },
+          onOpenIot: () async {
+            final token = widget.authState.accessToken?.trim() ?? '';
+            if (token.isEmpty) {
+              throw StateError(
+                'Cannot open IoT because the authenticated access token is empty.',
+              );
+            }
+            SchemaLoadQueue.instance.prioritizeIot(accessToken: token);
+
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => DynamicIotSduiPage(
+                  accessToken: token,
+                  source: IotSchemaSource.fromEnvironment(),
+                  onOpenDevice: ({
+                    required String modelId,
+                    required String nodeId,
+                    bool? online,
+                  }) async {
+                    SchemaLoadQueue.instance.prioritizeDevice(
                       modelId: modelId,
                       nodeId: nodeId,
-                      accessToken: widget.authState.accessToken ?? '',
-                      initialOnline: online,
-                      onAuthenticationFailure: () async {
-                        await EfactorCloudService.instance.disconnect();
-                        await widget.authState.clearSession();
-                      },
-                      onDisconnect: () {
-                        if (Navigator.of(deviceContext).canPop()) {
-                          Navigator.of(deviceContext).pop();
-                        }
-                      },
-                    ),
-                  ),
+                    );
+                    await Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (deviceContext) => DeviceUiScreen(
+                          modelId: modelId,
+                          nodeId: nodeId,
+                          accessToken: widget.authState.accessToken ?? '',
+                          initialOnline: online,
+                          onAuthenticationFailure: () async {
+                            await EfactorCloudService.instance.disconnect();
+                            await widget.authState.clearSession();
+                          },
+                          onDisconnect: () {
+                            if (Navigator.of(deviceContext).canPop()) {
+                              Navigator.of(deviceContext).pop();
+                            }
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+        Positioned(
+          bottom: 96,
+          right: 16,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                PushNotificationDiagnosticSheet.show(
+                  context,
+                  userId: currentUserId?.toString(),
+                  accessToken: currentToken,
                 );
               },
+              borderRadius: BorderRadius.circular(28),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: const Color(0xFF0284C7).withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      Icons.notifications_active,
+                      color: Color(0xFF38BDF8),
+                      size: 18,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Push Diagnostic',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
