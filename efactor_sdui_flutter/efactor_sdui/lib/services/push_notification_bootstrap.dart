@@ -63,9 +63,11 @@ void notificationTapBackground(NotificationResponse response) async {
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
-    await Firebase.initializeApp();
-  } catch (_) {
-    return;
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+  } catch (e) {
+    debugPrint('[PushBootstrap] Background Firebase.initializeApp: $e');
   }
 
   final data = Map<String, dynamic>.from(message.data);
@@ -421,20 +423,29 @@ class PushNotificationBootstrap {
       FlutterLocalNotificationsPlugin();
 
   var _ready = false;
+  Future<void>? _initFuture;
   StreamSubscription<String>? _tokenSub;
 
   bool get isReady => _ready;
 
   Future<void> initialize() async {
     if (_ready || kIsWeb) return;
+    if (_initFuture != null) return _initFuture;
+    _initFuture = _doInitialize();
+    return _initFuture;
+  }
 
+  Future<void> _doInitialize() async {
     try {
-      await Firebase.initializeApp();
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
     } catch (e) {
       logDebug(
         '[PushBootstrap] Firebase not configured ($e). '
         'Copy google-services.json and GoogleService-Info.plist then rebuild.',
       );
+      _initFuture = null;
       return;
     }
 
