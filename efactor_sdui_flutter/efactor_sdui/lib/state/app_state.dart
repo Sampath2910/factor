@@ -5226,9 +5226,21 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  String? _lastCommandError;
+  String? get lastCommandError => _lastCommandError;
+
+  void clearCommandError() {
+    if (_lastCommandError != null) {
+      _lastCommandError = null;
+      notifyListeners();
+    }
+  }
+
   /// Shows a persistent error message in the nearest [ScaffoldMessenger].
   void _showCommandError(String message) {
+    _lastCommandError = message;
     logDebug('[SDUI ERROR] $message');
+    notifyListeners();
     final messengerState = _messengerKey?.currentState;
     if (messengerState == null) return;
     final scheme = Theme.of(messengerState.context).colorScheme;

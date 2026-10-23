@@ -78,8 +78,15 @@ class DeviceFrameBuilder {
     var frameSize = 0;
     for (var index = 0; index < commands.length; index++) {
       final field = commands[index];
-      final start = _positiveInt(field['byte_start_position']);
-      final count = _positiveInt(field['no_of_bytes']);
+      final start = _positiveInt(field['byte_start_position'] ??
+          field['start_byte'] ??
+          field['byte_start'] ??
+          field['start_position']);
+      final count = _positiveInt(field['no_of_bytes'] ??
+          field['number_of_bytes'] ??
+          field['bytes_count'] ??
+          field['byte_count'] ??
+          field['length']);
       if (start == null || count == null) {
         return DeviceFrameBuildResult.failure(
           'controls[id="$controlId"].deviceFrame.commands[$index] must '
@@ -95,8 +102,15 @@ class DeviceFrameBuilder {
 
     for (var index = 0; index < commands.length; index++) {
       final field = commands[index];
-      final start = _positiveInt(field['byte_start_position'])!;
-      final count = _positiveInt(field['no_of_bytes'])!;
+      final start = _positiveInt(field['byte_start_position'] ??
+          field['start_byte'] ??
+          field['byte_start'] ??
+          field['start_position'])!;
+      final count = _positiveInt(field['no_of_bytes'] ??
+          field['number_of_bytes'] ??
+          field['bytes_count'] ??
+          field['byte_count'] ??
+          field['length'])!;
       final name = (field['default_name'] ?? field['Field_description'])
           ?.toString()
           .trim();
@@ -105,12 +119,31 @@ class DeviceFrameBuilder {
       dynamic rawValue = field['value'];
       if (_isBlank(rawValue)) {
         if (_looksLikeCommandId(normalizedName)) {
-          rawValue = protocolMeta['command_id'];
+          rawValue = protocolMeta['command_id'] ??
+              protocolMeta['commandId'] ??
+              protocolMeta['CommandId'] ??
+              control['command_id'] ??
+              control['commandId'];
         } else if (_looksLikeFunctionCode(normalizedName)) {
-          rawValue = protocolMeta['function_code'];
+          rawValue = protocolMeta['function_code'] ??
+              protocolMeta['functionCode'] ??
+              protocolMeta['FunctionCode'] ??
+              control['function_code'] ??
+              control['functionCode'];
         } else if (_looksLikeActionId(normalizedName)) {
-          rawValue = protocolMeta['action_id'];
+          rawValue = protocolMeta['action_id'] ??
+              protocolMeta['actionId'] ??
+              protocolMeta['ActionId'] ??
+              control['action_id'] ??
+              control['actionId'];
+        } else if (_looksLikeTerminator(normalizedName)) {
+          rawValue = protocolMeta['terminator'] ??
+              protocolMeta['end_byte'] ??
+              control['terminator'];
         }
+        rawValue ??= field['default'] ??
+            field['default_value'] ??
+            field['initial_value'];
       }
 
       final mapping = _mapRuntimeValue(
@@ -259,6 +292,9 @@ class DeviceFrameBuilder {
     final runtimeHex = _explicitProtocolHex(runtimeValue, byteCount: byteCount);
     if (runtimeHex != null) return _MappedValue(true, runtimeHex);
 
+    final numericHex = _unsignedIntProtocolHex(runtimeValue, byteCount);
+    if (numericHex != null) return _MappedValue(true, numericHex);
+
     if (_isTriggerField(field, control) && values.isNotEmpty) {
       final unique = values.toSet();
       if (unique.length == 1 && !_isBlank(unique.first)) {
@@ -326,16 +362,22 @@ class DeviceFrameBuilder {
       }
       if (value == null) return;
       final text = value.toString().trim();
-      if (text.isEmpty) return;
+      if (text.isEmpty || text == '[]') return;
       final matches = RegExp(r'\[([^\]]*)\]').allMatches(text).toList();
       if (matches.isNotEmpty) {
+        var addedAny = false;
         for (final match in matches) {
           final token = match.group(1)?.trim() ?? '';
-          if (token.isNotEmpty) output.add(token);
+          if (token.isNotEmpty && token != '[]') {
+            output.add(token);
+            addedAny = true;
+          }
         }
-        return;
+        if (addedAny) return;
       }
-      output.add(text);
+      if (text != '[]') {
+        output.add(text);
+      }
     }
 
     collect(raw);
@@ -432,12 +474,13 @@ class DeviceFrameBuilder {
         .replaceFirst(RegExp(r'^0x', caseSensitive: false), '')
         .replaceAll(RegExp(r'[\s:_-]'), '');
     if (!RegExp(r'^[0-9A-Fa-f]+$').hasMatch(normalized)) return null;
-    if (normalized.length != byteCount * 2) return null;
+    if (normalized.length > byteCount * 2) return null;
+    final padded = normalized.padLeft(byteCount * 2, '0');
 
     return List<int>.generate(
       byteCount,
       (index) =>
-          int.parse(normalized.substring(index * 2, index * 2 + 2), radix: 16),
+          int.parse(padded.substring(index * 2, index * 2 + 2), radix: 16),
     );
   }
 
@@ -497,17 +540,25 @@ class DeviceFrameBuilder {
     return value != null && value > 0 ? value : null;
   }
 
-  static bool _looksLikeCommandId(String name) =>
-      name.replaceAll(RegExp(r'[^a-z0-9]'), '') == 'commandid';
+  static bool _looksLikeCommandId(String name) {
+    final clean = name.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return clean == 'commandid' || clean == 'cmdid' || clean == 'command';
+  }
 
-  static bool _looksLikeFunctionCode(String name) =>
-      name.replaceAll(RegExp(r'[^a-z0-9]'), '') == 'functioncode';
+  static bool _looksLikeFunctionCode(String name) {
+    final clean = name.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return clean == 'functioncode' || clean == 'fncode' || clean == 'function';
+  }
 
-  static bool _looksLikeActionId(String name) =>
-      name.replaceAll(RegExp(r'[^a-z0-9]'), '') == 'actionid';
+  static bool _looksLikeActionId(String name) {
+    final clean = name.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return clean == 'actionid' || clean == 'actid' || clean == 'action';
+  }
 
-  static bool _looksLikeTerminator(String name) =>
-      name.replaceAll(RegExp(r'[^a-z0-9]'), '') == 'terminator';
+  static bool _looksLikeTerminator(String name) {
+    final clean = name.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return clean == 'terminator' || clean == 'endbyte' || clean == 'end';
+  }
 }
 
 class _MappedValue {

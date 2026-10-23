@@ -1699,12 +1699,16 @@ class HomeSduiRenderer {
     final content = _map(c['content']) ?? const <String, dynamic>{};
     final appearance = _map(c['appearance']) ?? const <String, dynamic>{};
 
-    final radius =
-        _d(appearance['borderRadius']) ??
+    final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+        _d(state.schema['theme']?['cardBorderRadius']) ??
+        _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']);
+    final rawRadius = _d(appearance['borderRadius']) ??
         _d(appearance['radius']) ??
         _tokenNumber(appearance['radiusToken']?.toString()) ??
+        themeRadius ??
         _tokenNumber('radius.card') ??
-        0;
+        14.0;
+    final radius = rawRadius.clamp(0.0, 16.0);
 
     final bg =
         _color(appearance['backgroundColor']) ??
@@ -2189,16 +2193,18 @@ class HomeSduiRenderer {
             height: height,
             child: Stack(
               children: [
-                for (final p in placements)
-                  Positioned(
-                    left: p.column * (cellWidth + columnGap),
+                for (final p in placements) () {
+                  final safeCol = p.column.clamp(0, math.max(0, columnCount - 1));
+                  final maxColSpan = math.max(1, columnCount - safeCol);
+                  final safeSpan = p.columnSpan.clamp(1, maxColSpan);
+                  final tileWidth = safeSpan * cellWidth + (safeSpan - 1) * columnGap;
+                  final tileHeight = p.rowSpan * effectiveRowHeight + (p.rowSpan - 1) * rowGap;
+
+                  return Positioned(
+                    left: safeCol * (cellWidth + columnGap),
                     top: p.row * (effectiveRowHeight + rowGap),
-                    width:
-                        p.columnSpan * cellWidth +
-                        (p.columnSpan - 1) * columnGap,
-                    height:
-                        p.rowSpan * effectiveRowHeight +
-                        (p.rowSpan - 1) * rowGap,
+                    width: tileWidth,
+                    height: tileHeight,
                     child: Builder(
                       builder: (context) {
                         final child = buildNode(
@@ -2220,7 +2226,8 @@ class HomeSduiRenderer {
                         );
                       },
                     ),
-                  ),
+                  );
+                }(),
               ],
             ),
           ),
@@ -2371,22 +2378,25 @@ class HomeSduiRenderer {
     return layout;
   }
 
-  bool _isFourFaceBoxComponent(Map<String, dynamic> c) {
-    final rotation = _map(c['rotation']);
-    final model =
-        '${rotation?['model'] ?? ''} ${rotation?['rendererKey'] ?? ''} '
-        '${c['presetId'] ?? ''}';
-    if (model.toLowerCase().contains('fourface')) return true;
-    final geometry = _map(rotation?['geometry']);
-    final style = geometry?['transformStyle']?.toString().trim().toLowerCase();
-    return style == 'preserve-3d';
-  }
-
-  double? _metroTileRadius(Map<String, dynamic> c) {
+  double _metroTileRadius(Map<String, dynamic> c) {
     final appearance = _map(c['appearance']);
-    return _d(appearance?['borderRadius']) ??
-        _d(appearance?['cardBorderRadius']) ??
-        _tokenNumber('radius.card');
+    final explicit = _d(appearance?['borderRadius']) ??
+        _d(appearance?['cardBorderRadius']);
+    if (explicit != null) return explicit;
+
+    final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+        _d(state.schema['theme']?['cardBorderRadius']) ??
+        _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+        _d(state.schema['grid']?['cardBorderRadius']);
+    if (themeRadius != null && themeRadius > 0) {
+      return themeRadius.clamp(0.0, 20.0);
+    }
+
+    final token = _tokenNumber('radius.card');
+    if (token != null && token > 0) {
+      return token.clamp(0.0, 20.0);
+    }
+    return 14.0;
   }
 
   /// Matches web `.ahp-card { overflow: hidden; border-radius }`.
@@ -2394,13 +2404,8 @@ class HomeSduiRenderer {
   /// 3D side faces still render during a turn; they are clipped to the tile
   /// so the cube cannot paint over neighbours.
   Widget _clipToTileBounds(Map<String, dynamic> c, Widget child) {
-    final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
-    final fourFace = _isFourFaceBoxComponent(c);
-    if (!fourFace && overflow != 'clip' && overflow != 'hidden') {
-      return child;
-    }
     final radius = _metroTileRadius(c);
-    if (radius != null && radius > 0) {
+    if (radius > 0) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         clipBehavior: Clip.antiAlias,
@@ -2607,8 +2612,15 @@ class HomeSduiRenderer {
 
     final imageTextColor = tokenColor('colors.welcomeText');
 
-    final radius =
-        _d(appearance['borderRadius']) ?? _tokenNumber('radius.card');
+    final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+        _d(state.schema['theme']?['cardBorderRadius']) ??
+        _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+        _d(state.schema['grid']?['cardBorderRadius']);
+    final rawRadius = _d(appearance['borderRadius']) ??
+        themeRadius ??
+        _tokenNumber('radius.card') ??
+        14.0;
+    final radius = rawRadius.clamp(0.0, 20.0);
 
     final titleSize =
         _d(appearance['titleFontSize']) ??
@@ -2905,7 +2917,7 @@ class HomeSduiRenderer {
         }
       },
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius!),
+        borderRadius: BorderRadius.circular(radius),
         child: Container(
           decoration: BoxDecoration(
             color: backgroundGradient == null ? background : null,

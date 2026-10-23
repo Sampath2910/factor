@@ -520,6 +520,7 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
         return MaterialApp(
           title: state.schema['app']?['name']?.toString() ?? '',
           debugShowCheckedModeBanner: false,
+          navigatorKey: IncomingCallService.instance.navigatorKey,
           theme: ThemeData(
             useMaterial3: true,
             splashFactory: InkRipple.splashFactory,

@@ -186,5 +186,36 @@ void main() {
       expect(body['call_id'], 'call_777');
       expect(body['caller_grid_id'], 'GRID-444');
     });
+
+    test('registerDeviceTokenWithBackend synchronizes FCM token with grid-chat native-token endpoint using Bearer auth', () async {
+      final service = IncomingCallService.instance;
+      final requests = <http.Request>[];
+
+      final mockClient = MockClient((request) async {
+        requests.add(request);
+        return http.Response(jsonEncode(<String, dynamic>{'status': 'ok'}), 200);
+      });
+
+      final success = await service.registerDeviceTokenWithBackend(
+        userId: '54321',
+        deviceToken: 'device_token_fcm_999',
+        platform: 'android',
+        tokenType: 'fcm',
+        accessToken: 'user_active_access_token_abc',
+        client: mockClient,
+      );
+
+      expect(success, isTrue);
+      final nativeTokenReq = requests.firstWhere(
+        (r) => r.url.path.contains('/grid-chat/api/push/native-token'),
+      );
+      expect(nativeTokenReq.headers['Authorization'], 'Bearer user_active_access_token_abc');
+      final body = jsonDecode(nativeTokenReq.body) as Map<String, dynamic>;
+      expect(body['user_id'], '54321');
+      expect(body['device_token'], 'device_token_fcm_999');
+      expect(body['platform'], 'android');
+      expect(body['token_type'], 'fcm');
+    });
   });
 }
+

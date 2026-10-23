@@ -56,6 +56,8 @@ class IotSduiState extends ChangeNotifier {
   deviceOpenHandler;
 
   String? _lastError;
+  String? _lastWarning;
+  bool _isShowingCachedData = false;
   bool _busy = false;
   bool _disposed = false;
   bool _notifyScheduled = false;
@@ -152,6 +154,8 @@ class IotSduiState extends ChangeNotifier {
   }
 
   String? get lastError => _lastError;
+  String? get lastWarning => _lastWarning;
+  bool get isShowingCachedData => _isShowingCachedData;
   bool get busy => _busy;
 
   Map<String, dynamic> get page =>
@@ -1152,6 +1156,9 @@ class IotSduiState extends ChangeNotifier {
               'source=$sourceName http=${response.statusCode}',
             );
             _applyResponse(contract, cached);
+            _isShowingCachedData = true;
+            _lastWarning =
+                'Showing cached devices. Server returned HTTP ${response.statusCode}.';
             _lastError = null;
             notifyListeners();
             return cached;
@@ -1416,7 +1423,13 @@ class IotSduiState extends ChangeNotifier {
     if (root == null || root.isEmpty) return;
 
     final value = _readDynamicPath(decoded, root);
-    if (value is! List) return;
+    if (value is! List) {
+      logDebug(
+        '[IOT_SDUI][DATASOURCE] root "$root" returned non-list (${value?.runtimeType})',
+      );
+      _softFail('Datasource response format error: "$root" is not a list.');
+      return;
+    }
 
     if (response?['mergeInto']?.toString() == 'devices') {
       _mergeNodeStatus(response!, _mapList(value));
@@ -1920,9 +1933,12 @@ class IotSduiState extends ChangeNotifier {
 
   dynamic _softFail(String message) {
     // Secondary enrichment/status sources must not replace a usable IoT page
-    // with a page-level error. Keep the last good device data and log the
-    // backend failure for diagnostics.
-    logDebug('[IOT_SDUI][SECONDARY_SOURCE] ${_redact(message)}');
+    // with a page-level error. Keep the last good device data, record the warning,
+    // and log the backend failure for diagnostics.
+    final safe = _redact(message);
+    logDebug('[IOT_SDUI][SECONDARY_SOURCE] $safe');
+    _lastWarning = safe;
+    notifyListeners();
     return null;
   }
 

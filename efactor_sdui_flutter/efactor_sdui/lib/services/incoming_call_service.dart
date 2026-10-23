@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -157,10 +158,34 @@ class IncomingCallService {
   /// The cached FCM or APNs device token.
   String? get deviceToken => _deviceToken;
 
+  /// The call ID currently ringing inside the open Circle Connect web page.
+  String? activeWebCallId;
+
+  /// Returns true if Circle Connect WebView is currently open in the foreground.
+  bool get isCallPageOpen => GridInAppWebViewPage.isPageOpen;
+
+  /// Returns true ONLY if the web page has explicitly called startRinging for this call_id.
+  bool isCallRingingInWeb(String callId) {
+    if (callId.isEmpty || activeWebCallId == null) return false;
+    return activeWebCallId == callId;
+  }
+
   /// Update or register the latest push token discovered from FCM or APNs.
   void setDeviceToken(String token) {
     _deviceToken = token.trim();
     unawaited(GridInAppWebViewPage.updatePushTokenInWeb(_deviceToken!));
+  }
+
+  /// Waits briefly on app cold start until [navigatorKey] is mounted.
+  Future<BuildContext?> _waitForNavigatorContext() async {
+    var ctx = navigatorKey.currentState?.context;
+    if (ctx != null && ctx.mounted) return ctx;
+    for (var i = 0; i < 25; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      ctx = navigatorKey.currentState?.context;
+      if (ctx != null && ctx.mounted) return ctx;
+    }
+    return null;
   }
 
   /// Read WebKit session cookies via native MethodChannel on Android and iOS.
@@ -187,7 +212,11 @@ class IncomingCallService {
     if (type == 'INCOMING_CALL' || type == 'CALL') {
       final call = IncomingCallData.fromJson(payload);
       currentCall.value = call;
-      _displayIncomingCallModal(call);
+      // Avoid double incoming screen: if Circle Connect is already open in the foreground
+      // or already ringing for this callId, do not show a redundant native modal dialog.
+      if (!isCallRingingInWeb(call.callId)) {
+        unawaited(_displayIncomingCallModal(call));
+      }
     } else if (type == 'MISSED_CALL' ||
         type == 'CALL_MISSED') {
       final call = IncomingCallData.fromJson(payload);
@@ -195,8 +224,13 @@ class IncomingCallService {
       PushNotificationBootstrap.instance.showMissedCallNotification(call);
     } else if (type == 'CALL_HANDLED' ||
         type == 'CALL_CANCELLED' ||
+        type == 'CANCEL_CALL' ||
+        type == 'REJECTED' ||
         type == 'HANGUP') {
       final callId = (payload['call_id'] ?? payload['callId'] ?? '').toString();
+      if (activeWebCallId == callId) {
+        activeWebCallId = null;
+      }
       dismissCall();
       PushNotificationBootstrap.instance.handleCallHandled(callId);
     }
@@ -215,6 +249,7 @@ class IncomingCallService {
     required String callType,
     required String url,
   }) async {
+    activeWebCallId = callId;
     final call = IncomingCallData(
       callId: callId,
       callerId: '',
@@ -229,6 +264,9 @@ class IncomingCallService {
   /// Triggered by the web page via `CircleConnectPush.stopRinging` when a call
   /// is answered, declined, or ended in the web UI.
   Future<void> stopRingingFromWeb(String callId) async {
+    if (activeWebCallId == callId || (callId.isEmpty && activeWebCallId != null)) {
+      activeWebCallId = null;
+    }
     dismissCall();
     await PushNotificationBootstrap.instance.cancelCallNotification(callId);
   }
@@ -276,9 +314,12 @@ class IncomingCallService {
     final qp = Map<String, String>.from(uri.queryParameters);
     qp['call_action'] = 'answer';
     qp['call_id'] = call.callId;
+    if (call.callerGridId.isNotEmpty) qp['grid_id'] = call.callerGridId;
+    if (call.callerUserId.isNotEmpty) qp['user_id'] = call.callerUserId;
+    if (call.callType.isNotEmpty) qp['call_type'] = call.callType;
     final answerUri = uri.replace(queryParameters: qp);
 
-    final targetContext = context ?? navigatorKey.currentState?.context;
+    final targetContext = await _waitForNavigatorContext();
     if (targetContext != null && targetContext.mounted) {
       await Navigator.of(targetContext).push<void>(
         MaterialPageRoute<void>(
@@ -302,23 +343,30 @@ class IncomingCallService {
     String? rejectApiUrl,
     http.Client? client,
   }) async {
+    debugPrint('[IncomingCallService] >>> declineCall() CALLED for callId=${call.callId}, caller=${call.callerName} <<<');
     dismissCall();
     await PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
+
+    if (GridInAppWebViewPage.isPageOpen) {
+      await GridInAppWebViewPage.handleCallAction(
+        action: 'decline',
+        callId: call.callId,
+      );
+    }
 
     final targetUrl = call.roomUrl.isNotEmpty
         ? call.roomUrl
         : IncomingCallData.defaultCallUrl;
     final cookies = await getCookiesForUrl(targetUrl);
 
-    final cleanUrl =
-        targetUrl.split('?').first.replaceAll(RegExp(r'/+$'), '');
-    final primaryUri =
-        Uri.tryParse('https://efactor.tech/index.php/api/call/decline');
-    final originUri = Uri.tryParse(targetUrl);
-    final fallbackUri = Uri.tryParse('$cleanUrl/api/call/decline') ??
-        (originUri != null
-            ? Uri.tryParse('${originUri.origin}/index.php/api/call/decline')
-            : null);
+    final primaryUri = (rejectApiUrl != null && rejectApiUrl.isNotEmpty)
+        ? Uri.tryParse(rejectApiUrl)
+        : Uri.tryParse(
+            'https://efactor.tech/index.php/grid-chat/api/call/decline',
+          );
+    final fallbackUri = Uri.tryParse(
+      'https://efactor.tech/grid-chat/api/call/decline',
+    );
 
     final headers = <String, String>{
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -330,6 +378,8 @@ class IncomingCallService {
     final bodyFields = <String, String>{
       'call_id': call.callId,
       'caller_grid_id': call.callerGridId,
+      if (call.callerUserId.isNotEmpty) 'caller_user_id': call.callerUserId,
+      if (activeUserId != null) 'user_id': activeUserId.toString(),
     };
 
     final httpClient = client ?? http.Client();
@@ -386,7 +436,7 @@ class IncomingCallService {
     if (call.callType.isNotEmpty) qp['call_type'] = call.callType;
     final callbackUri = uri.replace(queryParameters: qp);
 
-    final targetContext = context ?? navigatorKey.currentState?.context;
+    final targetContext = await _waitForNavigatorContext();
     if (targetContext != null && targetContext.mounted) {
       await Navigator.of(targetContext).push<void>(
         MaterialPageRoute<void>(
@@ -431,7 +481,7 @@ class IncomingCallService {
     if (call.callerUserId.isNotEmpty) qp['user_id'] = call.callerUserId;
     final messageUri = uri.replace(queryParameters: qp);
 
-    final targetContext = context ?? navigatorKey.currentState?.context;
+    final targetContext = await _waitForNavigatorContext();
     if (targetContext != null && targetContext.mounted) {
       await Navigator.of(targetContext).push<void>(
         MaterialPageRoute<void>(
@@ -447,30 +497,16 @@ class IncomingCallService {
     }
   }
 
-  /// Tap on banner / name: opens GRID Chat incoming-call screen without action.
+  /// Tap on banner / name: opens incoming call modal or brings call to focus.
   Future<void> openCallScreenWithoutAction(
     IncomingCallData call, {
     BuildContext? context,
   }) async {
+    if (isCallRingingInWeb(call.callId)) return;
     if (GridInAppWebViewPage.isPageOpen) return;
 
-    final uri = Uri.parse(
-      call.roomUrl.isNotEmpty ? call.roomUrl : IncomingCallData.defaultCallUrl,
-    );
-    final targetContext = context ?? navigatorKey.currentState?.context;
-    if (targetContext != null && targetContext.mounted) {
-      await Navigator.of(targetContext).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => GridInAppWebViewPage(
-            uri: uri,
-            title: 'Circle Connect',
-            showAppBar: false,
-            accessToken: activeAccessToken,
-            userId: activeUserId,
-          ),
-        ),
-      );
-    }
+    currentCall.value = call;
+    await _displayIncomingCallModal(call);
   }
 
   /// Opens or focuses chat by conversationId.
@@ -496,7 +532,7 @@ class IncomingCallService {
           'https://efactor.tech/index.php/grid-chat?conversation_id=$conversationId';
     }
     final uri = Uri.parse(effectiveUrl);
-    final targetContext = context ?? navigatorKey.currentState?.context;
+    final targetContext = await _waitForNavigatorContext();
     if (targetContext != null && targetContext.mounted) {
       await Navigator.of(targetContext).push<void>(
         MaterialPageRoute<void>(
@@ -539,9 +575,11 @@ class IncomingCallService {
           ? rawToken.substring(7).trim()
           : rawToken;
 
+      final cookies = await getCookiesForUrl('https://efactor.tech/index.php/grid-chat');
       final headers = <String, String>{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        if (cookies.isNotEmpty) 'Cookie': cookies,
         if (cleanToken.isNotEmpty) ...{
           'Authorization': 'Bearer $cleanToken',
           'access_token': cleanToken,
@@ -554,7 +592,7 @@ class IncomingCallService {
         'device_token': deviceToken,
         'platform': resolvedPlatform,
         'token_type': resolvedTokenType,
-        'user_id': userId,
+        'user_id': userId.toString(),
         if (cleanToken.isNotEmpty) ...{
           'access_token': cleanToken,
           'accesstoken': cleanToken,
@@ -566,25 +604,30 @@ class IncomingCallService {
       // ignore: avoid_print
       print('[IncomingCallService] Registering push token to backend for user $userId (endpoint: $uri)...');
 
-      final response = await httpClient.post(
-        uri,
-        headers: headers,
-        body: payload,
-      );
-
-      // ignore: avoid_print
-      print(
-        '[IncomingCallService] registerDeviceToken POST $uri -> status=${response.statusCode} body=${response.body}',
-      );
-
       var registered = false;
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final bodyLower = response.body.toLowerCase();
-        if (!bodyLower.contains('"error"') &&
-            !bodyLower.contains('"failure"') &&
-            response.body.trim() != '[]') {
-          registered = true;
+      try {
+        final response = await httpClient.post(
+          uri,
+          headers: headers,
+          body: payload,
+        );
+
+        // ignore: avoid_print
+        print(
+          '[IncomingCallService] registerDeviceToken POST $uri -> status=${response.statusCode} body=${response.body}',
+        );
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final bodyLower = response.body.toLowerCase();
+          if (!bodyLower.contains('"error"') &&
+              !bodyLower.contains('"failure"') &&
+              response.body.trim() != '[]') {
+            registered = true;
+          }
         }
+      } catch (e) {
+        // ignore: avoid_print
+        print('[IncomingCallService] primary registerDeviceToken error: $e');
       }
 
       // Also register with Circle Connect / GRID Chat native push token endpoint
@@ -691,7 +734,18 @@ class IncomingCallService {
     activeUserId = int.tryParse(userId);
     activeAccessToken = accessToken;
 
-    final token = (tokenOverride ?? _deviceToken ?? '').trim();
+    var token = (tokenOverride ?? _deviceToken ?? '').trim();
+    if (token.isEmpty && !kIsWeb) {
+      try {
+        final fcm = await FirebaseMessaging.instance.getToken();
+        if (fcm != null && fcm.isNotEmpty) {
+          token = fcm.trim();
+          _deviceToken = token;
+        }
+      } catch (e) {
+        debugPrint('[IncomingCallService] FCM token fetch failed: $e');
+      }
+    }
     if (token.isEmpty) {
       // ignore: avoid_print
       print('[IncomingCallService] No FCM/APNs token available yet to register.');
@@ -760,21 +814,24 @@ Token snippet: ${token.length > 25 ? token.substring(0, 25) : token}...
     }
   }
 
-  void _displayIncomingCallModal(IncomingCallData call) {
-    final nav = navigatorKey.currentState;
-    if (nav == null || nav.context.mounted == false) return;
+  Future<void> _displayIncomingCallModal(IncomingCallData call) async {
+    final ctx = await _waitForNavigatorContext();
+    if (ctx == null || !ctx.mounted) return;
 
     showGeneralDialog<void>(
-      context: nav.context,
+      context: ctx,
       barrierDismissible: false,
       barrierColor: Colors.black87,
-      pageBuilder: (context, anim1, anim2) {
+      pageBuilder: (dialogContext, anim1, anim2) {
         return IncomingCallScreen(
           call: call,
-          onAccept: () => acceptCall(context, call),
+          onAccept: () {
+            Navigator.of(dialogContext, rootNavigator: true).maybePop();
+            acceptCall(ctx, call);
+          },
           onDecline: () {
             declineCall(call);
-            Navigator.of(context, rootNavigator: true).maybePop();
+            Navigator.of(dialogContext, rootNavigator: true).maybePop();
           },
         );
       },

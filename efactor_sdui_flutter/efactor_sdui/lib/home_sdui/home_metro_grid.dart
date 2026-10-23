@@ -70,28 +70,87 @@ List<HomeMetroPlacement> _placeExplicit(
   required int columns,
   required bool clampColumnSpan,
 }) {
+  final occupied = <List<bool>>[];
   final result = <HomeMetroPlacement>[];
+
+  void ensureRows(int count) {
+    while (occupied.length < count) {
+      occupied.add(List<bool>.filled(columns, false));
+    }
+  }
+
+  bool fits(int row, int col, int rowSpan, int colSpan) {
+    if (col + colSpan > columns) return false;
+    ensureRows(row + rowSpan);
+    for (var r = row; r < row + rowSpan; r++) {
+      for (var c = col; c < col + colSpan; c++) {
+        if (occupied[r][c]) return false;
+      }
+    }
+    return true;
+  }
+
+  void occupy(int row, int col, int rowSpan, int colSpan) {
+    ensureRows(row + rowSpan);
+    for (var r = row; r < row + rowSpan; r++) {
+      for (var c = col; c < col + colSpan; c++) {
+        occupied[r][c] = true;
+      }
+    }
+  }
+
   for (final item in items) {
     final requestedSpan = clampColumnSpan
         ? item.columnSpan.clamp(1, columns).toInt()
         : mathMax(1, item.columnSpan);
+    final rowSpan = mathMax(1, item.rowSpan);
     var column = (item.columnStart ?? 1) - 1;
     if (column < 0) column = 0;
-    if (column >= columns) column = 0;
+    var row = mathMax(0, (item.rowStart ?? 1) - 1);
+
     var span = requestedSpan;
     if (column + span > columns) {
-      span = columns - column;
+      span = mathMax(1, columns - column);
     }
-    if (span < 1) continue;
-    result.add(
-      HomeMetroPlacement(
-        id: item.id,
-        column: column,
-        row: mathMax(0, (item.rowStart ?? 1) - 1),
-        columnSpan: span,
-        rowSpan: mathMax(1, item.rowSpan),
-      ),
-    );
+
+    // If requested coordinates fit without collision, place directly:
+    if (column < columns && fits(row, column, rowSpan, span)) {
+      occupy(row, column, rowSpan, span);
+      result.add(
+        HomeMetroPlacement(
+          id: item.id,
+          column: column,
+          row: row,
+          columnSpan: span,
+          rowSpan: rowSpan,
+        ),
+      );
+      continue;
+    }
+
+    // Coordinate collision or out-of-bounds column: find the next available non-overlapping slot
+    var placed = false;
+    for (var r = row; !placed; r++) {
+      for (var c = 0; c < columns; c++) {
+        final currentSpan = clampColumnSpan
+            ? item.columnSpan.clamp(1, columns - c).toInt()
+            : mathMax(1, item.columnSpan);
+        if (fits(r, c, rowSpan, currentSpan)) {
+          occupy(r, c, rowSpan, currentSpan);
+          result.add(
+            HomeMetroPlacement(
+              id: item.id,
+              column: c,
+              row: r,
+              columnSpan: currentSpan,
+              rowSpan: rowSpan,
+            ),
+          );
+          placed = true;
+          break;
+        }
+      }
+    }
   }
   return result;
 }

@@ -54,6 +54,13 @@ class GridShellPool {
     return _warmedShells.putIfAbsent(key, shellBuilder);
   }
 
+  /// Removes a shell from the pool when its route is popped and disposed.
+  void removeShell(Uri uri, {int? userId}) {
+    final key = _poolKey(uri, userId: userId);
+    _warmedShells.remove(key);
+    _shellCreationTimes.remove(key);
+  }
+
   /// Clears the warmed shells when logging out.
   void clearAll() {
     _warmedShells.clear();

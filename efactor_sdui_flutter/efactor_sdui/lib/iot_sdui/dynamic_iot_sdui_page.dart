@@ -84,6 +84,18 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
   IotSduiRenderer? _renderer;
   bool _loading = true;
   String? _loadError;
+  String? _lastNotifiedStateError;
+
+  void _onStateErrorNotified() {
+    if (!mounted || _state == null) return;
+    final err = _state!.lastError;
+    if (err != null && err.isNotEmpty && err != _lastNotifiedStateError) {
+      _lastNotifiedStateError = err;
+      _showIotMessage(err, error: true);
+    } else if (err == null) {
+      _lastNotifiedStateError = null;
+    }
+  }
 
   @override
   void initState() {
@@ -285,6 +297,9 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
     } catch (error, stackTrace) {
       logDebug('[IOT_SDUI][AUTO_REFRESH_ERROR] $error');
       if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
+      if (mounted && _state != null) {
+        _showIotMessage('Unable to sync live IoT schema. Showing saved data.', error: true);
+      }
     } finally {
       _schemaRefreshInProgress = false;
     }
@@ -376,6 +391,8 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
       }
 
       final previous = _state;
+      previous?.removeListener(_onStateErrorNotified);
+      nextState.addListener(_onStateErrorNotified);
 
       setState(() {
         _state = nextState;
@@ -410,6 +427,11 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
         _loading = false;
         if (_state == null) {
           _loadError = safe;
+        } else {
+          _showIotMessage(
+            'Failed to refresh live IoT schema. Showing saved data.',
+            error: true,
+          );
         }
       });
     }
@@ -1399,6 +1421,7 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
     _schemaInvalidationSubscription?.cancel();
     _cloudConnectionSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _state?.removeListener(_onStateErrorNotified);
     _state?.dispose();
     _repository.dispose();
     super.dispose();

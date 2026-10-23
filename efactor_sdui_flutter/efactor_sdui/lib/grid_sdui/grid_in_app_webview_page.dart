@@ -17,6 +17,7 @@ import '../services/incoming_call_service.dart';
 import '../services/push_notification_bootstrap.dart';
 import 'grid_media_cache_service.dart';
 import 'grid_offline_outbox_service.dart';
+import 'grid_shell_pool.dart';
 import 'grid_web_snapshot.dart';
 
 /// Full-screen in-app WebView for Grid schema `openIn: inAppWebView`.
@@ -258,7 +259,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   StreamSubscription<OfflineOutboxAction>? _outboxSyncedSub;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   bool _showReelsTutorial = false;
+  bool _reelsTutorialScheduled = false;
   double _tutorialDragDistance = 0.0;
+  bool _isPopping = false;
 
   Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
 
@@ -313,6 +316,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   @override
   void initState() {
     super.initState();
+    _isPopping = false;
     GridInAppWebViewPage._activeState = this;
     if (widget.accessToken != null && widget.accessToken!.isNotEmpty) {
       GridOfflineOutboxService.instance.setDefaultBearerToken(widget.accessToken);
@@ -331,11 +335,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     });
     _initController();
     _setupPermissionsAndLoad();
-    _checkReelsTutorial();
   }
 
   @override
   void dispose() {
+    GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
     _outboxSyncedSub?.cancel();
     _connectivitySub?.cancel();
     if (!_showingSnapshot && _error == null) {
@@ -498,11 +502,22 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
             });
             if (!_showingSnapshot) {
               unawaited(_persistSnapshot());
+              unawaited(_checkAndRecoverOfflineChannels());
               // Schedule delayed snapshot capture after dynamic React/SPA rendering completes
               Future.delayed(const Duration(milliseconds: 2500), () {
                 if (mounted && !_showingSnapshot && _error == null) {
                   unawaited(_persistSnapshot());
                   unawaited(_injectGridBackButton());
+                  unawaited(_checkAndRecoverOfflineChannels());
+                }
+              });
+            }
+            if (!_reelsTutorialScheduled && _isCircleConnect) {
+              _reelsTutorialScheduled = true;
+              // Allow chats page to be visible to the user first before displaying the swipe hint
+              Future.delayed(const Duration(milliseconds: 1200), () {
+                if (mounted) {
+                  _checkReelsTutorial();
                 }
               });
             }
@@ -970,25 +985,121 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     return <String>[];
   }
 
+  void _safeExitToGrid() {
+    if (!mounted || _isPopping) return;
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      _isPopping = true;
+      nav.pop();
+    }
+  }
+
   Future<void> _handleBackPress() async {
+    if (_isPopping) return;
     final canGoBack = await _controller.canGoBack();
     if (canGoBack) {
       await _controller.goBack();
       return;
     }
-    if (!mounted) return;
-    Navigator.of(context).maybePop();
+    try {
+      final handledInWeb = await _tryCloseWebChatConversation();
+      if (handledInWeb) return;
+    } catch (_) {}
+    if (!mounted || _isPopping) return;
+    _safeExitToGrid();
   }
 
   Future<void> _handlePopScope(bool didPop) async {
-    if (didPop) return;
+    if (didPop || _isPopping) return;
     final canGoBack = await _controller.canGoBack();
     if (canGoBack) {
       await _controller.goBack();
       return;
     }
-    if (!mounted) return;
-    Navigator.of(context).pop();
+    try {
+      final handledInWeb = await _tryCloseWebChatConversation();
+      if (handledInWeb) return;
+    } catch (_) {}
+    if (!mounted || _isPopping) return;
+    _safeExitToGrid();
+  }
+
+  Future<bool> _tryCloseWebChatConversation() async {
+    try {
+      final result = await _controller.runJavaScriptReturningResult('''
+        (function() {
+          try {
+            // 1. Check if the GRID logo is visible at the top-left (this ONLY exists on the main Chats page!)
+            var hasVisibleGridLogo = false;
+            var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2');
+            for (var i = 0; i < all.length; i++) {
+              var el = all[i];
+              var txt = (el.innerText || el.textContent || '').trim();
+              if (txt === 'GRID' || txt === '::: GRID' || txt.indexOf('GRID') === 0) {
+                var rect = el.getBoundingClientRect();
+                if (rect.top >= 0 && rect.top < 100 && rect.left >= 0 && rect.left < 180 && rect.width > 0 && rect.height > 0) {
+                  hasVisibleGridLogo = true;
+                  break;
+                }
+              }
+            }
+
+            // If GRID logo is visible at the top left, we are DEFINITELY on the main Chats page!
+            if (hasVisibleGridLogo) {
+              return false;
+            }
+
+            // If GRID logo is NOT visible at top left, the user IS inside an open chat conversation!
+            // Click the green back arrow / header back button to return to the Chats list page
+            var selectors = [
+              'header [class*="back" i]',
+              'header button',
+              'header [aria-label*="back" i]',
+              'header [title*="back" i]',
+              'header svg',
+              'header a',
+              '.back-arrow',
+              '[class*="back-button" i]',
+              '[class*="back_button" i]',
+              '[class*="arrow-back" i]',
+              '[class*="arrow_back" i]'
+            ];
+            for (var j = 0; j < selectors.length; j++) {
+              var btn = document.querySelector(selectors[j]);
+              if (btn && typeof btn.click === 'function') {
+                var r = btn.getBoundingClientRect();
+                if (r.top >= 0 && r.top < 120 && r.left >= 0 && r.left < 160) {
+                  btn.click();
+                  return true;
+                }
+              }
+            }
+
+            // Click whatever element is at the top-left (the green back arrow)
+            var topEl = document.elementFromPoint(25, 30);
+            if (topEl) {
+              if (typeof topEl.click === 'function') {
+                topEl.click();
+              }
+              topEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              return true;
+            }
+
+            // Fallback to browser history back
+            if (window.history && window.history.length > 1) {
+              window.history.back();
+              return true;
+            }
+            return true;
+          } catch(e) {
+            return false;
+          }
+        })();
+      ''');
+      return result == true || result == 'true';
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _handlePlatformPermissionRequest(
@@ -1498,10 +1609,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
                   top: 0,
                   left: 0,
                   width: 120,
-                  height: 52,
+                  height: 54,
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
-                    onTap: _backToGrid,
+                    onTap: _handleTopLeftTap,
                   ),
                 ),
               if (_showReelsTutorial)
@@ -1513,9 +1624,20 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     );
   }
 
+  Future<void> _handleTopLeftTap() async {
+    if (!mounted || _isPopping) return;
+    try {
+      final handledInWeb = await _tryCloseWebChatConversation();
+      if (handledInWeb) {
+        return;
+      }
+    } catch (_) {}
+    if (!mounted || _isPopping) return;
+    _safeExitToGrid();
+  }
+
   void _backToGrid() {
-    if (!mounted) return;
-    Navigator.of(context).pop();
+    _safeExitToGrid();
   }
 
   Future<void> _injectGridBackButton() async {
@@ -1528,7 +1650,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       var txt = (el.innerText || el.textContent || '').trim();
       if (txt === 'GRID' || txt === '::: GRID' || txt.indexOf('GRID') === 0) {
         var rect = el.getBoundingClientRect();
-        if (rect.top >= 0 && rect.top < 80 && rect.left >= 0 && rect.left < 140) {
+        if (rect.top >= 0 && rect.top < 90 && rect.left >= 0 && rect.left < 160) {
           el.style.cursor = 'pointer';
           el.style.display = 'inline-flex';
           el.style.alignItems = 'center';
@@ -1586,7 +1708,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     if (!_isCircleConnect) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final seen = prefs.getBool('has_seen_circle_connect_reels_tutorial_v6') ?? false;
+      final seen = prefs.getBool('has_seen_circle_connect_reels_tutorial_v11') ?? false;
       if (!seen && mounted) {
         setState(() {
           _showReelsTutorial = true;
@@ -1602,6 +1724,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     });
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v11', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v10', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v9', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v8', true);
+      await prefs.setBool('has_seen_circle_connect_reels_tutorial_v7', true);
       await prefs.setBool('has_seen_circle_connect_reels_tutorial_v6', true);
       await prefs.setBool('has_seen_circle_connect_reels_tutorial_v5', true);
       await prefs.setBool('has_seen_circle_connect_reels_tutorial_v4', true);
@@ -1611,131 +1738,257 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     } catch (_) {}
   }
 
-  void _handleSwipeToReels() {
+  void _handleSwipeToReels({String direction = 'left'}) {
     _dismissReelsTutorial();
+    final js = '''
+(function() {
+  try {
+    var dir = '$direction';
+
+    // 1. Try finding and clicking any reels tab/button/icon in the web app
+    var selectors = [
+      '[data-tab="reels"]',
+      '[data-testid="reels-tab"]',
+      '[data-testid*="reels" i]',
+      '[data-testid*="reel" i]',
+      'a[href*="reel" i]',
+      'a[href*="video" i]',
+      'button[aria-label*="reel" i]',
+      'button[aria-label*="video" i]',
+      'button[title*="reel" i]',
+      '.reels-tab',
+      '.reels-button',
+      '.reels-nav',
+      '#reels',
+      '[class*="reels" i]'
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      if (el) {
+        try { el.click(); return; } catch(_) {}
+      }
+    }
+
+    var all = document.querySelectorAll('button, a, div[role="button"], span[role="button"], div, span');
+    for (var i = 0; i < all.length; i++) {
+      var txt = (all[i].innerText || all[i].textContent || '').trim().toLowerCase();
+      if (txt === 'reels' || txt === 'reel' || txt === 'watch reels' || txt === 'videos') {
+        try { all[i].click(); return; } catch(_) {}
+      }
+    }
+
+    // 2. Dispatch custom events for any SPA/React router listener
+    window.dispatchEvent(new CustomEvent('openReels', { bubbles: true }));
+    window.dispatchEvent(new CustomEvent('open-reels', { bubbles: true }));
+    window.dispatchEvent(new CustomEvent('swipe-to-reels', { bubbles: true, detail: { direction: dir } }));
+    document.dispatchEvent(new CustomEvent('swipe-to-reels', { bubbles: true, detail: { direction: dir } }));
+
+    // 3. Simulate realistic multi-step touch swipe inside the web page
+    var w = window.innerWidth || document.documentElement.clientWidth || 375;
+    var h = window.innerHeight || document.documentElement.clientHeight || 667;
+    var isLeft = dir === 'left';
+    var startX = Math.round(isLeft ? (w * 0.88) : (w * 0.12));
+    var endX = Math.round(isLeft ? (w * 0.12) : (w * 0.88));
+    var midY = Math.round(h * 0.45);
+
+    var target = document.elementFromPoint(startX, midY) ||
+                 document.querySelector('.chat-container, [class*="chat"], main, #root, body') ||
+                 document.body;
+
+    function createTouch(x, y) {
+      if (typeof Touch === 'function') {
+        try {
+          return new Touch({
+            identifier: 1,
+            target: target,
+            clientX: x,
+            clientY: y,
+            screenX: x,
+            screenY: y,
+            pageX: x,
+            pageY: y
+          });
+        } catch(_) {}
+      }
+      return {
+        identifier: 1,
+        target: target,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+        pageX: x,
+        pageY: y
+      };
+    }
+
+    var t0 = createTouch(startX, midY);
+    target.dispatchEvent(new TouchEvent('touchstart', {
+      touches: [t0],
+      targetTouches: [t0],
+      changedTouches: [t0],
+      bubbles: true,
+      cancelable: true
+    }));
+
+    var steps = 6;
+    for (var s = 1; s <= steps; s++) {
+      var currX = Math.round(startX + (endX - startX) * (s / steps));
+      var tStep = createTouch(currX, midY);
+      target.dispatchEvent(new TouchEvent('touchmove', {
+        touches: [tStep],
+        targetTouches: [tStep],
+        changedTouches: [tStep],
+        bubbles: true,
+        cancelable: true
+      }));
+    }
+
+    var tEnd = createTouch(endX, midY);
+    target.dispatchEvent(new TouchEvent('touchend', {
+      touches: [],
+      targetTouches: [],
+      changedTouches: [tEnd],
+      bubbles: true,
+      cancelable: true
+    }));
+
+    // 4. Also dispatch PointerEvents for pointer-based listeners
+    target.dispatchEvent(new PointerEvent('pointerdown', {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: startX,
+      clientY: midY,
+      bubbles: true,
+      cancelable: true
+    }));
+    target.dispatchEvent(new PointerEvent('pointermove', {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: endX,
+      clientY: midY,
+      bubbles: true,
+      cancelable: true
+    }));
+    target.dispatchEvent(new PointerEvent('pointerup', {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: endX,
+      clientY: midY,
+      bubbles: true,
+      cancelable: true
+    }));
+  } catch(e) {
+    console.error('Error forwarding swipe to reels:', e);
+  }
+})();
+''';
     try {
-      _controller.runJavaScript('''
-        (function() {
-          var evt = new CustomEvent('swipe-to-reels', { bubbles: true });
-          window.dispatchEvent(evt);
-          document.dispatchEvent(evt);
-        })();
-      ''');
+      _controller.runJavaScript(js);
     } catch (_) {}
   }
 
   Widget _buildReelsTutorialOverlay() {
     return Positioned.fill(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: (_) {
-          _tutorialDragDistance = 0.0;
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+        builder: (context, opacity, child) {
+          return Opacity(
+            opacity: opacity,
+            child: child,
+          );
         },
-        onHorizontalDragUpdate: (details) {
-          _tutorialDragDistance += details.delta.dx;
-        },
-        onHorizontalDragEnd: (details) {
-          // Detect swipe from left to right (either by velocity or drag displacement)
-          if ((details.primaryVelocity ?? 0) > 100 || _tutorialDragDistance > 50) {
-            _handleSwipeToReels();
-          }
-        },
-        child: Material(
-          color: Colors.black.withValues(alpha: 0.82),
-          child: Stack(
-            children: [
-              // Top-right 'skip' button (PLAYit style)
-              Positioned(
-                top: 18,
-                right: 18,
-                child: SafeArea(
-                  child: InkWell(
-                    onTap: _dismissReelsTutorial,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white70, width: 1.5),
-                      ),
-                      child: const Text(
-                        'skip',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) {
+            _tutorialDragDistance = 0.0;
+          },
+          onHorizontalDragUpdate: (details) {
+            _tutorialDragDistance += details.delta.dx;
+          },
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            // Detect swipe: swipe left (primary) or swipe right
+            final isSwipeLeft = velocity < -80 || _tutorialDragDistance < -30;
+            final isSwipeRight = velocity > 80 || _tutorialDragDistance > 30;
+            if (isSwipeLeft) {
+              _handleSwipeToReels(direction: 'left');
+            } else if (isSwipeRight) {
+              _handleSwipeToReels(direction: 'right');
+            }
+          },
+          child: Material(
+            // Translucent overlay so the loaded chats list remains visible underneath
+            color: Colors.black.withValues(alpha: 0.42),
+            child: Stack(
+              children: [
+                // Top-right 'skip' button
+                Positioned(
+                  top: 18,
+                  right: 18,
+                  child: SafeArea(
+                    child: InkWell(
+                      onTap: _dismissReelsTutorial,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white70, width: 1.5),
+                        ),
+                        child: const Text(
+                          'skip',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
 
-              // Center gesture demonstration
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                // Center gesture demonstration: Simple floating white arrow in reverse direction (pointing right)
+                Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Glowing circular badge with animated swipe-right hand gesture
+                      // The simple floating white arrow gliding right continuously
+                      const SizedBox(
+                        width: 240,
+                        height: 90,
+                        child: _SubwaySurfersSlidingArrow(),
+                      ),
+                      const SizedBox(height: 12),
+                      // Simple, clean pill badge
                       Container(
-                        width: 108,
-                        height: 108,
-                        clipBehavior: Clip.antiAlias,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.10),
+                          color: Colors.black.withValues(alpha: 0.45),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.35),
-                            width: 2,
+                            color: Colors.white.withValues(alpha: 0.20),
+                            width: 1.0,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              blurRadius: 28,
-                              spreadRadius: 3,
-                            ),
-                          ],
                         ),
-                        child: const Center(
-                          child: _AnimatedSwipeRightHand(),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Swipe Right',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'to watch Reels & Videos',
-                        style: TextStyle(
-                          color: Color(0xFF86EFAC),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Swipe your finger from left to right across the screen',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.70),
-                          fontSize: 13,
-                          height: 1.4,
+                        child: const Text(
+                          'Swipe for Reels',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.3,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1743,15 +1996,15 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   }
 }
 
-/// Looping swipe-from-left-to-right animated hand gesture
-class _AnimatedSwipeRightHand extends StatefulWidget {
-  const _AnimatedSwipeRightHand();
+/// Simple, continuous white arrow sliding in reverse direction (from left to right)
+class _SubwaySurfersSlidingArrow extends StatefulWidget {
+  const _SubwaySurfersSlidingArrow();
 
   @override
-  State<_AnimatedSwipeRightHand> createState() => _AnimatedSwipeRightHandState();
+  State<_SubwaySurfersSlidingArrow> createState() => _SubwaySurfersSlidingArrowState();
 }
 
-class _AnimatedSwipeRightHandState extends State<_AnimatedSwipeRightHand>
+class _SubwaySurfersSlidingArrowState extends State<_SubwaySurfersSlidingArrow>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _slideAnimation;
@@ -1760,12 +2013,13 @@ class _AnimatedSwipeRightHandState extends State<_AnimatedSwipeRightHand>
   @override
   void initState() {
     super.initState();
+    // Continuous loop
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1300),
     )..repeat();
 
-    // Horizontal sliding motion: from left (-0.35) across to right (+0.35)
+    // Glides continuously from left (-0.35) across to right (+0.35) in reverse direction
     _slideAnimation = Tween<Offset>(
       begin: const Offset(-0.35, 0.0),
       end: const Offset(0.35, 0.0),
@@ -1776,10 +2030,7 @@ class _AnimatedSwipeRightHandState extends State<_AnimatedSwipeRightHand>
       ),
     );
 
-    // Natural gesture fade:
-    // 0% -> 20%: touch down & fade in
-    // 20% -> 75%: visible while moving left-to-right
-    // 75% -> 100%: fade out & lift finger before looping
+    // Natural arcade swipe fade
     _fadeAnimation = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.0, end: 1.0)
@@ -1788,12 +2039,12 @@ class _AnimatedSwipeRightHandState extends State<_AnimatedSwipeRightHand>
       ),
       TweenSequenceItem(
         tween: ConstantTween<double>(1.0),
-        weight: 55,
+        weight: 60,
       ),
       TweenSequenceItem(
         tween: Tween<double>(begin: 1.0, end: 0.0)
             .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 25,
+        weight: 20,
       ),
     ]).animate(_controller);
   }
@@ -1810,14 +2061,70 @@ class _AnimatedSwipeRightHandState extends State<_AnimatedSwipeRightHand>
       opacity: _fadeAnimation,
       child: SlideTransition(
         position: _slideAnimation,
-        child: const Icon(
-          Icons.swipe_right_rounded,
-          size: 60,
-          color: Colors.white,
+        child: const Center(
+          child: CustomPaint(
+            size: Size(130, 60),
+            painter: _TransparentOutlineArrowPainter(),
+          ),
         ),
       ),
     );
   }
+}
+
+/// Crisp transparent outline arrow pointing right with luminous border
+class _TransparentOutlineArrowPainter extends CustomPainter {
+  const _TransparentOutlineArrowPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centerY = size.height / 2;
+    const totalWidth = 114.0;
+    const headHeight = 52.0;
+    const shaftHeight = 18.0;
+    const headLength = 46.0;
+    const barbDepth = 10.0;
+    final tailX = (size.width - totalWidth) / 2;
+    final tipX = tailX + totalWidth;
+
+    final path = Path()
+      ..moveTo(tailX, centerY - shaftHeight / 2)
+      ..lineTo(tipX - headLength + barbDepth, centerY - shaftHeight / 2)
+      ..lineTo(tipX - headLength, centerY - headHeight / 2)
+      ..lineTo(tipX, centerY)
+      ..lineTo(tipX - headLength, centerY + headHeight / 2)
+      ..lineTo(tipX - headLength + barbDepth, centerY + shaftHeight / 2)
+      ..lineTo(tailX, centerY + shaftHeight / 2)
+      ..close();
+
+    // Subtle frosted interior (transparent so chats are completely visible through the arrow body)
+    final fillPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.10)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, fillPaint);
+
+    // Soft luminous outer glow
+    final glowPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.40)
+      ..strokeWidth = 6.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    canvas.drawPath(path, glowPaint);
+
+    // Sharp white outline border
+    final strokePaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 3.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, strokePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 

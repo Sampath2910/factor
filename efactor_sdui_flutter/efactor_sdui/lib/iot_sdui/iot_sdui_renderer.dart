@@ -83,6 +83,58 @@ class IotSduiRenderer {
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: <Widget>[
+              if (state.isShowingCachedData)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    pagePadding.left,
+                    pagePadding.top > 0 ? pagePadding.top / 2 : 8,
+                    pagePadding.right,
+                    8,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .errorContainer
+                            .withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .error
+                              .withValues(alpha: 0.4),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.cloud_off_outlined,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              state.lastWarning ??
+                                  'Showing saved offline data (server unavailable)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.error,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
                   pagePadding.left,
@@ -289,6 +341,56 @@ class IotSduiRenderer {
               onPressed: () => state.clearSearchQuery(),
               icon: const Icon(Icons.clear, size: 16),
               label: const Text('Clear search'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyGridState(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.devices_outlined,
+                  size: 28,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'No devices found',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'No connected IoT devices are currently available for this account.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextButton.icon(
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Refresh devices'),
             ),
           ],
         ),
@@ -825,7 +927,7 @@ class IotSduiRenderer {
           if (state.isSearchVisible && state.searchQuery.trim().isNotEmpty) {
             return _buildEmptySearchState(context, state.searchQuery.trim());
           }
-          return const SizedBox.shrink();
+          return _buildEmptyGridState(context);
         }
 
         // Render in symmetric rows with IntrinsicHeight so all cards in a row

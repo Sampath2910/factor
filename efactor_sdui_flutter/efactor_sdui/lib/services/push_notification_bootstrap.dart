@@ -1,17 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 
 import 'incoming_call_service.dart';
 import 'json_http.dart';
+import '../auth_sdui/auth_secure_storage.dart';
 
 /// Call notification channel configured with system default ringtone and USAGE_NOTIFICATION_RINGTONE.
 const AndroidNotificationChannel kCallsChannel = AndroidNotificationChannel(
@@ -118,13 +119,18 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   await android?.createNotificationChannel(kMessagesChannel);
   await android?.createNotificationChannel(kCallsChannel);
 
-  final isCall = type == 'INCOMING_CALL' ||
-      type == 'CALL' ||
-      type == 'CALL_REQUEST' ||
-      type == 'RINGING' ||
-      type == 'VOIP_CALL' ||
-      data.containsKey('caller_name') ||
-      data.containsKey('callerName');
+  final isChatMessage = type == 'CHAT_MESSAGE' ||
+      type == 'MESSAGE' ||
+      type == 'NEW_MESSAGE';
+
+  final isCall = !isChatMessage &&
+      (type == 'INCOMING_CALL' ||
+          type == 'CALL' ||
+          type == 'CALL_REQUEST' ||
+          type == 'RINGING' ||
+          type == 'VOIP_CALL' ||
+          data.containsKey('call_id') ||
+          data.containsKey('callId'));
 
   if (isCall) {
     final call = IncomingCallData.fromJson(data);
@@ -593,6 +599,50 @@ class PushNotificationBootstrap {
       logDebug('[PushBootstrap] getInitialMessage error: $e');
     }
 
+    try {
+      final launchDetails = await _local.getNotificationAppLaunchDetails();
+      if (launchDetails != null &&
+          launchDetails.didNotificationLaunchApp &&
+          launchDetails.notificationResponse != null) {
+        logDebug(
+          '[PushBootstrap] App launched from notification action: '
+          '${launchDetails.notificationResponse?.actionId} '
+          'payload: ${launchDetails.notificationResponse?.payload}',
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _handleNotificationResponse(launchDetails.notificationResponse!);
+        });
+      }
+    } catch (e) {
+      logDebug('[PushBootstrap] getNotificationAppLaunchDetails error: $e');
+    }
+
+    try {
+      if (IncomingCallService.instance.activeAccessToken == null) {
+        final session = await AuthSecureStorage().readSession();
+        final token = session['accessToken'];
+        final uid = session['userId'];
+        if (token != null && token.isNotEmpty) {
+          IncomingCallService.instance.activeAccessToken = token;
+          if (uid != null) {
+            IncomingCallService.instance.activeUserId = int.tryParse(uid);
+          }
+          final fcmToken = IncomingCallService.instance.deviceToken;
+          if (fcmToken != null && fcmToken.isNotEmpty && uid != null) {
+            unawaited(
+              IncomingCallService.instance.syncDeviceTokenOnLogin(
+                userId: uid,
+                accessToken: token,
+                tokenOverride: fcmToken,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      logDebug('[PushBootstrap] Cold start session restore error: $e');
+    }
+
     _ready = true;
     logDebug('[PushBootstrap] READY');
   }
@@ -738,18 +788,27 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
 ========================================================================
 ''');
 
-    final isCall = type == 'INCOMING_CALL' ||
-        type == 'CALL' ||
-        type == 'CALL_REQUEST' ||
-        type == 'RINGING' ||
-        type == 'VOIP_CALL' ||
-        data.containsKey('caller_name') ||
-        data.containsKey('callerName');
+    final isChatMessage = type == 'CHAT_MESSAGE' ||
+        type == 'MESSAGE' ||
+        type == 'NEW_MESSAGE';
+
+    final isCall = !isChatMessage &&
+        (type == 'INCOMING_CALL' ||
+            type == 'CALL' ||
+            type == 'CALL_REQUEST' ||
+            type == 'RINGING' ||
+            type == 'VOIP_CALL' ||
+            data.containsKey('call_id') ||
+            data.containsKey('callId'));
 
     if (isCall) {
       final call = IncomingCallData.fromJson(data);
       IncomingCallService.instance.handleIncomingPayload(data);
-      unawaited(showIncomingCallNotification(call));
+      // Avoid double incoming screen: if Circle Connect is already open and ringing
+      // for this callId, do not post a duplicate heads-up notification.
+      if (!IncomingCallService.instance.isCallRingingInWeb(call.callId)) {
+        unawaited(showIncomingCallNotification(call));
+      }
       return;
     }
     if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
