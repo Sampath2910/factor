@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../sdui/sdui_network_image_cache.dart';
 import '../services/json_http.dart';
@@ -27,6 +28,8 @@ class GridSchemaRepository {
         'https://efactor.tech/v8/grid_api_creation.php?action=get_grid&user_id={userId}',
   );
 
+  static const Duration _freshCacheRevalidateAfter = Duration(minutes: 15);
+
   final String accessToken;
   final int? userId;
   final http.Client _client;
@@ -38,6 +41,21 @@ class GridSchemaRepository {
       <String, Future<Map<String, dynamic>>>{};
 
   String get _cacheKey => 'user_${userId ?? 0}';
+
+  static bool isFreshCache(Map<String, dynamic> schema) {
+    if (schema['_clientGridSchemaCacheHit'] != true) return false;
+    final raw = schema['_clientGridSchemaCachedAtMs'];
+    final savedAtMs = raw is int
+        ? raw
+        : raw is num
+            ? raw.toInt()
+            : int.tryParse(raw?.toString() ?? '');
+    if (savedAtMs == null) return false;
+    return DateTime.now().difference(
+          DateTime.fromMillisecondsSinceEpoch(savedAtMs),
+        ) <
+        _freshCacheRevalidateAfter;
+  }
 
   Future<Map<String, dynamic>> load({bool forceRefresh = false}) async {
     final token = accessToken.trim();
@@ -77,6 +95,10 @@ class GridSchemaRepository {
     try {
       final key = 'efactor.grid.server_schema.v1.user_${userId ?? 0}.json';
       await SchemaDiskCache.remove(key);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('$key.savedAt');
+      } catch (_) {}
       logDebug('[GRID_SDUI][FETCH_SCHEMA] Cleared Grid schema cache for user=$userId');
     } catch (e) {
       logDebug('[GRID_SDUI][FETCH_SCHEMA] Failed to clear Grid cache: $e');
@@ -143,6 +165,7 @@ class GridSchemaRepository {
       final schema = await _decode(raw, sourceName: 'asset://assets/branding/grid.json');
       schema['_clientGridSchemaSource'] = 'asset://assets/branding/grid.json';
       schema['_clientGridSchemaCacheHit'] = true;
+      schema['_clientGridSchemaCachedAtMs'] = 0;
       assignClientHash(schema, '_clientGridSchemaHash', rawSource: raw);
       return schema;
     } catch (e) {
@@ -158,6 +181,13 @@ class GridSchemaRepository {
       final schema = await _decode(raw, sourceName: 'disk://$_diskCacheFileName');
       schema['_clientGridSchemaSource'] = 'disk://$_diskCacheFileName';
       schema['_clientGridSchemaCacheHit'] = true;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final savedAt = prefs.getInt('$_diskCacheFileName.savedAt');
+        if (savedAt != null) {
+          schema['_clientGridSchemaCachedAtMs'] = savedAt;
+        }
+      } catch (_) {}
       assignClientHash(schema, '_clientGridSchemaHash', rawSource: raw);
       return schema;
     } catch (e) {
@@ -169,6 +199,13 @@ class GridSchemaRepository {
   Future<void> _writeDiskCache(String raw) async {
     try {
       await SchemaDiskCache.writeString(_diskCacheFileName, raw);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(
+          '$_diskCacheFileName.savedAt',
+          DateTime.now().millisecondsSinceEpoch,
+        );
+      } catch (_) {}
       await LocalSchemaManifest.record(
         schemaKey: 'grid:${userId ?? 0}',
         schemaType: 'grid',
@@ -183,6 +220,8 @@ class GridSchemaRepository {
 
   Future<void> saveToCache(Map<String, dynamic> schema) async {
     final raw = jsonEncode(schema);
+    schema['_clientGridSchemaCachedAtMs'] =
+        DateTime.now().millisecondsSinceEpoch;
     _memoryCache[_cacheKey] = schema;
     await _writeDiskCache(raw);
     unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
@@ -213,7 +252,24 @@ class GridSchemaRepository {
             false;
     final effectiveForceFull = forceFull || isAsset;
 
+    final hasDeltaEndpoints = cached['metadataEndpoint'] != null ||
+        cached['deltaEndpoint'] != null;
+
     try {
+      if (effectiveForceFull || !hasDeltaEndpoints) {
+        final full = await _loadLive(forceRefresh: true);
+        final changed =
+            schemaFingerprint(cached) != schemaFingerprint(full);
+        return SchemaSyncResult(
+          schema: changed ? full : cached,
+          changed: changed,
+          usedDelta: false,
+          source: effectiveForceFull
+              ? 'full-forced'
+              : (changed ? 'full-changed' : 'full-unchanged'),
+        );
+      }
+
       return await SchemaIncrementalSync.revalidate(
         client: _client,
         localSchema: cached,
@@ -223,6 +279,8 @@ class GridSchemaRepository {
         logTag: 'GridSchemaSync',
         persist: (schema) async {
           schema['_clientGridSchemaCacheHit'] = true;
+          schema['_clientGridSchemaCachedAtMs'] =
+              DateTime.now().millisecondsSinceEpoch;
           assignClientHash(schema, '_clientGridSchemaHash');
           await saveToCache(schema);
         },
@@ -330,6 +388,8 @@ class GridSchemaRepository {
 
     schema['_clientGridSchemaSource'] = _redactUri(uri).toString();
     schema['_clientGridSchemaCacheHit'] = false;
+    schema['_clientGridSchemaCachedAtMs'] =
+        DateTime.now().millisecondsSinceEpoch;
     assignClientHash(schema, '_clientGridSchemaHash', rawSource: response.body);
     _memoryCache[_cacheKey] = schema;
     // Await disk write so offline open after first visit is reliable.

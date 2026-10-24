@@ -690,6 +690,16 @@ class PushNotificationBootstrap {
     }
     await requestNotificationPermission();
     try {
+      if (!kIsWeb && Platform.isIOS) {
+        // iOS requires APNs token to be acquired first before FCM token can be generated
+        int retries = 0;
+        while (retries < 6) {
+          final apns = await FirebaseMessaging.instance.getAPNSToken();
+          if (apns != null && apns.isNotEmpty) break;
+          await Future<void>.delayed(const Duration(milliseconds: 1000));
+          retries++;
+        }
+      }
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
         IncomingCallService.instance.setDeviceToken(token);
@@ -723,6 +733,15 @@ curl -X POST "https://fcm.googleapis.com/fcm/send" \\
 
   Future<void> _captureToken(FirebaseMessaging messaging) async {
     try {
+      if (!kIsWeb && Platform.isIOS) {
+        int retries = 0;
+        while (retries < 6) {
+          final apns = await messaging.getAPNSToken();
+          if (apns != null && apns.isNotEmpty) break;
+          await Future<void>.delayed(const Duration(milliseconds: 1000));
+          retries++;
+        }
+      }
       final token = await messaging.getToken();
       if (token != null && token.isNotEmpty) {
         IncomingCallService.instance.setDeviceToken(token);

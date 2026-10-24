@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'push_diagnostic_sheet.dart';
+
 /// Helper to request WhatsApp-like incoming call & floating banner permissions on Android.
 class CallPermissionHelper {
   CallPermissionHelper._();
@@ -213,15 +215,28 @@ class CallPermissionHelper {
                 ),
               ),
               const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.of(sheetContext).pop(),
-                  child: const Text(
-                    'Later',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.troubleshoot, size: 16, color: Color(0xFF38BDF8)),
+                    label: const Text(
+                      'Push Diagnostics',
+                      style: TextStyle(color: Color(0xFF38BDF8), fontSize: 13),
+                    ),
+                    onPressed: () {
+                      Navigator.of(sheetContext).pop();
+                      PushDiagnosticSheet.show(context);
+                    },
                   ),
-                ),
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    child: const Text(
+                      'Later',
+                      style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

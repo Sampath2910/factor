@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:efactor_sdui/grid_sdui/grid_in_app_webview_page.dart';
 import 'package:efactor_sdui/grid_sdui/grid_schema_repository.dart';
@@ -361,6 +362,93 @@ void main() {
       expect(stripped, contains('<div>Content</div>'));
       expect(stripped.contains('tailwindcss.com'), isFalse);
       expect(stripped.contains('<script'), isFalse);
+    });
+  });
+
+  group('Grid SDUI Live Schema Fetching and Revalidation', () {
+    test('isFreshCache accurately assesses schema age', () {
+      final assetSchema = <String, dynamic>{
+        '_clientGridSchemaCacheHit': true,
+        '_clientGridSchemaCachedAtMs': 0,
+      };
+      expect(GridSchemaRepository.isFreshCache(assetSchema), isFalse);
+
+      final freshSchema = <String, dynamic>{
+        '_clientGridSchemaCacheHit': true,
+        '_clientGridSchemaCachedAtMs': DateTime.now().millisecondsSinceEpoch,
+      };
+      expect(GridSchemaRepository.isFreshCache(freshSchema), isTrue);
+
+      final oldSchema = <String, dynamic>{
+        '_clientGridSchemaCacheHit': true,
+        '_clientGridSchemaCachedAtMs':
+            DateTime.now().subtract(const Duration(minutes: 20)).millisecondsSinceEpoch,
+      };
+      expect(GridSchemaRepository.isFreshCache(oldSchema), isFalse);
+    });
+
+    test('revalidate() detects server updates and returns changed: true', () async {
+      final initialSchema = <String, dynamic>{
+        'schemaVersion': '1.0.0',
+        'page': <String, dynamic>{'title': 'Initial Grid'},
+        'components': <String, dynamic>{},
+        '_clientGridSchemaCacheHit': true,
+        '_clientGridSchemaHash': 'initial_hash_1',
+      };
+
+      final updatedServerSchema = <String, dynamic>{
+        'schemaVersion': '1.0.1',
+        'page': <String, dynamic>{'title': 'Updated Live Grid from Web'},
+        'components': <String, dynamic>{},
+      };
+
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode(updatedServerSchema),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final repo = GridSchemaRepository(
+        accessToken: 'token_abc',
+        userId: 88888,
+        client: mockClient,
+      );
+
+      // Seed memory cache
+      await repo.saveToCache(initialSchema);
+
+      final result = await repo.revalidate(forceFull: true);
+      expect(result.changed, isTrue);
+      expect(result.schema['schemaVersion'], '1.0.1');
+      expect(result.schema['page']['title'], 'Updated Live Grid from Web');
+    });
+
+    test('revalidate() retains cache and returns changed: false on server 500 error', () async {
+      final cachedSchema = <String, dynamic>{
+        'schemaVersion': '1.0.0',
+        'page': <String, dynamic>{'title': 'Existing Offline Grid'},
+        'components': <String, dynamic>{},
+        '_clientGridSchemaCacheHit': true,
+      };
+
+      final serverErrorClient = MockClient((request) async {
+        return http.Response('Internal Server Error', 500);
+      });
+
+      final repo = GridSchemaRepository(
+        accessToken: 'token_abc',
+        userId: 88887,
+        client: serverErrorClient,
+      );
+
+      await repo.saveToCache(cachedSchema);
+
+      final result = await repo.revalidate(forceFull: true);
+      expect(result.changed, isFalse);
+      expect(result.source, 'offline-cache-retained');
+      expect(result.schema['page']['title'], 'Existing Offline Grid');
     });
   });
 }

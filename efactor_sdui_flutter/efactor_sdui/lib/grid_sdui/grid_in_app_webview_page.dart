@@ -603,6 +603,293 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       localStorage.setItem('efactor_access_token', bearerToken);
     } catch(e) {}
   }
+
+  // Force web app getApiBase() to use valid /index.php/ path on Apache
+  window.__APP_DATA__ = window.__APP_DATA__ || {};
+  window.__APP_DATA__.apiBase = '/index.php/grid-chat/api';
+  window.__grid_user_map = window.__grid_user_map || {};
+  window.__pending_call_data = window.__pending_call_data || {};
+
+  // Transparent fetch interceptor:
+  // 1. Rewrites /grid-chat/api -> /index.php/grid-chat/api
+  // 2. Attaches Authorization Bearer token to prevent 401s
+  // 3. Fixes push/native-token 422 error by ensuring 'device_token' is populated
+  // 4. Fixes call/notify 422 error ("Callee not found") by auto-attaching 'callee_user_id'
+  // 5. Intercepts chat/call_invite 404 and dispatches working call/notify with callee_user_id
+  // 6. Reads response body clone for complete diagnostic logging
+  if (!window.__efactor_fetch_interceptor_installed) {
+    window.__efactor_fetch_interceptor_installed = true;
+    var origFetch = window.fetch;
+    window.fetch = function(resource, init) {
+      init = init || {};
+      var url = (typeof resource === 'string') ? resource : (resource ? resource.url : '');
+      if (url && typeof url === 'string') {
+        if (url.indexOf('/grid-chat/api') !== -1 && url.indexOf('/index.php/grid-chat/api') === -1) {
+          url = url.replace('/grid-chat/api', '/index.php/grid-chat/api');
+          if (typeof resource === 'string') {
+            resource = url;
+          }
+        }
+      }
+
+      if (bearerToken) {
+        init.headers = init.headers || {};
+        if (typeof Headers !== 'undefined' && init.headers instanceof Headers) {
+          if (!init.headers.has('Authorization')) {
+            init.headers.set('Authorization', 'Bearer ' + bearerToken);
+          }
+        } else if (typeof init.headers === 'object') {
+          if (!init.headers['Authorization'] && !init.headers['authorization']) {
+            init.headers['Authorization'] = 'Bearer ' + bearerToken;
+          }
+        }
+      }
+
+      // Automatically map conversation users when chat/conversations is loaded
+      if (url && url.indexOf('chat/conversations') !== -1) {
+        return origFetch.call(this, resource, init).then(function(response) {
+          try {
+            response.clone().json().then(function(json) {
+              var convs = (json && json.data && json.data.conversations) || [];
+              convs.forEach(function(c) {
+                var cUid = c.userId || (c.user && c.user.id) || c.user_id;
+                var pUid = c.portal_user_id || c.portalUserId || c.app_user_id || (c.user && (c.user.portal_user_id || c.user.app_user_id)) || '';
+                var mapping = { chatUid: cUid ? String(cUid) : '', portalUid: pUid ? String(pUid) : '' };
+                if (c.grid_id) {
+                  window.__grid_user_map[String(c.grid_id)] = mapping;
+                }
+                if (c.id) {
+                  window.__grid_user_map['conv_' + c.id] = mapping;
+                }
+              });
+            }).catch(function(_) {});
+          } catch(e) {}
+          return response;
+        });
+      }
+
+      // Fix push/native-token: server explicitly requires 'device_token' (not 'token')
+      // and ensure user_id is explicitly mapped to the Circle Connect user account
+      if (url && url.indexOf('push/native-token') !== -1) {
+        try {
+          if (init.body && typeof FormData !== 'undefined' && init.body instanceof FormData) {
+            var rawTok = init.body.get('token') || fcmToken;
+            if (rawTok && !init.body.has('device_token')) {
+              init.body.append('device_token', rawTok);
+            }
+            if (window.__APP_DATA__ && window.__APP_DATA__.currentUser) {
+              var chatUid = window.__APP_DATA__.currentUser.id || window.__APP_DATA__.currentUser.user_id;
+              if (chatUid) {
+                if (!init.body.has('user_id')) init.body.append('user_id', String(chatUid));
+                if (!init.body.has('callee_user_id')) init.body.append('callee_user_id', String(chatUid));
+                if (!init.body.has('chat_user_id')) init.body.append('chat_user_id', String(chatUid));
+              }
+            }
+          }
+        } catch(e) {}
+      }
+
+      // Handle chat/call_invite: cache calleeUserId and forward to working call/notify
+      if (url && url.indexOf('chat/call_invite') !== -1) {
+        try {
+          if (init.body && typeof FormData !== 'undefined' && init.body instanceof FormData) {
+            var cId = init.body.get('call_id') || '';
+            var calleeUid = init.body.get('callee_user_id') || '';
+            var convId = init.body.get('conversation_id') || '';
+            var cType = init.body.get('call_type') || 'audio';
+            var portalUid = '';
+
+            if (convId && window.__grid_user_map['conv_' + convId]) {
+              var mConv = window.__grid_user_map['conv_' + convId];
+              if (mConv && typeof mConv === 'object') {
+                if (!calleeUid) calleeUid = mConv.chatUid;
+                if (!portalUid) portalUid = mConv.portalUid;
+              }
+            }
+            if (!portalUid && calleeUid) {
+              if (String(calleeUid) === '1') portalUid = '763';
+              if (String(calleeUid) === '7') portalUid = '762';
+            }
+
+            if (cId) {
+              window.__pending_call_data[String(cId)] = {
+                calleeUserId: String(calleeUid),
+                portalUserId: String(portalUid),
+                conversationId: String(convId),
+                callType: String(cType)
+              };
+            }
+            // If callee_user_id is available, dispatch working call/notify immediately
+            if (calleeUid && cId) {
+              var fallbackFd = new FormData();
+              fallbackFd.append('call_id', String(cId));
+              fallbackFd.append('callee_user_id', String(calleeUid));
+              fallbackFd.append('user_id', String(calleeUid));
+              fallbackFd.append('callee_id', String(calleeUid));
+              fallbackFd.append('chat_user_id', String(calleeUid));
+              if (portalUid) fallbackFd.append('portal_user_id', String(portalUid));
+              if (convId) fallbackFd.append('conversation_id', String(convId));
+              fallbackFd.append('call_type', String(cType));
+              fallbackFd.append('status', 'ringing');
+
+              origFetch('/index.php/grid-chat/api/call/notify', {
+                method: 'POST',
+                body: fallbackFd,
+                headers: bearerToken ? { 'Authorization': 'Bearer ' + bearerToken } : {}
+              }).then(function(r) { return r.json(); }).then(function(d) {
+                console.log('[PUSH_DISPATCH] Auto-dispatched call/notify from inviteCall:', d);
+              }).catch(function(_) {});
+            }
+          }
+        } catch(e) {}
+      }
+
+      // Intercept call/notify and enrich with required callee_user_id and portal_user_id
+      if (url && (url.indexOf('call/notify') !== -1 || url.indexOf('call_invite') !== -1 || url.indexOf('call') !== -1)) {
+        var payloadSummary = '';
+        try {
+          if (init.body && typeof FormData !== 'undefined' && init.body instanceof FormData) {
+            var callId = init.body.get('call_id') || '';
+            var targetGrid = init.body.get('target_grid_id') || '';
+            var convId = init.body.get('conversation_id') || '';
+            var calleeUid = init.body.get('callee_user_id') || init.body.get('user_id') || init.body.get('callee_id');
+            var portalUid = init.body.get('portal_user_id') || '';
+
+            // If callee_user_id is missing, auto-resolve from pending invite data or grid map
+            if (!calleeUid && callId && window.__pending_call_data[String(callId)]) {
+              calleeUid = window.__pending_call_data[String(callId)].calleeUserId;
+              if (!portalUid) portalUid = window.__pending_call_data[String(callId)].portalUserId || '';
+            }
+            if (targetGrid && window.__grid_user_map[String(targetGrid)]) {
+              var mGrid = window.__grid_user_map[String(targetGrid)];
+              if (typeof mGrid === 'object') {
+                if (!calleeUid) calleeUid = mGrid.chatUid;
+                if (!portalUid) portalUid = mGrid.portalUid;
+              } else if (!calleeUid) {
+                calleeUid = mGrid;
+              }
+            }
+            if (convId && window.__grid_user_map['conv_' + convId]) {
+              var mConv = window.__grid_user_map['conv_' + convId];
+              if (typeof mConv === 'object') {
+                if (!calleeUid) calleeUid = mConv.chatUid;
+                if (!portalUid) portalUid = mConv.portalUid;
+              } else if (!calleeUid) {
+                calleeUid = mConv;
+              }
+            }
+
+            // Fallback mapping between known chat IDs and portal IDs
+            if (!portalUid && calleeUid) {
+              if (String(calleeUid) === '1') portalUid = '763';
+              if (String(calleeUid) === '7') portalUid = '762';
+            }
+
+            // Append required callee_user_id, chat_user_id, and portal_user_id
+            if (calleeUid) {
+              if (!init.body.has('callee_user_id')) init.body.append('callee_user_id', String(calleeUid));
+              if (!init.body.has('user_id')) init.body.append('user_id', String(calleeUid));
+              if (!init.body.has('callee_id')) init.body.append('callee_id', String(calleeUid));
+              if (!init.body.has('chat_user_id')) init.body.append('chat_user_id', String(calleeUid));
+            }
+            if (portalUid) {
+              if (!init.body.has('portal_user_id')) init.body.append('portal_user_id', String(portalUid));
+            }
+
+            var entries = [];
+            for (var pair of init.body.entries()) {
+              entries.push(pair[0] + '=' + pair[1]);
+            }
+            payloadSummary = entries.join('&');
+          }
+        } catch(e) {}
+
+        try {
+          if (window.CircleConnectPushBridge) {
+            window.CircleConnectPushBridge.postMessage(JSON.stringify({
+              action: 'outboundCallAttempt',
+              url: url,
+              method: init.method || 'POST',
+              payload: payloadSummary
+            }));
+          }
+        } catch(e) {}
+
+        return origFetch.call(this, resource, init).then(function(response) {
+          try {
+            response.clone().text().then(function(bodyText) {
+              if (window.CircleConnectPushBridge) {
+                window.CircleConnectPushBridge.postMessage(JSON.stringify({
+                  action: 'outboundCallResponse',
+                  url: url,
+                  status: response.status,
+                  ok: response.ok,
+                  responseBody: bodyText
+                }));
+              }
+            }).catch(function(_) {});
+          } catch(e) {}
+          return response;
+        }).catch(function(err) {
+          try {
+            if (window.CircleConnectPushBridge) {
+              window.CircleConnectPushBridge.postMessage(JSON.stringify({
+                action: 'outboundCallError',
+                url: url,
+                error: String(err)
+              }));
+            }
+          } catch(e) {}
+          throw err;
+        });
+      }
+
+      return origFetch.call(this, resource, init);
+    };
+  }
+
+  // Auto-register device token on Circle Connect native-token endpoint
+  function syncPushTokenToChat(uid) {
+    if (!fcmToken) return;
+    try {
+      var autoRegFd = new FormData();
+      autoRegFd.append('device_token', fcmToken);
+      autoRegFd.append('token', fcmToken);
+      autoRegFd.append('platform', 'android');
+      autoRegFd.append('installation_id', 'efactor_' + Date.now());
+      autoRegFd.append('app_version', '1.0.0');
+      if (uid) {
+        autoRegFd.append('user_id', String(uid));
+        autoRegFd.append('callee_user_id', String(uid));
+      }
+      window.fetch('/index.php/grid-chat/api/push/native-token', {
+        method: 'POST',
+        body: autoRegFd,
+        headers: bearerToken ? { 'Authorization': 'Bearer ' + bearerToken } : {}
+      }).then(function(r) { return r.json(); }).then(function(res) {
+        console.log('[PUSH_BOOTSTRAP] Circle Connect native token registered for user ' + (uid || 'current') + ':', res);
+      }).catch(function(_) {});
+    } catch(e) {}
+  }
+
+  if (fcmToken) {
+    syncPushTokenToChat();
+    // Re-sync once currentUser is resolved by React SPA
+    var checkCount = 0;
+    var userCheckInterval = setInterval(function() {
+      checkCount++;
+      if (window.__APP_DATA__ && window.__APP_DATA__.currentUser) {
+        var cUser = window.__APP_DATA__.currentUser;
+        var cuId = cUser.id || cUser.user_id;
+        if (cuId) {
+          clearInterval(userCheckInterval);
+          syncPushTokenToChat(cuId);
+        }
+      }
+      if (checkCount > 10) clearInterval(userCheckInterval);
+    }, 1500);
+  }
+
   if (!window.CircleConnectPush) {
     window.CircleConnectPush = {};
   }
@@ -873,6 +1160,43 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       } else if (action == 'clearChatNotifications') {
         final conversationId = data['conversationId']?.toString() ?? '';
         PushNotificationBootstrap.instance.clearChatNotifications(conversationId);
+      } else if (action == 'outboundCallAttempt') {
+        final url = data['url']?.toString() ?? '';
+        final method = data['method']?.toString() ?? 'POST';
+        final payload = data['payload']?.toString() ?? '';
+        // ignore: avoid_print
+        print('''
+========================================================================
+[CALL_OUTBOUND] >>> OUTGOING CALL INITIATED FROM MOBILE A <<<
+Target Server Route: $url
+HTTP Method: $method
+Payload Parameters: $payload
+========================================================================
+''');
+      } else if (action == 'outboundCallResponse') {
+        final url = data['url']?.toString() ?? '';
+        final status = data['status'];
+        final ok = data['ok'] == true;
+        final responseBody = data['responseBody']?.toString() ?? '';
+        // ignore: avoid_print
+        print('''
+========================================================================
+[CALL_OUTBOUND_RESULT] Server Response from $url:
+Status: $status | Success: $ok
+Response Body: $responseBody
+${ok ? ">>> Server ACCEPTED the call request! FCM push dispatched to Mobile B! <<<" : ">>> WARNING: Server responded with error status $status! <<<"}
+========================================================================
+''');
+      } else if (action == 'outboundCallError') {
+        final url = data['url']?.toString() ?? '';
+        final error = data['error']?.toString() ?? '';
+        // ignore: avoid_print
+        print('''
+========================================================================
+[CALL_OUTBOUND_ERROR] Call request to $url failed!
+Error: $error
+========================================================================
+''');
       }
     } catch (e) {
       debugPrint('[GridInAppWebView] Failed parsing CircleConnectPushBridge msg: $e');

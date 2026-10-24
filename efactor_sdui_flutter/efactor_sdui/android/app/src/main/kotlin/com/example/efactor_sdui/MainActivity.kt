@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.WindowManager
 import android.webkit.CookieManager
 import io.flutter.embedding.android.FlutterActivity
@@ -36,6 +37,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun wakeAndUnlock() {
+        Log.i("FCM_DEBUG", "[NATIVE_WAKE] MainActivity.wakeAndUnlock() triggered: turning screen ON & dismissing keyguard")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
