@@ -369,13 +369,75 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     return method.isEmpty ? null : method;
   }
 
-  double _progressPercent() {
+  double? _evaluateFormula(String formula, Map<String, double> variables) {
+    try {
+      var expr = formula.replaceAll(' ', '');
+      for (final entry in variables.entries) {
+        expr = expr.replaceAll(entry.key, entry.value.toString());
+      }
+      final reg1 = RegExp(
+        r'\(\((\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)\)\/(\d+(?:\.\d+)?)\)\*(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)',
+      );
+      final m1 = reg1.firstMatch(expr);
+      if (m1 != null) {
+        final a = double.parse(m1.group(1)!);
+        final b = double.parse(m1.group(2)!);
+        final c = double.parse(m1.group(3)!);
+        final d = double.parse(m1.group(4)!);
+        final e = double.parse(m1.group(5)!);
+        if (c > 0) {
+          return ((a + b) / c) * d + e;
+        }
+      }
+      final reg2 = RegExp(
+        r'\(?\(?(\d+(?:\.\d+)?)\)?\/(\d+(?:\.\d+)?)\)?\*(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)',
+      );
+      final m2 = reg2.firstMatch(expr);
+      if (m2 != null) {
+        final a = double.parse(m2.group(1)!);
+        final c = double.parse(m2.group(2)!);
+        final d = double.parse(m2.group(3)!);
+        final e = double.parse(m2.group(4)!);
+        if (c > 0) {
+          return (a / c) * d + e;
+        }
+      }
+      final reg3 = RegExp(
+        r'\(?(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)\)?\*(\d+(?:\.\d+)?)',
+      );
+      final m3 = reg3.firstMatch(expr);
+      if (m3 != null) {
+        final a = double.parse(m3.group(1)!);
+        final b = double.parse(m3.group(2)!);
+        final c = double.parse(m3.group(3)!);
+        if (b > 0) {
+          return (a / b) * c;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  double _progressPercent([Map<String, dynamic>? percentFrom]) {
+    final formula = percentFrom?['fallbackFormula']?.toString().trim();
     final progress = _contract['progressMap'] as List? ?? const <dynamic>[];
-    if (progress.isEmpty) return 0;
+    final totalSteps = progress.isNotEmpty ? progress.length : 9;
     final maxIndex = progress
         .whereType<Map>()
         .map((item) => (item['stageIndex'] as num?)?.toInt() ?? 0)
         .fold<int>(0, (a, b) => a > b ? a : b);
+
+    if (formula != null && formula.isNotEmpty) {
+      final evaluated = _evaluateFormula(formula, <String, double>{
+        'stageIndex': _stageIndex.toDouble(),
+        'total': totalSteps.toDouble(),
+        'maxIndex': (maxIndex > 0 ? maxIndex : 8).toDouble(),
+      });
+      if (evaluated != null) {
+        return evaluated.clamp(0.0, 100.0);
+      }
+    }
+
     if (maxIndex <= 0) return 0;
     return (_stageIndex / maxIndex).clamp(0.0, 1.0) * 100.0;
   }
@@ -2226,6 +2288,8 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     required Color? color,
     double? size,
     FontWeight? weight,
+    double? letterSpacing,
+    double? lineHeight,
   }) {
     final typography = _map(_theme()['typography']);
     final configuredSize = size ?? _number(typography['bodySize'], 14);
@@ -2238,8 +2302,8 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
       fontSize: configuredSize,
       fontWeight: configuredWeight,
       fontFamily: family == null || family.isEmpty ? null : family,
-      letterSpacing: _number(typography['letterSpacing'], 0),
-      height: _number(typography['lineHeight'], 1.35),
+      letterSpacing: letterSpacing ?? _number(typography['letterSpacing'], 0),
+      height: lineHeight ?? _number(typography['lineHeight'], 1.35),
     );
   }
 
@@ -2818,12 +2882,12 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(pagePadding, 8, pagePadding, pagePadding),
       children: <Widget>[
-        _buildTracker(screen),
-        if ((_map(_contract['tracker']).isNotEmpty) &&
-            (_map(_contract['tracker'])['activeStepByScreen']
-                    as Map?)?[_screenId] !=
-                null)
+        if (!regular.any((item) => item['type'] == 'stepTracker') &&
+            (screen['showTracker'] == true ||
+                _map(_contract['tracker'])['showByDefault'] == true)) ...<Widget>[
+          _buildTracker(screen),
           SizedBox(height: cardGap),
+        ],
         if (title != null && title.isNotEmpty)
           Text(
             title,
@@ -2984,6 +3048,9 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     }
 
     switch (type) {
+      case 'stepTracker':
+        return _buildTracker(_screens[_screenId] ?? const <String, dynamic>{});
+
       case 'heroCard':
         final gradient = _schemaGradient(component['gradient']) ??
             _schemaGradient(componentStyle['gradient']);
@@ -3198,56 +3265,92 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
         );
 
       case 'circularGauge':
-        final value = component['percentFrom'] is Map
-            ? _progressPercent()
+        final percentFrom = component['percentFrom'] is Map
+            ? _map(component['percentFrom'])
+            : null;
+        final value = percentFrom != null
+            ? _progressPercent(percentFrom)
             : _number(component['value'], _progressPercent());
         final normalized = (value / 100.0).clamp(0.0, 1.0);
         final size = _number(componentStyle['size'], 148);
         final strokeWidth = _number(componentStyle['strokeWidth'], 8);
-        final caption = _resolveText(component['caption']) ??
-            _resolveBindingText(component['captionBinding']) ??
-            _stageLabel(_stage, _stage);
+        final innerLabel = _resolveText(component['label']) ??
+            _resolveText(componentStyle['label']) ??
+            'Status';
+        final progress = _contract['progressMap'] as List? ?? const <dynamic>[];
+        final maxIndex = progress
+            .whereType<Map>()
+            .map((item) => (item['stageIndex'] as num?)?.toInt() ?? 0)
+            .fold<int>(0, (a, b) => a > b ? a : b);
+
+        String bottomCaption = '';
+        if (_stageIndex >= (maxIndex > 0 ? maxIndex : 8) && _stageIndex > 0) {
+          bottomCaption = 'ALMOST DONE';
+        } else if (component['caption'] != null) {
+          bottomCaption = _resolveText(component['caption']) ?? '';
+        } else if (_stage != 'idle') {
+          bottomCaption = 'CONNECTING';
+        }
+
         return Center(
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Stack(
-              alignment: Alignment.center,
-              children: <Widget>[
-                SizedBox(
-                  width: size,
-                  height: size,
-                  child: CircularProgressIndicator(
-                    value: normalized,
-                    strokeWidth: strokeWidth,
-                    backgroundColor: _color(componentStyle['trackColor']),
-                    color: _color(componentStyle['progressColor']) ?? accent,
-                    strokeCap: StrokeCap.round,
-                  ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SizedBox(
+                width: size,
+                height: size,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: <Widget>[
-                    Text(
-                      '${value.round()}${componentStyle['valueSuffix'] ?? '%'}',
-                      style: _textStyleFromMap(
-                        _map(componentStyle['valueTypography']),
-                        fallbackColor: textColor,
+                    SizedBox(
+                      width: size,
+                      height: size,
+                      child: CircularProgressIndicator(
+                        value: normalized,
+                        strokeWidth: strokeWidth,
+                        backgroundColor: _color(componentStyle['trackColor']),
+                        color: _color(componentStyle['progressColor']) ?? accent,
+                        strokeCap: StrokeCap.round,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      caption.toUpperCase(),
-                      textAlign: TextAlign.center,
-                      style: _textStyleFromMap(
-                        _map(componentStyle['captionTypography']),
-                        fallbackColor: mutedTextColor,
-                      ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          '${value.round()}${componentStyle['valueSuffix'] ?? '%'}',
+                          style: _textStyleFromMap(
+                            _map(componentStyle['valueTypography']),
+                            fallbackColor: textColor,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          innerLabel.toUpperCase(),
+                          textAlign: TextAlign.center,
+                          style: _textStyleFromMap(
+                            _map(componentStyle['captionTypography']),
+                            fallbackColor: mutedTextColor,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
+              ),
+              if (bottomCaption.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 14),
+                Text(
+                  bottomCaption.toUpperCase(),
+                  textAlign: TextAlign.center,
+                  style: _schemaTextStyle(
+                    color: accent,
+                    size: 11,
+                    weight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
         );
 
@@ -3260,35 +3363,51 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
         final activeIndex = completed
             ? count - 1
             : (component['activeIndex'] as num?)?.toInt() ?? _stageIndex;
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        final isNearDone = _stageIndex >= (count - 1);
+        final loadingHint = isNearDone
+            ? 'Please wait, almost done...'
+            : 'Loading, please wait...';
+
+        final dotRow = _SchemaAnimatedDotProgress(
+          count: count,
+          activeIndex: activeIndex,
+          completed: completed,
+          componentStyle: componentStyle,
+          style: style,
+          accent: accent,
+          surface: surface,
+          resolveColor: _color,
+          resolveNumber: _number,
+        );
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            for (var i = 0; i < count; i++) ...<Widget>[
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: _number(componentStyle['size'], 8) *
-                    (i == activeIndex
-                        ? _number(componentStyle['currentScale'], 1.4)
-                        : 1),
-                height: _number(componentStyle['size'], 8) *
-                    (i == activeIndex
-                        ? _number(componentStyle['currentScale'], 1.4)
-                        : 1),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _color(
-                        i < activeIndex || completed
-                            ? componentStyle['completed']
-                            : i == activeIndex
-                                ? componentStyle['current']
-                                : componentStyle['pending'],
-                      ) ??
-                      accent,
+            dotRow,
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              if (i != count - 1)
-                SizedBox(width: _number(componentStyle['gap'], 7)),
-            ],
+                const SizedBox(width: 8),
+                Text(
+                  loadingHint,
+                  style: _schemaTextStyle(
+                    color: accent,
+                    size: 13,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ],
         );
 
@@ -3798,18 +3917,25 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
             componentStyle['borderSize'] ?? componentStyle['borderWidth'];
         final leading = _map(componentStyle['leadingIcon']);
         final toggle = _map(componentStyle['visibilityToggle']);
+        final labelText = _resolveText(component['label']) ??
+            _resolveText(componentStyle['label']) ??
+            '';
+        final hintText = _resolveText(component['placeholder']) ??
+            _resolveText(componentStyle['placeholder']) ??
+            (labelText.isNotEmpty
+                ? 'Enter ${labelText.toLowerCase()}'
+                : 'Enter password');
+
         final field = TextField(
           controller: _passwordController,
           obscureText: obscure && !_showPassword,
           enableSuggestions: !obscure,
           autocorrect: !obscure,
           onChanged: (_) => setState(() {}),
-          style: _schemaTextStyle(color: textColor),
+          style: _schemaTextStyle(color: textColor, size: 15, weight: FontWeight.w600),
           decoration: InputDecoration(
-            labelText: _resolveText(component['label']) ??
-                _resolveText(componentStyle['label']) ??
-                '',
-            labelStyle: _schemaTextStyle(color: mutedTextColor),
+            hintText: hintText,
+            hintStyle: _schemaTextStyle(color: mutedTextColor, size: 14),
             filled: true,
             fillColor: _color(componentStyle['background']) ?? surface,
             prefixIcon: leading.isEmpty
@@ -3837,7 +3963,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
                 : null,
             contentPadding: _schemaInsets(
               componentStyle['padding'],
-              fallback: cardPadding,
+              fallback: 14,
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: _schemaRadius(radius, themeKey: 'card'),
@@ -3860,8 +3986,31 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
             ),
           ),
         );
-        final height = _number(componentStyle['height'], 0);
-        return height > 0 ? SizedBox(height: height, child: field) : field;
+
+        final height = _number(componentStyle['height'], 52);
+        final sizedField =
+            height > 0 ? SizedBox(height: height, child: field) : field;
+
+        if (labelText.isNotEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                labelText.toUpperCase(),
+                style: _schemaTextStyle(
+                  color: mutedTextColor,
+                  size: 11,
+                  weight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const SizedBox(height: 8),
+              sizedField,
+            ],
+          );
+        }
+        return sizedField;
 
       case 'button':
         final height = _number(componentStyle['height'], 0);
@@ -3968,10 +4117,51 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
         );
 
       case 'text':
+        final isStageTitle = component['id'] == 'provisioningTitle' ||
+            component['id'] == 'deviceDiscoveryStatus';
+        final rawText = _resolveText(component['text']) ??
+            _resolveBindingText(component['textBinding']) ??
+            '';
+        final displayText = isStageTitle && rawText.isNotEmpty
+            ? _stageLabel(rawText, rawText)
+            : rawText;
+
+        if (isStageTitle) {
+          final isWaitingCloud = _stageIndex >= 8;
+          final subtitleText = isWaitingCloud
+              ? 'Waiting for the device to appear on eFactor Cloud...'
+              : 'Keep the app open while the device joins your network.';
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Text(
+                displayText,
+                textAlign: TextAlign.center,
+                style: _schemaTextStyle(
+                  color: _color(componentStyle['textColor']) ?? textColor,
+                  size: 20,
+                  weight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitleText,
+                textAlign: TextAlign.center,
+                style: _schemaTextStyle(
+                  color: mutedTextColor,
+                  size: 13,
+                  weight: FontWeight.w600,
+                  lineHeight: 1.4,
+                ),
+              ),
+            ],
+          );
+        }
+
         return Text(
-          _resolveText(component['text']) ??
-              _resolveBindingText(component['textBinding']) ??
-              '',
+          displayText,
           style: _schemaTextStyle(
             color: _color(componentStyle['textColor']) ?? textColor,
             size: _number(
@@ -4114,4 +4304,232 @@ extension _FirstOrNullExtension<T> on Iterable<T> {
 
 class _WifiFlowCancelled implements Exception {
   const _WifiFlowCancelled();
+}
+
+class _SchemaAnimatedDotProgress extends StatefulWidget {
+  const _SchemaAnimatedDotProgress({
+    required this.count,
+    required this.activeIndex,
+    required this.completed,
+    required this.componentStyle,
+    required this.style,
+    required this.accent,
+    required this.surface,
+    required this.resolveColor,
+    required this.resolveNumber,
+  });
+
+  final int count;
+  final int activeIndex;
+  final bool completed;
+  final Map<String, dynamic> componentStyle;
+  final Map<String, dynamic> style;
+  final Color accent;
+  final Color? surface;
+  final Color? Function(dynamic) resolveColor;
+  final double Function(dynamic, double) resolveNumber;
+
+  @override
+  State<_SchemaAnimatedDotProgress> createState() =>
+      _SchemaAnimatedDotProgressState();
+}
+
+class _SchemaAnimatedDotProgressState extends State<_SchemaAnimatedDotProgress>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.count;
+    final activeIndex = widget.activeIndex;
+    final completed = widget.completed;
+    final compStyle = widget.componentStyle;
+
+    final baseSize = widget.resolveNumber(compStyle['size'], 8.0);
+    final gap = widget.resolveNumber(compStyle['gap'], 7.0);
+    final targetScale = widget.resolveNumber(compStyle['currentScale'], 1.4);
+
+    final pendingColor = widget.resolveColor(compStyle['pending']) ??
+        const Color(0xFFE8EDF5);
+    final currentColor = widget.resolveColor(compStyle['current']) ??
+        widget.accent;
+    final completedColor = widget.resolveColor(compStyle['completed']) ??
+        const Color(0xFF22C55E);
+
+    final containerColor = widget.resolveColor(compStyle['containerColor']) ??
+        widget.resolveColor(widget.style['surfaceColor']) ??
+        Colors.white;
+    final borderColor = widget.resolveColor(compStyle['borderColor']) ??
+        widget.resolveColor(widget.style['borderColor']) ??
+        const Color(0xFFE6EAF2);
+
+    final dotBoxDimension = baseSize * (targetScale + 0.9);
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final animValue = _controller.value;
+        final pulse = (math.sin(animValue * 2 * math.pi) + 1.0) / 2.0; // 0.0 .. 1.0
+        final wavePos = animValue * (count + 1) - 0.5;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: containerColor,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              for (var i = 0; i < count; i++) ...<Widget>[
+                SizedBox(
+                  width: dotBoxDimension,
+                  height: dotBoxDimension,
+                  child: Center(
+                    child: _buildDot(
+                      index: i,
+                      activeIndex: activeIndex,
+                      completed: completed,
+                      baseSize: baseSize,
+                      targetScale: targetScale,
+                      pendingColor: pendingColor,
+                      currentColor: currentColor,
+                      completedColor: completedColor,
+                      pulse: pulse,
+                      wavePos: wavePos,
+                    ),
+                  ),
+                ),
+                if (i != count - 1) SizedBox(width: gap),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDot({
+    required int index,
+    required int activeIndex,
+    required bool completed,
+    required double baseSize,
+    required double targetScale,
+    required Color pendingColor,
+    required Color currentColor,
+    required Color completedColor,
+    required double pulse,
+    required double wavePos,
+  }) {
+    // 1. Completed dots
+    if (completed || (activeIndex >= 0 && index < activeIndex)) {
+      return Container(
+        width: baseSize,
+        height: baseSize,
+        decoration: BoxDecoration(
+          color: completedColor,
+          shape: BoxShape.circle,
+        ),
+      );
+    }
+
+    // 2. Current active dot with continuous breathing pulse & soft glowing halo
+    if (activeIndex >= 0 && index == activeIndex) {
+      final currentScale = 1.15 + (targetScale - 1.15) * pulse;
+      final haloScale = currentScale + 0.85 * pulse;
+      final haloAlpha = (0.16 + 0.18 * pulse).clamp(0.0, 1.0);
+
+      return Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          // Outer halo ring (glow seen in video and Image 1)
+          Container(
+            width: baseSize * haloScale,
+            height: baseSize * haloScale,
+            decoration: BoxDecoration(
+              color: currentColor.withValues(alpha: haloAlpha),
+              shape: BoxShape.circle,
+            ),
+          ),
+          // Inner vibrant active circle
+          Container(
+            width: baseSize * currentScale,
+            height: baseSize * currentScale,
+            decoration: BoxDecoration(
+              color: currentColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // 3. Indeterminate traveling wave when activeIndex < 0 (e.g. deviceDiscovery)
+    if (activeIndex < 0) {
+      final dist = (index - wavePos).abs();
+      if (dist < 1.3) {
+        final w = (1.0 - (dist / 1.3)).clamp(0.0, 1.0);
+        final dotColor = Color.lerp(pendingColor, currentColor, w) ?? pendingColor;
+        final scale = 1.0 + 0.35 * w;
+        final haloAlpha = (0.24 * w).clamp(0.0, 1.0);
+
+        return Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            if (w > 0.25)
+              Container(
+                width: baseSize * (scale + 0.7 * w),
+                height: baseSize * (scale + 0.7 * w),
+                decoration: BoxDecoration(
+                  color: currentColor.withValues(alpha: haloAlpha),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            Container(
+              width: baseSize * scale,
+              height: baseSize * scale,
+              decoration: BoxDecoration(
+                color: dotColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        );
+      }
+    }
+
+    // 4. Pending dots
+    return Container(
+      width: baseSize,
+      height: baseSize,
+      decoration: BoxDecoration(
+        color: pendingColor,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
 }

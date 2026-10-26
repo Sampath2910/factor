@@ -15,6 +15,7 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../services/incoming_call_service.dart';
 import '../services/push_notification_bootstrap.dart';
+import 'dynamic_grid_sdui_page.dart';
 import 'grid_live_location_service.dart';
 import 'grid_media_cache_service.dart';
 import 'grid_offline_outbox_service.dart';
@@ -109,6 +110,21 @@ class GridInAppWebViewPage extends StatefulWidget {
       updated['redirect_url'] = initialUri.path;
     }
     return uri.replace(queryParameters: updated);
+  }
+
+  static bool isGridRedirectUrl(Uri targetUri, {required Uri initialUri}) {
+    final targetPath = targetUri.path.toLowerCase();
+    final initialPath = initialUri.path.toLowerCase();
+    final initialIsChat = initialPath.contains('/grid-chat') || initialPath.contains('chat');
+    if (!initialIsChat) return false;
+    // Any chat sub-path, room, or API must NOT be treated as a Grid redirect.
+    if (targetPath.contains('grid-chat') || targetPath.contains('/chat')) {
+      return false;
+    }
+    return targetPath.endsWith('/grid') ||
+        targetPath.endsWith('/grid/') ||
+        targetPath.contains('/index.php/grid') ||
+        targetPath.endsWith('/grid_api_creation.php');
   }
 
   static bool isIgnorableWebResourceError(WebResourceError error) {
@@ -469,12 +485,13 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               return NavigationDecision.prevent;
             }
 
-            // If user opened Circle Connect (/grid-chat), do not allow server to redirect to base Grid (/grid)
-            if (initialIsChat && (targetPath.endsWith('/grid') || targetPath.endsWith('/grid/'))) {
+            // If user clicks or navigates to Grid (/grid) while in Circle Connect (/grid-chat),
+            // redirect directly back to the native Grid SDUI page (Image 2).
+            if (GridInAppWebViewPage.isGridRedirectUrl(targetUri, initialUri: widget.uri)) {
               debugPrint(
-                '[GridInAppWebView] Intercepting unwanted redirect to grid -> keeping Circle Connect: ${widget.uri}',
+                '[GridInAppWebView] Redirecting from Circle Connect to Grid SDUI page: ${request.url}',
               );
-              unawaited(_controller.loadRequest(_effectiveUri));
+              _backToGrid();
               return NavigationDecision.prevent;
             }
 
@@ -1493,6 +1510,16 @@ Error: $error
     if (nav.canPop()) {
       _isPopping = true;
       nav.pop();
+    } else {
+      _isPopping = true;
+      nav.pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => DynamicGridSduiPage(
+            accessToken: widget.accessToken ?? '',
+            userId: widget.userId,
+          ),
+        ),
+      );
     }
   }
 
@@ -1531,28 +1558,7 @@ Error: $error
       final result = await _controller.runJavaScriptReturningResult('''
         (function() {
           try {
-            // 1. Check if the GRID logo is visible at the top-left (this ONLY exists on the main Chats page!)
-            var hasVisibleGridLogo = false;
-            var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2');
-            for (var i = 0; i < all.length; i++) {
-              var el = all[i];
-              var txt = (el.innerText || el.textContent || '').trim();
-              if (txt === 'GRID' || txt === '::: GRID' || txt.indexOf('GRID') === 0) {
-                var rect = el.getBoundingClientRect();
-                if (rect.top >= 0 && rect.top < 100 && rect.left >= 0 && rect.left < 180 && rect.width > 0 && rect.height > 0) {
-                  hasVisibleGridLogo = true;
-                  break;
-                }
-              }
-            }
-
-            // If GRID logo is visible at the top left, we are DEFINITELY on the main Chats page!
-            if (hasVisibleGridLogo) {
-              return false;
-            }
-
-            // If GRID logo is NOT visible at top left, the user IS inside an open chat conversation!
-            // Click the green back arrow / header back button to return to the Chats list page
+            // Check if user is inside an open chat conversation (back arrow or message composer present)
             var selectors = [
               'header [class*="back" i]',
               'header button',
@@ -1577,22 +1583,26 @@ Error: $error
               }
             }
 
-            // Click whatever element is at the top-left (the green back arrow)
-            var topEl = document.elementFromPoint(25, 30);
-            if (topEl) {
-              if (typeof topEl.click === 'function') {
-                topEl.click();
+            var hasComposer = !!document.querySelector(
+              'input[placeholder*="Type a message" i], textarea[placeholder*="Type a message" i], [class*="chat-input" i], [class*="message-input" i]'
+            );
+            var search = (window.location.search || '').toLowerCase();
+            var isChatRoom = search.includes('conversation_id=') || search.includes('chat_id=') || search.includes('room=') || hasComposer;
+            if (isChatRoom) {
+              var topEl = document.elementFromPoint(25, 30);
+              if (topEl) {
+                if (typeof topEl.click === 'function') {
+                  topEl.click();
+                }
+                topEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                return true;
               }
-              topEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-              return true;
+              if (window.history && window.history.length > 1) {
+                window.history.back();
+                return true;
+              }
             }
-
-            // Fallback to browser history back
-            if (window.history && window.history.length > 1) {
-              window.history.back();
-              return true;
-            }
-            return true;
+            return false;
           } catch(e) {
             return false;
           }
@@ -2300,46 +2310,133 @@ Error: $error
   Future<void> _injectGridBackButton() async {
     const js = '''
 (function() {
-  function attachGridBack() {
-    var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2');
-    for (var i = 0; i < all.length; i++) {
-      var el = all[i];
-      var txt = (el.innerText || el.textContent || '').trim();
-      if (txt === 'GRID' || txt === '::: GRID' || txt.indexOf('GRID') === 0) {
+  function isInsideConversation() {
+    try {
+      var backBtn = document.querySelector(
+        'header [class*="back" i], header button, header [aria-label*="back" i], header [title*="back" i], .back-arrow, [class*="back-button" i], [class*="back_button" i], [class*="arrow-back" i], [class*="arrow_back" i]'
+      );
+      if (backBtn) {
+        var r = backBtn.getBoundingClientRect();
+        if (r.top >= 0 && r.top < 120 && r.left >= 0 && r.left < 160 && r.width > 0 && r.height > 0) {
+          return true;
+        }
+      }
+      var hasComposer = !!document.querySelector(
+        'input[placeholder*="Type a message" i], textarea[placeholder*="Type a message" i], [class*="chat-input" i], [class*="message-input" i], [class*="composer" i]'
+      );
+      if (hasComposer) {
+        return true;
+      }
+      var search = (window.location.search || '').toLowerCase();
+      var path = (window.location.pathname || '').toLowerCase();
+      if (search.includes('conversation_id=') || search.includes('chat_id=') || search.includes('room=') || path.includes('/room/') || path.includes('/c/')) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  function isGridElement(el) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+
+    // Explicitly exclude any back button or back arrow
+    var tag = el.tagName ? el.tagName.toLowerCase() : '';
+    var className = (typeof el.className === 'string') ? el.className.toLowerCase() : '';
+    var ariaLabel = (el.getAttribute && el.getAttribute('aria-label')) ? el.getAttribute('aria-label').toLowerCase() : '';
+    var title = (el.getAttribute && el.getAttribute('title')) ? el.getAttribute('title').toLowerCase() : '';
+    if (className.includes('back') || className.includes('arrow') || ariaLabel.includes('back') || title.includes('back')) {
+      return false;
+    }
+
+    var txt = (el.innerText || el.textContent || '').trim();
+    var hasGridText = /^:::?\\s*GRID/i.test(txt) || txt === 'GRID' || txt === '::: GRID';
+    var isGridImg = tag === 'img' && ((el.getAttribute('src') || '').toLowerCase().includes('grid') || (el.getAttribute('alt') || '').toLowerCase().includes('grid'));
+    var hasGridClass = className.includes('grid-logo');
+    var href = (el.getAttribute && el.getAttribute('href')) ? el.getAttribute('href').toLowerCase() : '';
+    var hasGridHref = href.endsWith('/grid') || href.endsWith('/grid/') || href.includes('/index.php/grid');
+
+    if (hasGridText || isGridImg || hasGridClass || hasGridHref) {
+      try {
         var rect = el.getBoundingClientRect();
-        if (rect.top >= 0 && rect.top < 90 && rect.left >= 0 && rect.left < 160) {
-          el.style.cursor = 'pointer';
-          el.style.display = 'inline-flex';
-          el.style.alignItems = 'center';
-          el.style.gap = '6px';
-          if (!el.querySelector('.grid-back-arrow')) {
-            var arrow = document.createElement('span');
-            arrow.className = 'grid-back-arrow';
-            arrow.innerHTML = '&#8592;';
-            arrow.style.fontSize = '20px';
-            arrow.style.fontWeight = '700';
-            arrow.style.color = 'currentColor';
-            arrow.style.marginRight = '4px';
-            arrow.style.display = 'inline-block';
-            arrow.style.verticalAlign = 'middle';
-            el.insertBefore(arrow, el.firstChild);
+        if (rect.top >= 0 && rect.top < 110 && rect.left >= 0 && rect.left < 200 && rect.width > 0 && rect.height > 0) {
+          return true;
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  function handleGridTrigger(e) {
+    // If inside a conversation, NEVER intercept. Let web app handle the back arrow natively!
+    if (isInsideConversation()) {
+      return;
+    }
+
+    var curr = e.target;
+    var matched = false;
+    while (curr && curr !== document.body && curr !== document.documentElement) {
+      if (isGridElement(curr)) {
+        matched = true;
+        break;
+      }
+      curr = curr.parentElement;
+    }
+
+    if (!matched && e.clientX !== undefined && e.clientY !== undefined) {
+      if (e.clientX <= 150 && e.clientY <= 65) {
+        var elAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+        var checkEl = elAtPoint;
+        while (checkEl && checkEl !== document.body) {
+          var t = (checkEl.innerText || checkEl.textContent || '').trim();
+          if (/^:::?\\s*GRID/i.test(t) || t === 'GRID' || t === '::: GRID') {
+            matched = true;
+            break;
           }
-          el.onclick = function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.CircleConnectNavBridge) {
-              window.CircleConnectNavBridge.postMessage('go_back_to_grid');
-            }
-          };
-          break;
+          checkEl = checkEl.parentElement;
         }
       }
     }
+
+    if (matched) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.CircleConnectNavBridge) {
+        window.CircleConnectNavBridge.postMessage('go_back_to_grid');
+      }
+    }
   }
-  attachGridBack();
+
+  if (!window.__gridClickInterceptorInstalled) {
+    window.__gridClickInterceptorInstalled = true;
+    document.addEventListener('click', handleGridTrigger, true);
+    document.addEventListener('touchend', handleGridTrigger, true);
+  }
+
+  function attachGridDirect() {
+    if (isInsideConversation()) {
+      return;
+    }
+    var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2, img');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (isGridElement(el) && !el.__gridDirectAttached) {
+        el.__gridDirectAttached = true;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', function(e) {
+          if (isInsideConversation()) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (window.CircleConnectNavBridge) {
+            window.CircleConnectNavBridge.postMessage('go_back_to_grid');
+          }
+        }, true);
+      }
+    }
+  }
+  attachGridDirect();
   if (!window.__gridBackObserver && document.body) {
     window.__gridBackObserver = new MutationObserver(function() {
-      attachGridBack();
+      attachGridDirect();
     });
     window.__gridBackObserver.observe(document.body, { childList: true, subtree: true });
   }
