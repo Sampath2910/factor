@@ -112,19 +112,39 @@ class GridInAppWebViewPage extends StatefulWidget {
     return uri.replace(queryParameters: updated);
   }
 
-  static bool isGridRedirectUrl(Uri targetUri, {required Uri initialUri}) {
+  static bool isGridRedirectUrl(
+    Uri targetUri, {
+    required Uri initialUri,
+    bool pageFinished = true,
+  }) {
     final targetPath = targetUri.path.toLowerCase();
     final initialPath = initialUri.path.toLowerCase();
     final initialIsChat = initialPath.contains('/grid-chat') || initialPath.contains('chat');
-    if (!initialIsChat) return false;
+    final initialIsGrid = !initialIsChat && initialPath.contains('/grid');
+
     // Any chat sub-path, room, or API must NOT be treated as a Grid redirect.
     if (targetPath.contains('grid-chat') || targetPath.contains('/chat')) {
       return false;
     }
-    return targetPath.endsWith('/grid') ||
-        targetPath.endsWith('/grid/') ||
-        targetPath.contains('/index.php/grid') ||
-        targetPath.endsWith('/grid_api_creation.php');
+
+    if (initialIsChat) {
+      return targetPath.endsWith('/grid') ||
+          targetPath.endsWith('/grid/') ||
+          targetPath.contains('/index.php/grid') ||
+          targetPath.endsWith('/grid_api_creation.php');
+    }
+
+    if (initialIsGrid && pageFinished) {
+      return targetPath.endsWith('/grid') ||
+          targetPath.endsWith('/grid/') ||
+          targetPath.contains('/index.php/grid') ||
+          targetPath == '/' ||
+          targetPath.endsWith('/home') ||
+          targetPath.endsWith('/home/') ||
+          targetPath.endsWith('/grid_api_creation.php');
+    }
+
+    return false;
   }
 
   static bool isIgnorableWebResourceError(WebResourceError error) {
@@ -485,13 +505,17 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               return NavigationDecision.prevent;
             }
 
-            // If user clicks or navigates to Grid (/grid) while in Circle Connect (/grid-chat),
+            // If user clicks or navigates to Grid (/grid) while in Circle Connect or Professional Space,
             // redirect directly back to the native Grid SDUI page (Image 2).
-            if (GridInAppWebViewPage.isGridRedirectUrl(targetUri, initialUri: widget.uri)) {
+            if (GridInAppWebViewPage.isGridRedirectUrl(
+              targetUri,
+              initialUri: widget.uri,
+              pageFinished: !_loading,
+            )) {
               debugPrint(
-                '[GridInAppWebView] Redirecting from Circle Connect to Grid SDUI page: ${request.url}',
+                '[GridInAppWebView] Redirecting to Grid SDUI page: ${request.url}',
               );
-              _backToGrid();
+              _safeExitToGrid();
               return NavigationDecision.prevent;
             }
 
@@ -2312,6 +2336,12 @@ Error: $error
 (function() {
   function isInsideConversation() {
     try {
+      // Must be on a chat page to be in a chat conversation!
+      var path = (window.location.pathname || '').toLowerCase();
+      var isChat = path.includes('grid-chat') || path.includes('/chat');
+      if (!isChat) {
+        return false;
+      }
       var backBtn = document.querySelector(
         'header [class*="back" i], header button, header [aria-label*="back" i], header [title*="back" i], .back-arrow, [class*="back-button" i], [class*="back_button" i], [class*="arrow-back" i], [class*="arrow_back" i]'
       );
@@ -2328,7 +2358,6 @@ Error: $error
         return true;
       }
       var search = (window.location.search || '').toLowerCase();
-      var path = (window.location.pathname || '').toLowerCase();
       if (search.includes('conversation_id=') || search.includes('chat_id=') || search.includes('room=') || path.includes('/room/') || path.includes('/c/')) {
         return true;
       }
@@ -2349,11 +2378,11 @@ Error: $error
     }
 
     var txt = (el.innerText || el.textContent || '').trim();
-    var hasGridText = /^:::?\\s*GRID/i.test(txt) || txt === 'GRID' || txt === '::: GRID';
+    var hasGridText = /^:::?\\s*GRID/i.test(txt) || txt === 'GRID' || txt === '::: GRID' || (/GRID/i.test(txt) && txt.length <= 15);
     var isGridImg = tag === 'img' && ((el.getAttribute('src') || '').toLowerCase().includes('grid') || (el.getAttribute('alt') || '').toLowerCase().includes('grid'));
-    var hasGridClass = className.includes('grid-logo');
+    var hasGridClass = className.includes('grid-logo') || className.includes('grid_logo') || className.includes('logo') || className.includes('brand');
     var href = (el.getAttribute && el.getAttribute('href')) ? el.getAttribute('href').toLowerCase() : '';
-    var hasGridHref = href.endsWith('/grid') || href.endsWith('/grid/') || href.includes('/index.php/grid');
+    var hasGridHref = href.endsWith('/grid') || href.endsWith('/grid/') || href.includes('/index.php/grid') || href === '/' || href === '#';
 
     if (hasGridText || isGridImg || hasGridClass || hasGridHref) {
       try {
@@ -2383,12 +2412,14 @@ Error: $error
     }
 
     if (!matched && e.clientX !== undefined && e.clientY !== undefined) {
-      if (e.clientX <= 150 && e.clientY <= 65) {
+      if (e.clientX <= 160 && e.clientY <= 65) {
         var elAtPoint = document.elementFromPoint(e.clientX, e.clientY);
         var checkEl = elAtPoint;
         while (checkEl && checkEl !== document.body) {
           var t = (checkEl.innerText || checkEl.textContent || '').trim();
-          if (/^:::?\\s*GRID/i.test(t) || t === 'GRID' || t === '::: GRID') {
+          var isImg = checkEl.tagName === 'IMG' && ((checkEl.getAttribute('src') || '').toLowerCase().includes('grid') || (checkEl.getAttribute('alt') || '').toLowerCase().includes('grid'));
+          var isClass = (typeof checkEl.className === 'string') && (checkEl.className.toLowerCase().includes('grid') || checkEl.className.toLowerCase().includes('logo') || checkEl.className.toLowerCase().includes('brand'));
+          if (/^:::?\\s*GRID/i.test(t) || t === 'GRID' || t === '::: GRID' || (/GRID/i.test(t) && t.length <= 15) || isImg || isClass) {
             matched = true;
             break;
           }
@@ -2416,7 +2447,7 @@ Error: $error
     if (isInsideConversation()) {
       return;
     }
-    var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2, img');
+    var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2, img, button');
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
       if (isGridElement(el) && !el.__gridDirectAttached) {
