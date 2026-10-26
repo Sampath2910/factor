@@ -262,6 +262,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   bool _reelsTutorialScheduled = false;
   double _tutorialDragDistance = 0.0;
   bool _isPopping = false;
+  bool _isConnectingCall = false;
+  Timer? _connectingCallTimer;
 
   Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
 
@@ -318,6 +320,17 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     super.initState();
     _isPopping = false;
     GridInAppWebViewPage._activeState = this;
+
+    final isAnswerAction = _effectiveUri.queryParameters['call_action'] == 'answer';
+    if (isAnswerAction) {
+      _isConnectingCall = true;
+      _connectingCallTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted && _isConnectingCall) {
+          setState(() => _isConnectingCall = false);
+        }
+      });
+    }
+
     if (widget.accessToken != null && widget.accessToken!.isNotEmpty) {
       GridOfflineOutboxService.instance.setDefaultBearerToken(widget.accessToken);
     }
@@ -339,6 +352,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
 
   @override
   void dispose() {
+    _connectingCallTimer?.cancel();
+    PushNotificationBootstrap.instance.setActiveConversationId(null);
     GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
     _outboxSyncedSub?.cancel();
     _connectivitySub?.cancel();
@@ -497,6 +512,13 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
             unawaited(_injectCircleConnectPushBridge());
             unawaited(_injectGridBackButton());
             _dispatchPendingCallActionIfPresent();
+            if (_isConnectingCall) {
+              Future.delayed(const Duration(milliseconds: 1000), () {
+                if (mounted && _isConnectingCall) {
+                  setState(() => _isConnectingCall = false);
+                }
+              });
+            }
             Future.delayed(const Duration(milliseconds: 600), () {
               if (mounted) unawaited(_injectGridBackButton());
             });
@@ -938,6 +960,41 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       console.error('clearChatNotifications error:', e);
     }
   };
+  window.CircleConnectPush.setActiveConversation = function(conversationId) {
+    try {
+      if (window.CircleConnectPushBridge) {
+        window.CircleConnectPushBridge.postMessage(JSON.stringify({
+          action: 'activeConversationChanged',
+          conversationId: String(conversationId || '')
+        }));
+      }
+    } catch (e) {
+      console.error('setActiveConversation error:', e);
+    }
+  };
+
+  function checkUrlForConversation() {
+    try {
+      var path = window.location.pathname + window.location.search + window.location.hash;
+      var match = path.match(/\\/chat\\/(\\d+)/) || path.match(/conversation\\/(\\d+)/) || path.match(/#\\/chat\\/(\\d+)/);
+      if (match && match[1]) {
+        if (window.CircleConnectPushBridge) {
+          window.CircleConnectPushBridge.postMessage(JSON.stringify({
+            action: 'activeConversationChanged',
+            conversationId: String(match[1])
+          }));
+        }
+      } else if (path.indexOf('/chat/') === -1 && path.indexOf('/conversation/') === -1) {
+        if (window.CircleConnectPushBridge) {
+          window.CircleConnectPushBridge.postMessage(JSON.stringify({
+            action: 'conversationClosed'
+          }));
+        }
+      }
+    } catch(_) {}
+  }
+  window.addEventListener('popstate', checkUrlForConversation);
+  window.addEventListener('hashchange', checkUrlForConversation);
 
   // Offline Media Cache Bridge
   window.CircleConnectMedia = {
@@ -1154,12 +1211,32 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
           callType: callType,
           url: widget.uri.toString(),
         );
-      } else if (action == 'stopRinging') {
+      } else if (action == 'stopRinging' ||
+          action == 'callConnected' ||
+          action == 'callActive' ||
+          action == 'callEnded') {
         final callId = data['callId']?.toString() ?? '';
         IncomingCallService.instance.stopRingingFromWeb(callId);
+        if (_isConnectingCall && mounted) {
+          setState(() => _isConnectingCall = false);
+        }
       } else if (action == 'clearChatNotifications') {
         final conversationId = data['conversationId']?.toString() ?? '';
         PushNotificationBootstrap.instance.clearChatNotifications(conversationId);
+      } else if (action == 'activeConversationChanged' ||
+          action == 'conversationOpened' ||
+          action == 'setActiveConversation') {
+        final convId = (data['conversationId'] ??
+                data['conversation_id'] ??
+                data['chat_id'] ??
+                '')
+            .toString()
+            .trim();
+        PushNotificationBootstrap.instance
+            .setActiveConversationId(convId.isNotEmpty ? convId : null);
+      } else if (action == 'conversationClosed' ||
+          action == 'clearActiveConversation') {
+        PushNotificationBootstrap.instance.setActiveConversationId(null);
       } else if (action == 'outboundCallAttempt') {
         final url = data['url']?.toString() ?? '';
         final method = data['method']?.toString() ?? 'POST';
@@ -1941,8 +2018,163 @@ Error: $error
                 ),
               if (_showReelsTutorial)
                 _buildReelsTutorialOverlay(),
+              if (_isConnectingCall)
+                _buildConnectingCallOverlay(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectingCallOverlay() {
+    final callerName = _effectiveUri.queryParameters['caller_name'] ??
+        _effectiveUri.queryParameters['callerName'] ??
+        'Circle Connect Call';
+    final callType = _effectiveUri.queryParameters['call_type'] ?? 'video';
+    final isVideo = callType.toLowerCase().contains('video');
+
+    return Container(
+      color: const Color(0xFF0F172A),
+      width: double.infinity,
+      height: double.infinity,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 60),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isVideo ? Icons.videocam : Icons.call,
+                    color: const Color(0xFF60A5FA),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isVideo ? 'Incoming Video Call' : 'Incoming Voice Call',
+                    style: const TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              callerName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF38BDF8)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Connecting...',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Center(
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0284C7).withValues(alpha: 0.35),
+                      blurRadius: 30,
+                      spreadRadius: 8,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Container(
+                    width: 90,
+                    height: 90,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF0284C7),
+                    ),
+                    child: Icon(
+                      isVideo ? Icons.videocam : Icons.person,
+                      size: 48,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 48),
+              child: InkWell(
+                onTap: () {
+                  final callId = _effectiveUri.queryParameters['call_id'] ?? '';
+                  if (callId.isNotEmpty) {
+                    final call = IncomingCallData(
+                      callId: callId,
+                      callerId: '',
+                      callerName: callerName,
+                      roomUrl: widget.uri.toString(),
+                    );
+                    IncomingCallService.instance.declineCall(call);
+                  }
+                  _safeExitToGrid();
+                },
+                borderRadius: BorderRadius.circular(36),
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x66EF4444),
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.call_end,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

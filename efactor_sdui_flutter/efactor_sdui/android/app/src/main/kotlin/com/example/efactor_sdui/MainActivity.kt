@@ -1,11 +1,13 @@
 package com.example.efactor_sdui
 
 import android.app.KeyguardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
@@ -63,6 +65,10 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "tech.efactor/circle_connect").setMethodCallHandler { call, result ->
             when (call.method) {
+                "wakeAndUnlock" -> {
+                    wakeAndUnlock()
+                    result.success(true)
+                }
                 "getCookies" -> {
                     val url = call.argument<String>("url") ?: "https://efactor.tech"
                     val cookies = CookieManager.getInstance().getCookie(url) ?: ""
@@ -149,8 +155,88 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
+                "isIgnoringBatteryOptimizations" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                        result.success(pm?.isIgnoringBatteryOptimizations(packageName) ?: true)
+                    } else {
+                        result.success(true)
+                    }
+                }
+                "requestIgnoreBatteryOptimizations" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        try {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:$packageName")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            try {
+                                val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(fallbackIntent)
+                                result.success(true)
+                            } catch (e2: Exception) {
+                                result.error("BATTERY_OPTI_ERROR", e2.message, null)
+                            }
+                        }
+                    } else {
+                        result.success(true)
+                    }
+                }
+                "openAutostartSettings" -> {
+                    val opened = openOemAutostartSettings()
+                    result.success(opened)
+                }
+                "getDeviceManufacturer" -> {
+                    result.success(Build.MANUFACTURER.lowercase())
+                }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun openOemAutostartSettings(): Boolean {
+        val autostartIntents = listOf(
+            // Xiaomi / Poco / Redmi
+            Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
+            // Vivo / iQOO
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
+            Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.MainGuideActivity")),
+            // Oppo / Realme
+            Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
+            Intent().setComponent(ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity")),
+            Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity")),
+            // Huawei / Honor
+            Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")),
+            Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.appcontrol.activity.StartupAppControlActivity")),
+            // Samsung Device Care
+            Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity")),
+            Intent().setComponent(ComponentName("com.samsung.android.sm", "com.samsung.android.sm.ui.battery.BatteryActivity"))
+        )
+
+        for (intent in autostartIntents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                return true
+            } catch (_: Exception) {}
+        }
+
+        // Generic fallback to Application Details Settings
+        try {
+            val genericIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:$packageName")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(genericIntent)
+            return true
+        } catch (_: Exception) {
+            return false
         }
     }
 

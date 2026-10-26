@@ -549,8 +549,21 @@ class PushNotificationBootstrap {
   var _ready = false;
   Future<void>? _initFuture;
   StreamSubscription<String>? _tokenSub;
+  String? _activeConversationId;
 
   bool get isReady => _ready;
+  String? get activeConversationId => _activeConversationId;
+
+  /// Sets the currently active conversation in Circle Connect chat.
+  /// When set, foreground notification banners for this conversation are suppressed.
+  void setActiveConversationId(String? conversationId) {
+    final cleanId = conversationId?.trim();
+    _activeConversationId = (cleanId == null || cleanId.isEmpty) ? null : cleanId;
+    debugPrint('[PushBootstrap] Active conversation set to: $_activeConversationId');
+    if (_activeConversationId != null) {
+      unawaited(clearChatNotifications(_activeConversationId!));
+    }
+  }
 
   Future<void> initialize() async {
     if (_ready || kIsWeb) return;
@@ -846,6 +859,20 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       unawaited(handleCallHandled(callId));
       return;
     }
+
+    final convId = (data['conversation_id'] ??
+            data['conversationId'] ??
+            data['chat_id'] ??
+            '')
+        .toString()
+        .trim();
+    if (_activeConversationId != null &&
+        convId.isNotEmpty &&
+        _activeConversationId == convId) {
+      debugPrint(
+          '[PushBootstrap] Suppressing foreground notification banner for currently active conversation: $convId');
+      return;
+    }
     unawaited(showMessageNotificationOnPlugin(_local, data, notification: message.notification));
   }
 
@@ -980,6 +1007,19 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
 
   /// Public API for chat message push notifications.
   Future<void> showMessageNotification(Map<String, dynamic> data) async {
+    final convId = (data['conversation_id'] ??
+            data['conversationId'] ??
+            data['chat_id'] ??
+            '')
+        .toString()
+        .trim();
+    if (_activeConversationId != null &&
+        convId.isNotEmpty &&
+        _activeConversationId == convId) {
+      debugPrint(
+          '[PushBootstrap] Suppressing showMessageNotification for active conversation: $convId');
+      return;
+    }
     try {
       await showMessageNotificationOnPlugin(_local, data);
     } catch (e) {

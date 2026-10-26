@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../grid_sdui/grid_in_app_webview_page.dart';
+import 'call_permission_helper.dart';
 import 'push_notification_bootstrap.dart';
 
 /// Data structure representing an incoming call payload delivered via
@@ -212,6 +213,7 @@ class IncomingCallService {
     if (type == 'INCOMING_CALL' || type == 'CALL') {
       final call = IncomingCallData.fromJson(payload);
       currentCall.value = call;
+      unawaited(CallPermissionHelper.wakeAndUnlock());
       // Avoid double incoming screen: if Circle Connect is already open in the foreground
       // or already ringing for this callId, do not show a redundant native modal dialog.
       if (!isCallRingingInWeb(call.callId)) {
@@ -314,6 +316,7 @@ class IncomingCallService {
     final qp = Map<String, String>.from(uri.queryParameters);
     qp['call_action'] = 'answer';
     qp['call_id'] = call.callId;
+    if (call.callerName.isNotEmpty) qp['caller_name'] = call.callerName;
     if (call.callerGridId.isNotEmpty) qp['grid_id'] = call.callerGridId;
     if (call.callerUserId.isNotEmpty) qp['user_id'] = call.callerUserId;
     if (call.callType.isNotEmpty) qp['call_type'] = call.callType;

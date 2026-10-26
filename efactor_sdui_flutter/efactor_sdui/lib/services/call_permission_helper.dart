@@ -70,6 +70,63 @@ class CallPermissionHelper {
     }
   }
 
+  /// Checks whether app is exempt from battery optimizations (Doze mode whitelist).
+  static Future<bool> isBatteryOptimizationIgnored() async {
+    if (kIsWeb || !Platform.isAndroid) return true;
+    try {
+      final res =
+          await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations');
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[CallPermissionHelper] isIgnoringBatteryOptimizations error: $e');
+      return false;
+    }
+  }
+
+  /// Triggers system battery optimization exemption dialog.
+  static Future<bool> requestIgnoreBatteryOptimizations() async {
+    if (kIsWeb || !Platform.isAndroid) return true;
+    try {
+      final res = await _channel
+          .invokeMethod<bool>('requestIgnoreBatteryOptimizations');
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[CallPermissionHelper] requestIgnoreBatteryOptimizations error: $e');
+      return false;
+    }
+  }
+
+  /// Opens OEM specific Autostart settings (Vivo, Xiaomi, Oppo, Samsung, Huawei).
+  static Future<bool> openAutostartSettings() async {
+    if (kIsWeb || !Platform.isAndroid) return false;
+    try {
+      final res = await _channel.invokeMethod<bool>('openAutostartSettings');
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[CallPermissionHelper] openAutostartSettings error: $e');
+      return false;
+    }
+  }
+
+  /// Gets device manufacturer lowercase.
+  static Future<String> getDeviceManufacturer() async {
+    if (kIsWeb || !Platform.isAndroid) return '';
+    try {
+      final res = await _channel.invokeMethod<String>('getDeviceManufacturer');
+      return res ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Explicitly requests native activity to wake the screen and dismiss keyguard.
+  static Future<void> wakeAndUnlock() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod<bool>('wakeAndUnlock');
+    } catch (_) {}
+  }
+
   /// Checks if prompt is needed and displays the onboarding bottom sheet if not yet configured.
   static Future<void> checkAndPromptIfNeeded(BuildContext context) async {
     if (kIsWeb || !Platform.isAndroid) return;
@@ -83,9 +140,10 @@ class CallPermissionHelper {
     final prefs = await SharedPreferences.getInstance();
     final alreadyPrompted = prefs.getBool(_prefPromptShown) ?? false;
     final hasOverlay = await canDrawOverlays();
+    final isBatteryIgnored = await isBatteryOptimizationIgnored();
 
-    // If already granted, nothing needed!
-    if (hasOverlay) return;
+    // If both overlay and battery whitelist are granted, nothing needed!
+    if (hasOverlay && isBatteryIgnored) return;
 
     // If user already dismissed it previously, don't nag every single second
     if (alreadyPrompted) return;
@@ -98,6 +156,18 @@ class CallPermissionHelper {
   static Future<void> showCallPermissionModal(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefPromptShown, true);
+
+    if (!context.mounted) return;
+
+    final manufacturer = await getDeviceManufacturer();
+    final isChineseOem = manufacturer.contains('vivo') ||
+        manufacturer.contains('xiaomi') ||
+        manufacturer.contains('oppo') ||
+        manufacturer.contains('realme') ||
+        manufacturer.contains('iqoo') ||
+        manufacturer.contains('poco') ||
+        manufacturer.contains('redmi') ||
+        manufacturer.contains('oneplus');
 
     if (!context.mounted) return;
 
@@ -182,6 +252,12 @@ class CallPermissionHelper {
                 title: 'Floating Heads-Up Banners',
                 desc: 'Pop-up banners for calls and chat messages while in other apps.',
               ),
+              const SizedBox(height: 12),
+              _buildFeatureRow(
+                icon: Icons.battery_charging_full,
+                title: 'Background Call Wake-up',
+                desc: 'Prevents phone power manager from killing calls when cleared from Recents.',
+              ),
               const SizedBox(height: 24),
 
               // Action Buttons
@@ -199,18 +275,32 @@ class CallPermissionHelper {
                   ),
                   onPressed: () async {
                     Navigator.of(sheetContext).pop();
-                    // Open channel settings (contains floating banner toggle)
+                    // 1. Request Battery Optimization Exemption (Crucial for closed app wake)
+                    final isBatIgnored = await isBatteryOptimizationIgnored();
+                    if (!isBatIgnored) {
+                      await requestIgnoreBatteryOptimizations();
+                      await Future<void>.delayed(const Duration(milliseconds: 500));
+                    }
+
+                    // 2. Open notification channel settings (contains floating banner toggle)
                     await openCallNotificationChannelSettings();
-                    // Also open overlay settings if needed
+
+                    // 3. Open overlay settings if needed
                     final hasOverlay = await canDrawOverlays();
                     if (!hasOverlay) {
                       await Future<void>.delayed(const Duration(milliseconds: 600));
                       await openOverlaySettings();
                     }
+
+                    // 4. On Vivo / Xiaomi / Oppo, prompt autostart if needed
+                    if (isChineseOem) {
+                      await Future<void>.delayed(const Duration(milliseconds: 600));
+                      await openAutostartSettings();
+                    }
                   },
                   child: const Text(
-                    'Enable Call Alerts',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    'Enable Call Alerts & Background Wake',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

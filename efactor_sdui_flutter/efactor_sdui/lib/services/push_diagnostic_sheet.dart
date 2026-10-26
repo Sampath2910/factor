@@ -60,6 +60,7 @@ class _PushDiagnosticSheetState extends State<PushDiagnosticSheet> {
   // Permissions state
   bool _notifGranted = false;
   bool _overlayGranted = false;
+  bool _batteryIgnored = false;
 
   // Backend Sync State
   bool _syncingBackend = false;
@@ -100,6 +101,8 @@ class _PushDiagnosticSheetState extends State<PushDiagnosticSheet> {
         final notif = await Permission.notification.status;
         _notifGranted = notif.isGranted;
         _overlayGranted = await CallPermissionHelper.canDrawOverlays();
+        _batteryIgnored =
+            await CallPermissionHelper.isBatteryOptimizationIgnored();
 
         var token = IncomingCallService.instance.deviceToken;
         if (token == null || token.isEmpty) {
@@ -847,6 +850,40 @@ class _PushDiagnosticSheetState extends State<PushDiagnosticSheet> {
                           onPressed: () => CallPermissionHelper
                               .openCallNotificationChannelSettings(),
                           child: const Text('Configure'),
+                        ),
+                      ),
+                      const Divider(color: borderCol, height: 16),
+                      _buildChecklistRow(
+                        title: 'Battery Whitelist (Doze Exemption)',
+                        granted: _batteryIgnored,
+                        onFix: () async {
+                          await CallPermissionHelper.requestIgnoreBatteryOptimizations();
+                          await Future<void>.delayed(
+                            const Duration(seconds: 1),
+                          );
+                          await _loadDiagnostics();
+                        },
+                      ),
+                      const Divider(color: borderCol, height: 16),
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'OEM Autostart / Background Run',
+                          style: TextStyle(color: Colors.white, fontSize: 13),
+                        ),
+                        subtitle: const Text(
+                          'Vivo, Xiaomi, Oppo background wake after swipe',
+                          style: TextStyle(color: Colors.white60, fontSize: 11),
+                        ),
+                        trailing: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: primary,
+                            side: const BorderSide(color: borderCol),
+                          ),
+                          onPressed: () =>
+                              CallPermissionHelper.openAutostartSettings(),
+                          child: const Text('Open'),
                         ),
                       ),
                     ],
