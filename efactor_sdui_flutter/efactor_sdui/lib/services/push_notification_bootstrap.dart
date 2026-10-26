@@ -38,6 +38,83 @@ const AndroidNotificationChannel kMessagesChannel = AndroidNotificationChannel(
   enableLights: true,
 );
 
+/// Darwin notification categories providing interactive action buttons on iOS
+/// (Answer/Decline on calls, inline text Reply + Mark as read on messages, and Stop on live location).
+List<DarwinNotificationCategory> get kDarwinNotificationCategories =>
+    <DarwinNotificationCategory>[
+  DarwinNotificationCategory(
+    'calls_category',
+    actions: <DarwinNotificationAction>[
+      DarwinNotificationAction.plain(
+        'decline',
+        'Decline',
+        options: <DarwinNotificationActionOption>{
+          DarwinNotificationActionOption.destructive,
+        },
+      ),
+      DarwinNotificationAction.plain(
+        'answer',
+        'Answer',
+        options: <DarwinNotificationActionOption>{
+          DarwinNotificationActionOption.foreground,
+        },
+      ),
+    ],
+    options: <DarwinNotificationCategoryOption>{
+      DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
+    },
+  ),
+  DarwinNotificationCategory(
+    'messages_category',
+    actions: <DarwinNotificationAction>[
+      DarwinNotificationAction.text(
+        'reply',
+        'Reply',
+        buttonTitle: 'Send',
+        placeholder: 'Type a reply...',
+      ),
+      DarwinNotificationAction.plain(
+        'mark_as_read',
+        'Mark as read',
+      ),
+    ],
+    options: <DarwinNotificationCategoryOption>{
+      DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
+    },
+  ),
+  DarwinNotificationCategory(
+    'missed_calls_category',
+    actions: <DarwinNotificationAction>[
+      DarwinNotificationAction.plain(
+        'callback',
+        'Call back',
+        options: <DarwinNotificationActionOption>{
+          DarwinNotificationActionOption.foreground,
+        },
+      ),
+      DarwinNotificationAction.plain(
+        'message',
+        'Message',
+        options: <DarwinNotificationActionOption>{
+          DarwinNotificationActionOption.foreground,
+        },
+      ),
+    ],
+  ),
+  DarwinNotificationCategory(
+    'live_location_category',
+    actions: <DarwinNotificationAction>[
+      DarwinNotificationAction.plain(
+        'stop_live_location',
+        'Stop Sharing',
+        options: <DarwinNotificationActionOption>{
+          DarwinNotificationActionOption.destructive,
+        },
+      ),
+    ],
+  ),
+];
+
 /// Background notification response handler (runs in background isolate).
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) async {
@@ -99,9 +176,11 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   final plugin = FlutterLocalNotificationsPlugin();
   const androidInit = AndroidInitializationSettings('ic_notification');
   await plugin.initialize(
-    const InitializationSettings(
+    InitializationSettings(
       android: androidInit,
-      iOS: DarwinInitializationSettings(),
+      iOS: DarwinInitializationSettings(
+        notificationCategories: kDarwinNotificationCategories,
+      ),
     ),
     onDidReceiveNotificationResponse: (response) {
       notificationTapBackground(response);
@@ -234,7 +313,9 @@ Future<void> showIncomingCallNotificationOnPlugin(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        sound: 'call_ringtone.aiff',
         interruptionLevel: InterruptionLevel.timeSensitive,
+        categoryIdentifier: 'calls_category',
       ),
     ),
     payload: payload,
@@ -304,6 +385,7 @@ Future<void> showMissedCallNotificationOnPlugin(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        categoryIdentifier: 'missed_calls_category',
       ),
     ),
     payload: jsonEncode(payloadMap),
@@ -371,6 +453,7 @@ Future<void> showMessageNotificationOnPlugin(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          categoryIdentifier: 'messages_category',
         ),
       ),
       payload: jsonEncode(data),
@@ -422,6 +505,7 @@ Future<void> showMessageNotificationOnPlugin(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        categoryIdentifier: 'messages_category',
       ),
     ),
     payload: jsonEncode(data),
@@ -787,9 +871,11 @@ curl -X POST "https://fcm.googleapis.com/fcm/send" \\
 
   Future<void> _initLocalNotifications() async {
     const android = AndroidInitializationSettings('ic_notification');
-    const ios = DarwinInitializationSettings();
+    final ios = DarwinInitializationSettings(
+      notificationCategories: kDarwinNotificationCategories,
+    );
     await _local.initialize(
-      const InitializationSettings(android: android, iOS: ios),
+      InitializationSettings(android: android, iOS: ios),
       onDidReceiveNotificationResponse: _handleNotificationResponse,
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );

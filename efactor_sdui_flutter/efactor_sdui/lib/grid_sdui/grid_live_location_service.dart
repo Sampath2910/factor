@@ -403,11 +403,22 @@ class GridLiveLocationService {
       ],
     );
 
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: false,
+      presentSound: false,
+      interruptionLevel: InterruptionLevel.active,
+      categoryIdentifier: 'live_location_category',
+    );
+
     await plugin.show(
       kNotificationId,
       title,
       body,
-      const NotificationDetails(android: androidDetails),
+      const NotificationDetails(
+        android: androidDetails,
+        iOS: darwinDetails,
+      ),
       payload: jsonEncode(<String, dynamic>{'type': 'live_location'}),
     );
   }

@@ -19,6 +19,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A1B2C3D4E5F60718293A0001 /* WifiNativeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A0002 /* WifiNativeBridge.swift */; };
 		B1C2D3E4F5A60718293B0001 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A60718293B0002 /* GoogleService-Info.plist */; };
+		C1C2D3E4F5A60718293B0001 /* call_ringtone.aiff in Resources */ = {isa = PBXBuildFile; fileRef = C1C2D3E4F5A60718293B0002 /* call_ringtone.aiff */; };
 		C6ED43BDAAECB70446C9E26B /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 66D49C826C2AEBD45BEB1C11 /* Pods_Runner.framework */; };
 /* End PBXBuildFile section */
 
@@ -69,6 +70,7 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A0002 /* WifiNativeBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WifiNativeBridge.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A60718293B0002 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		C1C2D3E4F5A60718293B0002 /* call_ringtone.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = call_ringtone.aiff; sourceTree = "<group>"; };
 		D6D29C3D7906B4338AAE6DD5 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		E61F97B1712A0E76440DEB06 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		E7FBA1521DCDC5447DA3592E /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
@@ -167,6 +169,7 @@
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
 				97C147021CF9000F007C117D /* Info.plist */,
 				B1C2D3E4F5A60718293B0002 /* GoogleService-Info.plist */,
+				C1C2D3E4F5A60718293B0002 /* call_ringtone.aiff */,
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
@@ -285,6 +288,7 @@
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				B1C2D3E4F5A60718293B0001 /* GoogleService-Info.plist in Resources */,
+				C1C2D3E4F5A60718293B0001 /* call_ringtone.aiff in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
