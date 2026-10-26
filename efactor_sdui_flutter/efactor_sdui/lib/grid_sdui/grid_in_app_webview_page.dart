@@ -590,6 +590,36 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
           return _handleAndroidFileSelection(params);
         },
       );
+
+      // Handle Geolocation prompt requests from Circle Connect & Professional Space (📎 -> Location)
+      androidController.setGeolocationPermissionsPromptCallbacks(
+        onShowPrompt: (GeolocationPermissionsRequestParams request) async {
+          final isAllowedDomain = request.origin.contains('efactor.tech');
+          if (!isAllowedDomain) {
+            debugPrint(
+              '[GridInAppWebView] Geolocation prompt denied for untrusted origin: ${request.origin}',
+            );
+            return const GeolocationPermissionsResponse(
+              allow: false,
+              retain: false,
+            );
+          }
+
+          var status = await Permission.locationWhenInUse.status;
+          if (!status.isGranted) {
+            status = await Permission.locationWhenInUse.request();
+          }
+
+          final allow = status.isGranted;
+          debugPrint(
+            '[GridInAppWebView] Geolocation prompt ${allow ? "ALLOWED" : "DENIED"} for origin: ${request.origin}',
+          );
+          return GeolocationPermissionsResponse(
+            allow: allow,
+            retain: allow,
+          );
+        },
+      );
     }
   }
 
