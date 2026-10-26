@@ -13,6 +13,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'incoming_call_service.dart';
 import 'json_http.dart';
 import '../auth_sdui/auth_secure_storage.dart';
+import '../grid_sdui/grid_live_location_service.dart';
 
 /// Call notification channel configured with system default ringtone and USAGE_NOTIFICATION_RINGTONE.
 const AndroidNotificationChannel kCallsChannel = AndroidNotificationChannel(
@@ -40,6 +41,12 @@ const AndroidNotificationChannel kMessagesChannel = AndroidNotificationChannel(
 /// Background notification response handler (runs in background isolate).
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) async {
+  final actionId = response.actionId ?? '';
+  if (actionId == 'stop_live_location') {
+    await GridLiveLocationService.instance.stopAll(postStop: true);
+    return;
+  }
+
   final payload = response.payload;
   if (payload == null || payload.isEmpty) return;
 
@@ -892,6 +899,10 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
           (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
       final actionId = response.actionId;
 
+      if (actionId == 'stop_live_location') {
+        await GridLiveLocationService.instance.stopAll(postStop: true);
+        return;
+      }
       if (actionId == 'decline') {
         final call = IncomingCallData.fromJson(data);
         await IncomingCallService.instance.declineCall(call);

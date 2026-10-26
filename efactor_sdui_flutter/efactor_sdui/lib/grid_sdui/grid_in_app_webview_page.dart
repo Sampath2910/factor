@@ -15,6 +15,7 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../services/incoming_call_service.dart';
 import '../services/push_notification_bootstrap.dart';
+import 'grid_live_location_service.dart';
 import 'grid_media_cache_service.dart';
 import 'grid_offline_outbox_service.dart';
 import 'grid_shell_pool.dart';
@@ -1304,10 +1305,80 @@ ${ok ? ">>> Server ACCEPTED the call request! FCM push dispatched to Mobile B! <
 Error: $error
 ========================================================================
 ''');
+      } else if (action == 'startLiveLocation') {
+        final messageId = data['messageId']?.toString() ?? '';
+        final conversationId = data['conversationId']?.toString() ?? '';
+        final untilStr = data['until']?.toString() ?? '';
+        final until = DateTime.tryParse(untilStr) ??
+            DateTime.now().add(const Duration(minutes: 15));
+        final endpoint = data['endpoint']?.toString() ?? '';
+        final intervalSeconds =
+            (data['intervalSeconds'] as num?)?.toInt() ?? 30;
+        final minDistanceMeters =
+            (data['minDistanceMeters'] as num?)?.toDouble() ?? 15.0;
+
+        unawaited(_handleStartLiveLocation(
+          messageId: messageId,
+          conversationId: conversationId,
+          until: until,
+          endpoint: endpoint,
+          intervalSeconds: intervalSeconds,
+          minDistanceMeters: minDistanceMeters,
+        ));
+      } else if (action == 'stopLiveLocation') {
+        final messageId = data['messageId']?.toString() ?? '';
+        GridLiveLocationService.instance.stop(messageId, postStop: false);
       }
     } catch (e) {
       debugPrint('[GridInAppWebView] Failed parsing CircleConnectPushBridge msg: $e');
     }
+  }
+
+  Future<void> _handleStartLiveLocation({
+    required String messageId,
+    required String conversationId,
+    required DateTime until,
+    required String endpoint,
+    required int intervalSeconds,
+    required double minDistanceMeters,
+  }) async {
+    final cookies = await _getCookiesForEndpoint(endpoint);
+    await GridLiveLocationService.instance.start(
+      messageId: messageId,
+      conversationId: conversationId,
+      until: until,
+      endpoint: endpoint,
+      intervalSeconds: intervalSeconds,
+      minDistanceMeters: minDistanceMeters,
+      cookies: cookies,
+    );
+  }
+
+  Future<String> _getCookiesForEndpoint(String endpoint) async {
+    try {
+      final uri = Uri.tryParse(endpoint);
+      if (uri != null) {
+        final cookieList =
+            await WebViewCookieManager().getCookies(domain: uri);
+        if (cookieList.isNotEmpty) {
+          return cookieList.map((c) => '${c.name}=${c.value}').join('; ');
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final dynamic docCookie =
+          await _controller.runJavaScriptReturningResult('document.cookie');
+      if (docCookie != null) {
+        var str = docCookie.toString().trim();
+        if (str.startsWith('"') && str.endsWith('"') && str.length >= 2) {
+          str = str.substring(1, str.length - 1);
+        }
+        return str;
+      }
+    } catch (_) {}
+
+    return '';
   }
 
   /// Handles media requests from CircleConnectMediaBridge (cache/download/save voice note).
