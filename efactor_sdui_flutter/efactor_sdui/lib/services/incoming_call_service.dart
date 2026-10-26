@@ -25,6 +25,7 @@ class IncomingCallData {
     this.conversationId = '',
     this.tag = '',
     this.body = '',
+    this.actionToken = '',
   });
 
   static const String defaultCallUrl = 'https://efactor.tech/index.php/grid-chat';
@@ -41,6 +42,7 @@ class IncomingCallData {
   final String conversationId;
   final String tag;
   final String body;
+  final String actionToken;
 
   bool get isVideo => callType.toLowerCase() == 'video';
 
@@ -90,6 +92,14 @@ class IncomingCallData {
             .toString()
             .trim();
 
+    final actionToken = (json['action_token'] ??
+            json['actionToken'] ??
+            json['call_token'] ??
+            json['token'] ??
+            '')
+        .toString()
+        .trim();
+
     return IncomingCallData(
       callId: callId,
       callerId: callerUserId.isNotEmpty
@@ -108,6 +118,7 @@ class IncomingCallData {
       conversationId: conversationId,
       tag: tag,
       body: body,
+      actionToken: actionToken,
       timestamp: json['timestamp'] is int
           ? json['timestamp'] as int
           : int.tryParse(json['timestamp']?.toString() ?? ''),
@@ -126,6 +137,7 @@ class IncomingCallData {
         'conversation_id': conversationId,
         'tag': tag,
         'body': body,
+        'action_token': actionToken,
         'timestamp': timestamp,
       };
 }
@@ -177,6 +189,95 @@ class IncomingCallService {
     unawaited(GridInAppWebViewPage.updatePushTokenInWeb(_deviceToken!));
   }
 
+  Timer? _callTimeoutTimer;
+  static final Set<String> _sentRingingTokens = <String>{};
+
+  /// Dispatches call lifecycle actions (`ringing`, `decline`, etc.) to the
+  /// Circle Connect native action API:
+  /// POST https://<domain>/grid-chat/api/call/native_action
+  /// Body: {"action": "<action>", "action_token": "<actionToken>"}
+  /// No login / authentication required; valid for 2 minutes from call push.
+  static Future<bool> postNativeAction({
+    required String action,
+    required String actionToken,
+    String? roomUrl,
+  }) async {
+    final token = actionToken.trim();
+    if (token.isEmpty) {
+      debugPrint('[NativeCallAction] Skip POST native_action ($action): empty actionToken');
+      return false;
+    }
+
+    final normalizedAction = action.toLowerCase().trim();
+    if (normalizedAction == 'ringing') {
+      if (_sentRingingTokens.contains(token)) {
+        debugPrint('[NativeCallAction] Skipping duplicate ringing action for token: $token');
+        return true;
+      }
+      _sentRingingTokens.add(token);
+    }
+
+    Uri? targetUri;
+    if (roomUrl != null && roomUrl.isNotEmpty) {
+      final parsed = Uri.tryParse(roomUrl);
+      if (parsed != null && parsed.host.isNotEmpty) {
+        targetUri = Uri.parse('${parsed.origin}/grid-chat/api/call/native_action');
+      }
+    }
+    targetUri ??= Uri.parse('https://efactor.tech/grid-chat/api/call/native_action');
+
+    final payload = <String, String>{
+      'action': normalizedAction,
+      'action_token': token,
+    };
+
+    final jsonBody = jsonEncode(payload);
+    debugPrint('[NativeCallAction] >>> POST $targetUri | Body: $jsonBody');
+
+    try {
+      var response = await http
+          .post(
+            targetUri,
+            headers: const <String, String>{
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonBody,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint(
+        '[NativeCallAction] <<< Response $targetUri -> Status: ${response.statusCode} | Body: ${response.body}',
+      );
+
+      // In WordPress environments without URL rewrite, retry with /index.php/ prefix if 404
+      if (response.statusCode == 404 && !targetUri.path.contains('index.php')) {
+        final fallbackUri = Uri.parse(
+          '${targetUri.origin}/index.php/grid-chat/api/call/native_action',
+        );
+        debugPrint('[NativeCallAction] 404 received; retrying at fallback $fallbackUri');
+        response = await http
+            .post(
+              fallbackUri,
+              headers: const <String, String>{
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+              body: jsonBody,
+            )
+            .timeout(const Duration(seconds: 10));
+        debugPrint(
+          '[NativeCallAction] <<< Fallback Response $fallbackUri -> Status: ${response.statusCode} | Body: ${response.body}',
+        );
+      }
+
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      debugPrint('[NativeCallAction] !!! Failed POST $targetUri ($action): $e');
+      return false;
+    }
+  }
+
   /// Waits briefly on app cold start until [navigatorKey] is mounted.
   Future<BuildContext?> _waitForNavigatorContext() async {
     var ctx = navigatorKey.currentState?.context;
@@ -213,6 +314,28 @@ class IncomingCallService {
     if (type == 'INCOMING_CALL' || type == 'CALL') {
       final call = IncomingCallData.fromJson(payload);
       currentCall.value = call;
+
+      // Spec rule: Automatically stop ringing after 60 seconds
+      _callTimeoutTimer?.cancel();
+      _callTimeoutTimer = Timer(const Duration(seconds: 60), () {
+        if (currentCall.value?.callId == call.callId) {
+          debugPrint(
+            '[IncomingCallService] 60s timeout reached, auto-stopping ringing for callId=${call.callId}',
+          );
+          dismissCall();
+          PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
+        }
+      });
+
+      // Spec rule: Notify server that ringing screen appears
+      if (call.actionToken.isNotEmpty) {
+        unawaited(postNativeAction(
+          action: 'ringing',
+          actionToken: call.actionToken,
+          roomUrl: call.roomUrl,
+        ));
+      }
+
       unawaited(CallPermissionHelper.wakeAndUnlock());
       // Avoid double incoming screen: if Circle Connect is already open in the foreground
       // or already ringing for this callId, do not show a redundant native modal dialog.
@@ -240,6 +363,8 @@ class IncomingCallService {
 
   /// Dismiss the active incoming call banner/screen.
   void dismissCall() {
+    _callTimeoutTimer?.cancel();
+    _callTimeoutTimer = null;
     currentCall.value = null;
   }
 
@@ -293,7 +418,7 @@ class IncomingCallService {
 
   /// Answer the call.
   /// If GRID Chat is open: calls window.gridChatCallAction({action: 'answer', call_id})
-  /// If closed: opens <url>?call_action=answer&call_id=<call_id>
+  /// If closed: opens <url>?call_action=answer&call_id=<call_id>&grid_id=<caller_grid_id>
   Future<void> answerCall(
     IncomingCallData call, {
     BuildContext? context,
@@ -305,6 +430,9 @@ class IncomingCallService {
       await GridInAppWebViewPage.handleCallAction(
         action: 'answer',
         callId: call.callId,
+        gridId: call.callerGridId,
+        userId: call.callerUserId,
+        callType: call.callType,
       );
       return;
     }
@@ -316,8 +444,8 @@ class IncomingCallService {
     final qp = Map<String, String>.from(uri.queryParameters);
     qp['call_action'] = 'answer';
     qp['call_id'] = call.callId;
-    if (call.callerName.isNotEmpty) qp['caller_name'] = call.callerName;
     if (call.callerGridId.isNotEmpty) qp['grid_id'] = call.callerGridId;
+    if (call.callerName.isNotEmpty) qp['caller_name'] = call.callerName;
     if (call.callerUserId.isNotEmpty) qp['user_id'] = call.callerUserId;
     if (call.callType.isNotEmpty) qp['call_type'] = call.callType;
     final answerUri = uri.replace(queryParameters: qp);
@@ -338,9 +466,58 @@ class IncomingCallService {
     }
   }
 
+  /// User tapped notification body: opens full-screen ringing UI with call_action=show.
+  /// If GRID Chat is open: calls window.gridChatCallAction({action: 'show', call_id})
+  /// If closed: opens <url>?call_action=show&call_id=<call_id>&grid_id=<caller_grid_id>
+  Future<void> showCallScreen(
+    IncomingCallData call, {
+    BuildContext? context,
+  }) async {
+    dismissCall();
+
+    if (GridInAppWebViewPage.isPageOpen) {
+      await GridInAppWebViewPage.handleCallAction(
+        action: 'show',
+        callId: call.callId,
+        gridId: call.callerGridId,
+        userId: call.callerUserId,
+        callType: call.callType,
+      );
+      return;
+    }
+
+    final base = call.roomUrl.isNotEmpty
+        ? call.roomUrl
+        : IncomingCallData.defaultCallUrl;
+    final uri = Uri.parse(base);
+    final qp = Map<String, String>.from(uri.queryParameters);
+    qp['call_action'] = 'show';
+    qp['call_id'] = call.callId;
+    if (call.callerGridId.isNotEmpty) qp['grid_id'] = call.callerGridId;
+    if (call.callerName.isNotEmpty) qp['caller_name'] = call.callerName;
+    if (call.callerUserId.isNotEmpty) qp['user_id'] = call.callerUserId;
+    if (call.callType.isNotEmpty) qp['call_type'] = call.callType;
+    final showUri = uri.replace(queryParameters: qp);
+
+    final targetContext = await _waitForNavigatorContext();
+    if (targetContext != null && targetContext.mounted) {
+      await Navigator.of(targetContext).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => GridInAppWebViewPage(
+            uri: showUri,
+            title: 'Circle Connect',
+            showAppBar: false,
+            accessToken: activeAccessToken,
+            userId: activeUserId,
+          ),
+        ),
+      );
+    }
+  }
+
   /// User declined the call.
-  /// Cancels notification, POSTs <url>/api/call/decline with form fields
-  /// `call_id` and `caller_grid_id`, and sends the WebView cookies.
+  /// Spec rule: Uses action_token with POST /grid-chat/api/call/native_action
+  /// requiring no login, preventing 401 Unauthorized errors when app is closed.
   Future<void> declineCall(
     IncomingCallData call, {
     String? rejectApiUrl,
@@ -354,9 +531,24 @@ class IncomingCallService {
       await GridInAppWebViewPage.handleCallAction(
         action: 'decline',
         callId: call.callId,
+        gridId: call.callerGridId,
       );
     }
 
+    // 1. Spec rule: If action_token is present from push, POST native_action without requiring login
+    if (call.actionToken.isNotEmpty) {
+      final success = await postNativeAction(
+        action: 'decline',
+        actionToken: call.actionToken,
+        roomUrl: call.roomUrl,
+      );
+      if (success) {
+        debugPrint('[IncomingCallService] declineCall completed via native_action endpoint.');
+        return;
+      }
+    }
+
+    // 2. Legacy fallback to cookie-based call/decline if actionToken was empty or failed
     final targetUrl = call.roomUrl.isNotEmpty
         ? call.roomUrl
         : IncomingCallData.defaultCallUrl;

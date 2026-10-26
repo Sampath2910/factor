@@ -222,12 +222,20 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
     final call = IncomingCallData.fromJson(data);
     // ignore: avoid_print
     print('[FCM_DEBUG] Rendering background incoming call notification for caller: ${call.callerName} (callId: ${call.callId})');
+    if (call.actionToken.isNotEmpty) {
+      unawaited(IncomingCallService.postNativeAction(
+        action: 'ringing',
+        actionToken: call.actionToken,
+        roomUrl: call.roomUrl,
+      ));
+    }
     await showIncomingCallNotificationOnPlugin(plugin, call, rawData: data);
     return;
   }
 
   if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
     final call = IncomingCallData.fromJson(data);
+    await plugin.cancel(call.callId.hashCode.abs());
     await showMissedCallNotificationOnPlugin(plugin, call, rawData: data);
     return;
   }
@@ -280,7 +288,7 @@ Future<void> showIncomingCallNotificationOnPlugin(
         fullScreenIntent: true,
         ongoing: true,
         autoCancel: true,
-        timeoutAfter: 45000,
+        timeoutAfter: 60000,
         color: const Color(0xFF0284C7),
         ticker: 'Incoming call from ${call.callerName}',
         additionalFlags: Int32List.fromList([4]), // Notification.FLAG_INSISTENT loops ringtone
@@ -928,6 +936,13 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
 
     if (isCall) {
       final call = IncomingCallData.fromJson(data);
+      if (call.actionToken.isNotEmpty) {
+        unawaited(IncomingCallService.postNativeAction(
+          action: 'ringing',
+          actionToken: call.actionToken,
+          roomUrl: call.roomUrl,
+        ));
+      }
       IncomingCallService.instance.handleIncomingPayload(data);
       // Avoid double incoming screen: if Circle Connect is already open and ringing
       // for this callId, do not post a duplicate heads-up notification.
@@ -938,6 +953,7 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
     }
     if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
       final call = IncomingCallData.fromJson(data);
+      unawaited(cancelCallNotification(call.callId));
       IncomingCallService.instance.handleIncomingPayload(data);
       unawaited(showMissedCallNotification(call));
       return;
@@ -1036,7 +1052,7 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       // No button clicked -> user tapped notification banner / full-screen intent
       if (type == 'INCOMING_CALL' || type == 'CALL') {
         final call = IncomingCallData.fromJson(data);
-        await IncomingCallService.instance.openCallScreenWithoutAction(call);
+        await IncomingCallService.instance.showCallScreen(call);
       } else if (type == 'MISSED_CALL') {
         final call = IncomingCallData.fromJson(data);
         await IncomingCallService.instance.openCallScreenWithoutAction(call);
@@ -1063,7 +1079,7 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
     if (type == 'INCOMING_CALL' || type == 'CALL') {
       final call = IncomingCallData.fromJson(data);
       unawaited(
-        IncomingCallService.instance.openCallScreenWithoutAction(call),
+        IncomingCallService.instance.showCallScreen(call),
       );
       return;
     }
