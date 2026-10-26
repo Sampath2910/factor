@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../data/schema_repository.dart';
+import '../grid_sdui/grid_live_location_service.dart';
 import '../grid_sdui/grid_schema_repository.dart';
 import '../grid_sdui/grid_shell_pool.dart';
 import '../home_sdui/home_schema_repository.dart';
@@ -85,6 +86,7 @@ class AppCacheManager {
     }
     try {
       GridShellPool.instance.clearAll();
+      await GridLiveLocationService.instance.stopAll(postStop: true);
     } catch (e) {
       logDebug('[AppCacheManager] GridShellPool clear error: $e');
     }
