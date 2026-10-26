@@ -339,7 +339,7 @@ class IncomingCallService {
       unawaited(CallPermissionHelper.wakeAndUnlock());
       // Avoid double incoming screen: if Circle Connect is already open in the foreground
       // or already ringing for this callId, do not show a redundant native modal dialog.
-      if (!isCallRingingInWeb(call.callId)) {
+      if (!isCallPageOpen && !isCallRingingInWeb(call.callId)) {
         unawaited(_displayIncomingCallModal(call));
       }
     } else if (type == 'MISSED_CALL' ||
@@ -516,26 +516,48 @@ class IncomingCallService {
   }
 
   /// User declined the call.
-  /// Spec rule: Uses action_token with POST /grid-chat/api/call/native_action
-  /// requiring no login, preventing 401 Unauthorized errors when app is closed.
+  /// Handles both cases per Circle Connect specification:
+  ///
+  /// 1. Push with `action_token` (1:1 calls):
+  ///    POSTs to `/grid-chat/api/call/native_action` with `{"action":"decline", "action_token":"<from push>"}`
+  ///    requiring no login, preventing 401 Unauthorized errors when app is closed.
+  ///
+  /// 2. Push without `action_token` (group calls or legacy pushes):
+  ///    - If GRID Chat WebView is open: calls `window.gridChatCallAction({action:"decline", call_id, grid_id})`.
+  ///    - If closed: opens WebView at `https://<domain>/grid-chat?call_action=decline&call_id=<call_id>&grid_id=<caller_grid_id>`.
+  ///    The page then declines through the logged-in session.
+  ///    Never sends native_action without a token.
   Future<void> declineCall(
     IncomingCallData call, {
     String? rejectApiUrl,
     http.Client? client,
   }) async {
-    debugPrint('[IncomingCallService] >>> declineCall() CALLED for callId=${call.callId}, caller=${call.callerName} <<<');
+    debugPrint(
+      '[IncomingCallService] >>> declineCall() CALLED for callId=${call.callId}, caller=${call.callerName}, hasToken=${call.actionToken.isNotEmpty} <<<',
+    );
     dismissCall();
     await PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
 
+    // Case A: If GRID Chat WebView is already open in foreground -> call window.gridChatCallAction
     if (GridInAppWebViewPage.isPageOpen) {
       await GridInAppWebViewPage.handleCallAction(
         action: 'decline',
         callId: call.callId,
         gridId: call.callerGridId,
+        userId: call.callerUserId,
+        callType: call.callType,
       );
+      if (call.actionToken.isNotEmpty) {
+        unawaited(postNativeAction(
+          action: 'decline',
+          actionToken: call.actionToken,
+          roomUrl: call.roomUrl,
+        ));
+      }
+      return;
     }
 
-    // 1. Spec rule: If action_token is present from push, POST native_action without requiring login
+    // Case B: Push has action_token (1:1 calls) -> POST native_action without requiring login
     if (call.actionToken.isNotEmpty) {
       final success = await postNativeAction(
         action: 'decline',
@@ -548,55 +570,38 @@ class IncomingCallService {
       }
     }
 
-    // 2. Legacy fallback to cookie-based call/decline if actionToken was empty or failed
-    final targetUrl = call.roomUrl.isNotEmpty
+    // Case C: Push WITHOUT action_token (group calls or older push) and WebView closed ->
+    // Spec rule: Open WebView with call_action=decline&call_id=<call_id>&grid_id=<caller_grid_id>.
+    // Page declines through the logged-in session. Never send native_action without a token!
+    debugPrint(
+      '[IncomingCallService] No action_token; opening WebView with call_action=decline to decline via logged-in session',
+    );
+    final base = call.roomUrl.isNotEmpty
         ? call.roomUrl
         : IncomingCallData.defaultCallUrl;
-    final cookies = await getCookiesForUrl(targetUrl);
+    final uri = Uri.parse(base);
+    final qp = Map<String, String>.from(uri.queryParameters);
+    qp['call_action'] = 'decline';
+    qp['call_id'] = call.callId;
+    if (call.callerGridId.isNotEmpty) qp['grid_id'] = call.callerGridId;
+    if (call.callerName.isNotEmpty) qp['caller_name'] = call.callerName;
+    if (call.callerUserId.isNotEmpty) qp['user_id'] = call.callerUserId;
+    if (call.callType.isNotEmpty) qp['call_type'] = call.callType;
+    final declineUri = uri.replace(queryParameters: qp);
 
-    final primaryUri = (rejectApiUrl != null && rejectApiUrl.isNotEmpty)
-        ? Uri.tryParse(rejectApiUrl)
-        : Uri.tryParse(
-            'https://efactor.tech/index.php/grid-chat/api/call/decline',
-          );
-    final fallbackUri = Uri.tryParse(
-      'https://efactor.tech/grid-chat/api/call/decline',
-    );
-
-    final headers = <String, String>{
-      'Content-Type': 'application/x-www-form-urlencoded',
-      if (cookies.isNotEmpty) 'Cookie': cookies,
-      if (activeAccessToken != null && activeAccessToken!.isNotEmpty)
-        'Authorization': 'Bearer $activeAccessToken',
-    };
-
-    final bodyFields = <String, String>{
-      'call_id': call.callId,
-      'caller_grid_id': call.callerGridId,
-      if (call.callerUserId.isNotEmpty) 'caller_user_id': call.callerUserId,
-      if (activeUserId != null) 'user_id': activeUserId.toString(),
-    };
-
-    final httpClient = client ?? http.Client();
-    try {
-      if (primaryUri != null) {
-        final resp = await httpClient
-            .post(primaryUri, headers: headers, body: bodyFields)
-            .timeout(const Duration(seconds: 10));
-        if (resp.statusCode >= 200 && resp.statusCode < 300) {
-          if (client == null) httpClient.close();
-          return;
-        }
-      }
-      if (fallbackUri != null && fallbackUri != primaryUri) {
-        await httpClient
-            .post(fallbackUri, headers: headers, body: bodyFields)
-            .timeout(const Duration(seconds: 10));
-      }
-    } catch (e) {
-      debugPrint('[IncomingCallService] declineCall error: $e');
-    } finally {
-      if (client == null) httpClient.close();
+    final targetContext = await _waitForNavigatorContext();
+    if (targetContext != null && targetContext.mounted) {
+      await Navigator.of(targetContext).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => GridInAppWebViewPage(
+            uri: declineUri,
+            title: 'Circle Connect',
+            showAppBar: false,
+            accessToken: activeAccessToken,
+            userId: activeUserId,
+          ),
+        ),
+      );
     }
   }
 

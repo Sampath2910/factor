@@ -944,9 +944,10 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         ));
       }
       IncomingCallService.instance.handleIncomingPayload(data);
-      // Avoid double incoming screen: if Circle Connect is already open and ringing
-      // for this callId, do not post a duplicate heads-up notification.
-      if (!IncomingCallService.instance.isCallRingingInWeb(call.callId)) {
+      // Avoid double incoming screen: if Circle Connect is already open in foreground
+      // or already ringing for this callId, do not post a duplicate heads-up notification.
+      if (!IncomingCallService.instance.isCallPageOpen &&
+          !IncomingCallService.instance.isCallRingingInWeb(call.callId)) {
         unawaited(showIncomingCallNotification(call));
       }
       return;
