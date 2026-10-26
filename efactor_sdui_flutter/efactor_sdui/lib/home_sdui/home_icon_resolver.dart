@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class HomeIconResolver {
@@ -69,6 +68,12 @@ class HomeIconResolver {
     'cartShopping': FontAwesomeIcons.cartShopping,
     'userPen': FontAwesomeIcons.userPen,
     'moon': FontAwesomeIcons.moon,
+    'scanner': FontAwesomeIcons.expand,
+    'cropFree': FontAwesomeIcons.expand,
+    'viewfinder': FontAwesomeIcons.expand,
+    'expand': FontAwesomeIcons.expand,
+    'arrow-right': FontAwesomeIcons.arrowRight,
+    'chevron-right': FontAwesomeIcons.chevronRight,
   };
 
   final Map<String, FaIconData> _resolved = <String, FaIconData>{};
@@ -211,6 +216,9 @@ class HomeIconResolver {
     'logout' || 'signOut' || 'signOutAlt' => 'rightFromBracket',
     'alerts' || 'notification' || 'notifications' => 'bell',
     'appearance' || 'theme' => 'sliders',
+    'scanner' || 'cropFree' || 'scan' || 'viewfinder' => 'expand',
+    'arrowRight' || 'arrow-right' => 'arrowRight',
+    'chevronRight' || 'chevron-right' => 'chevronRight',
     'videoCamera' || 'video' => 'video',
     'percentage' => 'percent',
     _ => value,

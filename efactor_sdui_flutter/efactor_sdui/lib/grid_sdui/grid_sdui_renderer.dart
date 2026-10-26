@@ -192,22 +192,34 @@ class GridSduiRenderer {
       }
       return Padding(
         padding: const EdgeInsets.only(left: 8),
-        child: Material(
-          color: color,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => state.dispatch(action['actionId']?.toString()),
-            child: SizedBox(
-              width: 40,
-              height: 40,
-              child: Center(
-                child: Text(
-                  action['label']?.toString() ?? '',
-                  style: TextStyle(
-                    color: onAccent,
-                    fontWeight: FontWeight.w800,
-                    fontSize: fontSize,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: color.withValues(alpha: 0.35),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: color,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => state.dispatch(action['actionId']?.toString()),
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Center(
+                  child: Text(
+                    action['label']?.toString() ?? '',
+                    style: TextStyle(
+                      color: onAccent,
+                      fontWeight: FontWeight.w800,
+                      fontSize: fontSize,
+                    ),
                   ),
                 ),
               ),
@@ -217,13 +229,20 @@ class GridSduiRenderer {
       );
     }
 
-    final surface = state.tokenColor('colors.surface');
-    final iconColor = state.tokenColor('colors.textSecondary');
-    if (surface == null || iconColor == null) {
+    final appearance = _map(action['appearance']) ?? const <String, dynamic>{};
+    final layout = _map(action['layout']) ?? const <String, dynamic>{};
+    final actionSize = _d(appearance['size'] ?? layout['width']) ?? 40.0;
+    final iconSize = _d(appearance['iconSize']) ?? 20.0;
+    final surface = state.parseColor(action['backgroundColor']) ??
+        state.parseColor(appearance['backgroundColor']) ??
+        Colors.transparent;
+    final iconColor = state.parseColor(action['color']) ??
+        state.tokenColor('colors.textSecondary');
+    if (iconColor == null) {
       return SchemaIssueWidget(
         title: 'Schema color missing',
         details: const [
-          'Provide designTokens.colors.surface and designTokens.colors.textSecondary',
+          'Provide designTokens.colors.textSecondary or action.color',
         ],
         componentType: type,
         controlId: action['id']?.toString(),
@@ -240,12 +259,12 @@ class GridSduiRenderer {
           customBorder: const CircleBorder(),
           onTap: () => state.dispatch(action['actionId']?.toString()),
           child: SizedBox(
-            width: 40,
-            height: 40,
+            width: actionSize,
+            height: actionSize,
             child: Center(
               child: FaIcon(
                 icons.resolve(action['iconToken']?.toString()),
-                size: 16,
+                size: iconSize,
                 color: iconColor,
               ),
             ),
@@ -703,23 +722,31 @@ class GridSduiRenderer {
                       ),
               ),
             ),
-            Positioned(
-              top: 6,
-              right: 6,
-              child: Material(
-                color: surface,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: () => state.dispatch(c['shareActionId']?.toString()),
-                  child: const SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: Icon(Icons.ios_share, size: 14),
+            if (c['shareActionId'] != null &&
+                c['shareActionId'].toString().trim().isNotEmpty)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Material(
+                  color: surface,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => state.dispatch(c['shareActionId']?.toString()),
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Center(
+                        child: FaIcon(
+                          icons.resolve(c['shareIconToken']?.toString() ?? 'share'),
+                          size: 14,
+                          color: muted,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -884,6 +911,11 @@ class GridSduiRenderer {
       );
     }
 
+    final iconBorderRadius = _d(appearance['iconBorderRadius']) ?? 10.0;
+    final showActionArrow = appearance['showActionArrow'] == true ||
+        c['actionArrowIconToken'] != null;
+    final actionArrowToken = c['actionArrowIconToken']?.toString();
+
     return Material(
       color: background,
       borderRadius: BorderRadius.circular(radius),
@@ -902,7 +934,7 @@ class GridSduiRenderer {
                   height: 36,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.16),
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(iconBorderRadius),
                   ),
                   alignment: Alignment.center,
                   child: FaIcon(
@@ -929,12 +961,14 @@ class GridSduiRenderer {
                     height: 1.3,
                   ),
                 ),
-                const Spacer(),
-                FaIcon(
-                  icons.resolve('chevron-right'),
-                  size: 14,
-                  color: textSecondary,
-                ),
+                if (showActionArrow) ...<Widget>[
+                  const Spacer(),
+                  FaIcon(
+                    icons.resolve(actionArrowToken ?? 'chevron-right'),
+                    size: 14,
+                    color: textSecondary,
+                  ),
+                ],
               ],
             ),
           ),
