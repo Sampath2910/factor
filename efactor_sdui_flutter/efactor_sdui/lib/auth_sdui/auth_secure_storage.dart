@@ -30,6 +30,9 @@ class AuthSecureStorage {
   static const _emailKey = 'efactor.auth.email';
   static const _userTypeKey = 'efactor.auth.user_type';
   static const _userIdKey = 'efactor.auth.user_id';
+  static const _rememberMeKey = 'efactor.auth.remember_me';
+  static const _rememberedIdentityKey = 'efactor.auth.remembered_identity';
+  static const _rememberedPasswordKey = 'efactor.auth.remembered_password';
 
   Future<void> saveSession({
     required String accessToken,
@@ -138,6 +141,55 @@ class AuthSecureStorage {
       try {
         await _storage.deleteAll();
       } catch (_) {}
+    }
+  }
+
+  Future<void> saveRememberedIdentity({
+    required bool rememberMe,
+    String? identity,
+    String? password,
+  }) async {
+    try {
+      if (rememberMe && identity != null && identity.trim().isNotEmpty) {
+        await Future.wait([
+          _storage.write(key: _rememberMeKey, value: 'true'),
+          _storage.write(key: _rememberedIdentityKey, value: identity.trim()),
+          if (password != null && password.isNotEmpty)
+            _storage.write(key: _rememberedPasswordKey, value: password)
+          else
+            _safeDelete(_rememberedPasswordKey),
+        ]);
+      } else {
+        await Future.wait([
+          _safeDelete(_rememberMeKey),
+          _safeDelete(_rememberedIdentityKey),
+          _safeDelete(_rememberedPasswordKey),
+        ]);
+      }
+    } catch (e) {
+      debugPrint('[AUTH][SECURE_STORAGE] Error saving remembered identity: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> readRememberedIdentity() async {
+    try {
+      final values = await Future.wait<String?>([
+        _safeRead(_rememberMeKey),
+        _safeRead(_rememberedIdentityKey),
+        _safeRead(_rememberedPasswordKey),
+      ]);
+      return <String, dynamic>{
+        'rememberMe': values[0] == 'true',
+        'identity': values[1] ?? '',
+        'password': values[2] ?? '',
+      };
+    } catch (e) {
+      debugPrint('[AUTH][SECURE_STORAGE] Error reading remembered identity: $e');
+      return const <String, dynamic>{
+        'rememberMe': false,
+        'identity': '',
+        'password': '',
+      };
     }
   }
 

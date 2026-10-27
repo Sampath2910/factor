@@ -44,17 +44,29 @@ Future<void> main() async {
   await PushNotificationBootstrap.instance.captureColdStartAnswer();
 
   Map<String, dynamic>? initialAuthSchema;
-  if (IncomingCallService.instance.pendingAnswer == null &&
-      GridChatMessageNotifications.instance.pendingOpen == null) {
+  AuthState? initialAuthState;
+  final pendingHandoff =
+      IncomingCallService.instance.pendingAnswer != null ||
+      GridChatMessageNotifications.instance.pendingOpen != null;
+  if (!pendingHandoff) {
     try {
-      initialAuthSchema = await SchemaLoadQueue.instance.loadAuth();
-    } catch (_) {}
+      final schema = await SchemaLoadQueue.instance.loadAuth();
+      initialAuthSchema = schema;
+      initialAuthState = AuthState(schema);
+      await initialAuthState.restoreSession();
+      if (initialAuthState.isAuthenticated) {
+        await LocationStartupGate.prewarm();
+      }
+    } catch (e) {
+      debugPrint('[Main] Startup prewarm error: $e');
+    }
   }
 
   runApp(
     AuthUiGate(
       authenticatedBuilder: _buildAuthenticatedFlow,
       initialSchema: initialAuthSchema,
+      initialState: initialAuthState,
     ),
   );
 
@@ -199,6 +211,7 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
       );
     }
     return LocationStartupGate(
+      initialReady: LocationStartupGate.isReady,
       child: AuthenticatedHomeGate(authState: widget.authState),
     );
   }

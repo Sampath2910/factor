@@ -8,6 +8,7 @@ import '../sdui/sdui_network_image_cache.dart';
 import '../services/app_cache_manager.dart';
 import '../services/efactor_cloud_service.dart';
 import '../services/incoming_call_service.dart';
+import '../services/location_startup_gate.dart';
 import '../services/schema_invalidation_event.dart';
 import '../services/schema_prefetch.dart';
 import 'auth_renderer.dart';
@@ -30,10 +31,12 @@ class AuthUiGate extends StatefulWidget {
     super.key,
     required this.authenticatedBuilder,
     this.initialSchema,
+    this.initialState,
   });
 
   final AuthenticatedBuilder authenticatedBuilder;
   final Map<String, dynamic>? initialSchema;
+  final AuthState? initialState;
 
   @override
   State<AuthUiGate> createState() => _AuthUiGateState();
@@ -57,10 +60,13 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.initialSchema != null) {
-      _state = AuthState(widget.initialSchema!);
+    if (widget.initialState != null) {
+      _state = widget.initialState;
       _loading = false;
-      unawaited(_state!.restoreSession());
+    } else if (widget.initialSchema != null) {
+      _state = AuthState(widget.initialSchema!);
+      _loading = true;
+      _initFromInitialSchema();
     }
     _schemaInvalidationSubscription = EfactorCloudService
         .instance
@@ -71,9 +77,48 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
         .connectionChanges
         .listen(_onCloudConnectionChanged);
 
-    // Cached-first. On first install/load the repository transparently falls
-    // back to the complete live schema and stores it if cachePolicy allows it.
-    _load(false);
+    if (widget.initialState == null && widget.initialSchema == null) {
+      // Cached-first. On first install/load the repository transparently falls
+      // back to the complete live schema and stores it if cachePolicy allows it.
+      _load(false);
+    } else if (widget.initialState != null) {
+      final hit =
+          widget.initialState!.schema['_clientAuthSchemaCacheHit'] == true;
+      if (hit) {
+        unawaited(
+          _syncSchema(
+            applyIfUnauthenticated: !widget.initialState!.isAuthenticated,
+            reason: 'startup_revalidate',
+            forceFull: false,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _initFromInitialSchema() async {
+    try {
+      await _state!.restoreSession();
+      if (_state!.isAuthenticated) {
+        await LocationStartupGate.prewarm();
+      }
+    } catch (e) {
+      debugPrint('[AUTH][GATE] Error restoring initial session: $e');
+    }
+    if (mounted) {
+      setState(() {
+        _loading = false;
+      });
+      if (_state!.schema['_clientAuthSchemaCacheHit'] == true) {
+        unawaited(
+          _syncSchema(
+            applyIfUnauthenticated: !_state!.isAuthenticated,
+            reason: 'startup_revalidate',
+            forceFull: false,
+          ),
+        );
+      }
+    }
   }
 
   void _onSchemaInvalidation(SchemaInvalidationEvent event) {
@@ -390,12 +435,21 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading && _state == null) {
+    if (_loading) {
       return const MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
           backgroundColor: Color(0xFF0D121C),
-          body: SizedBox.expand(),
+          body: Center(
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6750A4)),
+              ),
+            ),
+          ),
         ),
       );
     }

@@ -2698,7 +2698,8 @@ class _AuthBoundFieldState extends State<_AuthBoundField> {
 
     final value = widget.state.read(widget.stateKey)?.toString() ?? '';
 
-    if (_controller.text != value && !_controller.selection.isValid) {
+    if (_controller.text != value &&
+        (_controller.text.isEmpty || !_controller.selection.isValid)) {
       _controller.text = value;
     }
   }

@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth_secure_storage.dart';
 import '../services/app_cache_manager.dart';
 import '../services/json_http.dart';
+import '../services/location_startup_gate.dart';
 import '../services/user_location_service.dart';
 
 class AuthState extends ChangeNotifier {
@@ -186,8 +187,30 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  Future<void> restoreRememberedIdentity() async {
+    try {
+      final remembered = await _secureStorage.readRememberedIdentity();
+      final rememberMe = remembered['rememberMe'] == true;
+      final identity = remembered['identity']?.toString().trim() ?? '';
+      final password = remembered['password']?.toString() ?? '';
+
+      if (rememberMe && identity.isNotEmpty) {
+        _write(_state, 'loginForm.identity', identity);
+        if (password.isNotEmpty) {
+          _write(_state, 'loginForm.password', password);
+        }
+        _write(_state, 'loginForm.remember_ui', true);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[AuthState] restoreRememberedIdentity error: $e');
+    }
+  }
+
   Future<void> restoreSession() async {
     try {
+      await restoreRememberedIdentity();
+
       final stored = await _secureStorage.readSession();
 
       final token = _nonEmpty(stored['accessToken']);
@@ -265,6 +288,20 @@ class AuthState extends ChangeNotifier {
     fieldErrors.clear();
     _passwordVisible.clear();
     _write(_state, 'auth.isAuthenticated', false);
+
+    // Retain remembered login identity upon logout so user doesn't have to re-type
+    try {
+      final remembered = await _secureStorage.readRememberedIdentity();
+      if (remembered['rememberMe'] == true &&
+          (remembered['identity']?.toString().isNotEmpty ?? false)) {
+        _write(_state, 'loginForm.identity', remembered['identity']);
+        final password = remembered['password']?.toString() ?? '';
+        if (password.isNotEmpty) {
+          _write(_state, 'loginForm.password', password);
+        }
+        _write(_state, 'loginForm.remember_ui', true);
+      }
+    } catch (_) {}
 
     if (notify) {
       notifyListeners();
@@ -475,6 +512,9 @@ class AuthState extends ChangeNotifier {
     final session = _map(action['session']);
     if (action['setAuthenticated'] == true && session != null) {
       await _persistSchemaSession(session, source: '$source.session');
+      try {
+        await LocationStartupGate.prewarm().timeout(const Duration(seconds: 2));
+      } catch (_) {}
       _write(_state, 'auth.isAuthenticated', true);
       notifyListeners();
       return;
@@ -682,18 +722,31 @@ class AuthState extends ChangeNotifier {
                   ?.toString()
               : null;
           final identity = read('loginForm.identity')?.toString().trim() ?? '';
+          final password = read('loginForm.password')?.toString() ?? '';
+          final rememberMe = read('loginForm.remember_ui') == true;
+          unawaited(
+            _secureStorage.saveRememberedIdentity(
+              rememberMe: rememberMe,
+              identity: identity,
+              password: password,
+            ),
+          );
           final email = identity.contains('@') ? identity : null;
           final username = !identity.contains('@') && identity.isNotEmpty
               ? identity
               : null;
           unawaited(
-            UserLocationService.instance.sendCurrentLocation(
-              force: true,
-              accessToken: token,
-              userId: userId,
-              email: email,
-              username: username,
-            ),
+            Future<void>.delayed(const Duration(milliseconds: 1500), () {
+              unawaited(
+                UserLocationService.instance.sendCurrentLocation(
+                  force: true,
+                  accessToken: token,
+                  userId: userId,
+                  email: email,
+                  username: username,
+                ),
+              );
+            }),
           );
         }
 

@@ -35,6 +35,7 @@ class UserLocationService {
 
   DateTime? _lastCurrentLocationSentAt;
   static const Duration _currentLocationThrottle = Duration(minutes: 15);
+  bool _isSendingCurrentLocation = false;
 
   String? _lastReportedSignupEmail;
 
@@ -47,6 +48,13 @@ class UserLocationService {
     String? email,
     String? username,
   }) async {
+    if (_isSendingCurrentLocation) {
+      debugPrint(
+        '[UserLocationService] sendCurrentLocation skipped: already in flight',
+      );
+      return false;
+    }
+
     final rawToken = accessToken ??
         (await AuthSecureStorage().readSession())['accessToken'];
     if (rawToken == null || rawToken.trim().isEmpty) {
@@ -70,6 +78,7 @@ class UserLocationService {
       return false;
     }
 
+    _isSendingCurrentLocation = true;
     try {
       final position = await _resolvePosition();
       if (position == null) {
@@ -129,6 +138,8 @@ class UserLocationService {
     } catch (e) {
       debugPrint('[UserLocationService] Failed to send current location: $e');
       return false;
+    } finally {
+      _isSendingCurrentLocation = false;
     }
   }
 
@@ -215,17 +226,20 @@ class UserLocationService {
     }
   }
 
-  /// Resolves GPS position with medium accuracy and a safe timeout, falling back
-  /// to the device's last known position so UI never hangs on cold GPS fixes.
+  /// Resolves GPS position safely with non-blocking checks.
+  /// Background services MUST NOT prompt user permissions via requestPermission().
   Future<Position?> _resolvePosition() async {
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => false,
+      );
       if (!serviceEnabled) return null;
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
+      final permission = await Geolocator.checkPermission().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => LocationPermission.denied,
+      );
       if (permission != LocationPermission.always &&
           permission != LocationPermission.whileInUse) {
         return null;
@@ -234,10 +248,13 @@ class UserLocationService {
       try {
         return await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 8),
+          timeLimit: const Duration(seconds: 5),
         );
       } catch (_) {
-        return await Geolocator.getLastKnownPosition();
+        return await Geolocator.getLastKnownPosition().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => null,
+        );
       }
     } catch (e) {
       debugPrint('[UserLocationService] Location resolution error: $e');

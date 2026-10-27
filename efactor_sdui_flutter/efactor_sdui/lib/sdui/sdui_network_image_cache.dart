@@ -134,10 +134,12 @@ class SduiNetworkImageCache {
   /// Completely purges all local disk image caches and in-memory decoded image bitmaps on logout.
   static Future<void> clearAll() async {
     try {
-      await manager.emptyCache();
+      await manager.emptyCache().timeout(const Duration(seconds: 1));
     } catch (_) {}
     try {
-      await SduiAuthImageCache.manager.emptyCache();
+      await SduiAuthImageCache.manager
+          .emptyCache()
+          .timeout(const Duration(seconds: 1));
     } catch (_) {}
     try {
       PaintingBinding.instance.imageCache.clear();
