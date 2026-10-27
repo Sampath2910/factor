@@ -664,6 +664,32 @@ class PushNotificationBootstrap {
     }
   }
 
+  bool _localNotificationsReady = false;
+
+  /// Reads the Answer action that launched a killed app, before Firebase
+  /// and before the home dashboard is built.
+  Future<void> captureColdStartAnswer() async {
+    if (kIsWeb) return;
+    await _initLocalNotifications();
+    try {
+      final launchDetails = await _local.getNotificationAppLaunchDetails();
+      final response = launchDetails?.notificationResponse;
+      if (launchDetails?.didNotificationLaunchApp != true || response == null) {
+        return;
+      }
+      if (response.actionId != 'answer') return;
+      final payload = response.payload;
+      if (payload == null || payload.isEmpty) return;
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      final call = IncomingCallData.fromJson(data);
+      if (call.callId.isEmpty) return;
+      await IncomingCallService.instance.recordNotificationAnswer(call);
+    } catch (e) {
+      // ignore: avoid_print
+      print('[CALL] cold-start answer capture failed error=$e');
+    }
+  }
+
   Future<void> initialize() async {
     if (_ready || kIsWeb) return;
     if (_initFuture != null) return _initFuture;
@@ -878,6 +904,7 @@ curl -X POST "https://fcm.googleapis.com/fcm/send" \\
   }
 
   Future<void> _initLocalNotifications() async {
+    if (_localNotificationsReady) return;
     const android = AndroidInitializationSettings('ic_notification');
     final ios = DarwinInitializationSettings(
       notificationCategories: kDarwinNotificationCategories,
@@ -904,6 +931,7 @@ curl -X POST "https://fcm.googleapis.com/fcm/send" \\
     }
     await androidPlugin?.createNotificationChannel(kMessagesChannel);
     await androidPlugin?.createNotificationChannel(kCallsChannel);
+    _localNotificationsReady = true;
   }
 
   void _onForegroundMessage(RemoteMessage message) {
@@ -944,12 +972,6 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         ));
       }
       IncomingCallService.instance.handleIncomingPayload(data);
-      // Avoid double incoming screen: if Circle Connect is already open in foreground
-      // or already ringing for this callId, do not post a duplicate heads-up notification.
-      if (!IncomingCallService.instance.isCallPageOpen &&
-          !IncomingCallService.instance.isCallRingingInWeb(call.callId)) {
-        unawaited(showIncomingCallNotification(call));
-      }
       return;
     }
     if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
@@ -1015,6 +1037,18 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         final call = IncomingCallData.fromJson(data);
         await IncomingCallService.instance.answerCall(call);
         return;
+      }
+      if (actionId == null || actionId.isEmpty) {
+        final tappedCallId =
+            (data['call_id'] ?? data['callId'] ?? '').toString();
+        if (IncomingCallService.instance
+            .shouldIgnoreNotificationBodyTap(tappedCallId)) {
+          // ignore: avoid_print
+          print(
+            '[CALL] ignored notification dismiss call_id=$tappedCallId',
+          );
+          return;
+        }
       }
       if (actionId == 'callback') {
         final call = IncomingCallData.fromJson(data);
@@ -1102,10 +1136,20 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
     );
   }
 
+  final Set<String> _postedIncomingCallIds = <String>{};
+
   /// Public API called by [IncomingCallService] and [GridInAppWebViewPage].
+  /// The same call_id is posted once until it is cancelled.
   Future<void> showIncomingCallNotification(IncomingCallData call) async {
+    final id = call.callId.trim();
+    if (id.isNotEmpty && _postedIncomingCallIds.contains(id)) {
+      return;
+    }
     try {
       await showIncomingCallNotificationOnPlugin(_local, call);
+      if (id.isNotEmpty) {
+        _postedIncomingCallIds.add(id);
+      }
     } catch (e) {
       debugPrint('[PushBootstrap] showIncomingCallNotification error: $e');
     }
@@ -1142,15 +1186,61 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
   }
 
   Future<void> handleCallHandled(String callId) async {
+    _postedIncomingCallIds.remove(callId.trim());
     try {
       await _local.cancel(callId.hashCode.abs());
     } catch (_) {}
   }
 
   Future<void> cancelCallNotification(String callId) async {
+    final id = callId.trim();
+    IncomingCallService.instance.markNotificationCleared(id);
+    if (id.isEmpty) {
+      _postedIncomingCallIds.clear();
+    } else {
+      _postedIncomingCallIds.remove(id);
+    }
     try {
       await _local.cancel(callId.hashCode.abs());
     } catch (_) {}
+  }
+
+  /// Drops Android incoming-call notifications already on screen, including
+  /// ones posted by the background isolate before GRID Chat took the call.
+  Future<void> cancelVisibleIncomingCallNotifications() async {
+    try {
+      final active = await _local.getActiveNotifications();
+      for (final notification in active) {
+        final id = notification.id;
+        if (id == null) continue;
+        final channelId = notification.channelId;
+        if (channelId != null && channelId != kCallsChannel.id) continue;
+        if (channelId == null) {
+          final payload = notification.payload ?? '';
+          if (!payload.contains('call_id') && !payload.contains('INCOMING_CALL')) {
+            continue;
+          }
+        }
+        final payload = notification.payload ?? '';
+        if (payload.isNotEmpty) {
+          try {
+            final decoded = jsonDecode(payload);
+            if (decoded is Map) {
+              final callId =
+                  (decoded['call_id'] ?? decoded['callId'] ?? '').toString();
+              IncomingCallService.instance.markNotificationCleared(callId);
+            }
+          } catch (_) {}
+        }
+        await _local.cancel(id);
+      }
+    } catch (e) {
+      debugPrint('[PushBootstrap] cancelVisibleIncomingCallNotifications: $e');
+    }
+    for (final id in _postedIncomingCallIds) {
+      IncomingCallService.instance.markNotificationCleared(id);
+    }
+    _postedIncomingCallIds.clear();
   }
 
   Future<void> clearChatNotifications(String conversationId) async {

@@ -52,6 +52,89 @@ void main() {
       expect(call.roomUrl, 'https://efactor.tech/index.php/grid-chat');
     });
 
+    test('cold-start answer URL targets GRID Chat and keeps the same call id', () async {
+      final service = IncomingCallService.instance;
+      final call = IncomingCallData.fromJson(<String, dynamic>{
+        'call_id': 'call_cold_1',
+        'caller_grid_id': 'grid_9',
+        'call_type': 'audio',
+        'caller_name': 'Asha',
+        'type': 'INCOMING_CALL',
+      });
+
+      await service.recordNotificationAnswer(call);
+      final pending = service.pendingAnswer;
+      expect(pending, isNotNull);
+      expect(pending!.callId, 'call_cold_1');
+
+      final uri = IncomingCallService.answerGridChatUri(pending);
+      expect(
+        uri.toString(),
+        'https://efactor.tech/index.php/grid-chat?call_action=answer&call_id=call_cold_1&call_type=audio&grid_id=grid_9',
+      );
+
+      service.logGridChatNavigation(pending.callId);
+      service.logGridChatNavigation(pending.callId);
+      expect(service.pendingAnswer?.callId, 'call_cold_1');
+
+      await service.clearPendingAnswer(
+        reason: 'cancelled',
+        callId: 'other_call',
+      );
+      expect(service.pendingAnswer?.callId, 'call_cold_1');
+
+      await service.clearPendingAnswer(
+        reason: 'delivered',
+        callId: 'call_cold_1',
+      );
+      expect(service.pendingAnswer, isNull);
+    });
+
+    test('answer URL uses audio unless the call is video', () {
+      final pending = PendingCallAnswer.fromCall(
+        IncomingCallData.fromJson(<String, dynamic>{
+          'call_id': 'call_cold_2',
+          'type': 'INCOMING_CALL',
+          'caller_grid_id': 'g2',
+        }),
+      );
+      expect(pending.normalizedCallType, 'audio');
+      expect(
+        IncomingCallService.answerGridChatUri(pending).queryParameters['call_type'],
+        'audio',
+      );
+
+      final video = PendingCallAnswer(
+        callId: 'call_cold_video',
+        gridId: '',
+        callType: 'video',
+        callerName: 'Asha',
+        callerUserId: '7',
+        storedAtMs: DateTime.now().millisecondsSinceEpoch -
+            const Duration(minutes: 5).inMilliseconds,
+      );
+      expect(video.isExpired, isTrue);
+      expect(
+        IncomingCallService.answerGridChatUri(video).queryParameters['grid_id'],
+        isNull,
+      );
+    });
+
+    test('native incoming notification is posted only when GRID Chat is not ready', () {
+      expect(
+        IncomingCallService.shouldPostNativeIncomingNotification(
+          circleConnectReady: true,
+        ),
+        isFalse,
+      );
+      expect(
+        IncomingCallService.shouldPostNativeIncomingNotification(
+          circleConnectReady: false,
+        ),
+        isTrue,
+      );
+    });
+
     test('IncomingCallService handles incoming call payload and cancellation', () {
       final service = IncomingCallService.instance;
 
@@ -160,7 +243,7 @@ void main() {
       expect(body['user_id'], '999');
     });
 
-    test('declineCall posts call_rejected payload to backend', () async {
+    test('declineCall posts native_action decline payload to backend when action_token is present', () async {
       final service = IncomingCallService.instance;
       http.Request? capturedRequest;
 
@@ -173,6 +256,7 @@ void main() {
         'call_id': 'call_777',
         'caller_grid_id': 'GRID-444',
         'caller_name': 'Alice',
+        'action_token': 'tok_777',
       });
 
       await service.declineCall(
@@ -182,9 +266,9 @@ void main() {
       );
 
       expect(capturedRequest, isNotNull);
-      final body = Uri.splitQueryString(capturedRequest!.body);
-      expect(body['call_id'], 'call_777');
-      expect(body['caller_grid_id'], 'GRID-444');
+      final body = jsonDecode(capturedRequest!.body) as Map<String, dynamic>;
+      expect(body['action'], 'decline');
+      expect(body['action_token'], 'tok_777');
     });
 
     test('registerDeviceTokenWithBackend synchronizes FCM token with grid-chat native-token endpoint using Bearer auth', () async {

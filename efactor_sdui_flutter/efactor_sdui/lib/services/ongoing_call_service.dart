@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Service managing the active, connected call state.
-/// Runs an Android Foreground Service (type phoneCall/microphone/camera)
+/// Runs an Android Foreground Service (microphone, plus camera for video)
 /// with an "Ongoing call · tap to return" notification, keeping WebRTC
 /// audio/video alive in the background.
 class OngoingCallService {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../grid_sdui/grid_in_app_webview_page.dart';
 import 'call_permission_helper.dart';
 import 'push_notification_bootstrap.dart';
@@ -138,8 +139,78 @@ class IncomingCallData {
         'tag': tag,
         'body': body,
         'action_token': actionToken,
-        'timestamp': timestamp,
+      'timestamp': timestamp,
+    };
+}
+
+/// Answer captured from the Android notification before GRID Chat is open.
+/// Kept until gridChatCallAction runs on a page that called callUiReady(),
+/// or until the call expires, the caller cancels, or the user declines.
+class PendingCallAnswer {
+  const PendingCallAnswer({
+    required this.callId,
+    required this.gridId,
+    required this.callType,
+    required this.callerName,
+    required this.callerUserId,
+    required this.storedAtMs,
+  });
+
+  static const Duration ttl = Duration(seconds: 90);
+  static const String prefsKey = 'efactor_pending_call_answer_v1';
+
+  final String callId;
+  final String gridId;
+  final String callType;
+  final String callerName;
+  final String callerUserId;
+  final int storedAtMs;
+
+  bool get isExpired =>
+      DateTime.now().millisecondsSinceEpoch - storedAtMs > ttl.inMilliseconds;
+
+  String get normalizedCallType {
+    if (callType.toLowerCase() == 'video') return 'video';
+    return 'audio';
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'call_id': callId,
+        'grid_id': gridId,
+        'call_type': normalizedCallType,
+        'caller_name': callerName,
+        'caller_user_id': callerUserId,
+        'stored_at_ms': storedAtMs,
       };
+
+  factory PendingCallAnswer.fromCall(IncomingCallData call) {
+    return PendingCallAnswer(
+      callId: call.callId.trim(),
+      gridId: call.callerGridId.trim(),
+      callType: call.callType,
+      callerName: call.callerName,
+      callerUserId: call.callerUserId,
+      storedAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  static PendingCallAnswer? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final callId = (raw['call_id'] ?? '').toString().trim();
+    if (callId.isEmpty) return null;
+    final stored = raw['stored_at_ms'];
+    final storedAtMs = stored is int
+        ? stored
+        : int.tryParse(stored?.toString() ?? '') ?? 0;
+    return PendingCallAnswer(
+      callId: callId,
+      gridId: (raw['grid_id'] ?? '').toString().trim(),
+      callType: (raw['call_type'] ?? 'audio').toString(),
+      callerName: (raw['caller_name'] ?? '').toString(),
+      callerUserId: (raw['caller_user_id'] ?? '').toString(),
+      storedAtMs: storedAtMs,
+    );
+  }
 }
 
 /// Singleton manager for incoming calls across Circle Connect and WebRTC.
@@ -183,6 +254,241 @@ class IncomingCallService {
     return activeWebCallId == callId;
   }
 
+  /// Android heads-up / full-screen notification is for when GRID Chat cannot
+  /// draw its own banner. One call_id, one visible incoming UI.
+  static bool shouldPostNativeIncomingNotification({
+    required bool circleConnectReady,
+  }) {
+    return !circleConnectReady;
+  }
+
+  int _presentationGeneration = 0;
+  bool _nativeRingPlaying = false;
+  final Set<String> _answeredCallIds = <String>{};
+  final Set<String> _answerJsSentCallIds = <String>{};
+  final Set<String> _clearedNotificationCallIds = <String>{};
+  final Set<String> _loggedNavigationCallIds = <String>{};
+  PendingCallAnswer? _pendingAnswer;
+  final ValueNotifier<PendingCallAnswer?> pendingAnswerListenable =
+      ValueNotifier<PendingCallAnswer?>(null);
+
+  /// True while the authenticated shell is mounted and can show GRID Chat
+  /// itself, without pushing a route on top of the home dashboard.
+  bool answerHandoffOwnedByShell = false;
+
+  PendingCallAnswer? get pendingAnswer {
+    final pending = _pendingAnswer;
+    if (pending != null && pending.isExpired) return null;
+    return pending;
+  }
+
+  bool get navigatorCovered {
+    final nav = navigatorKey.currentState;
+    if (nav == null) return false;
+    return nav.canPop();
+  }
+
+  static void callTrace(String event, String callId) {
+    final id = callId.trim();
+    final t = DateTime.now().millisecondsSinceEpoch;
+    // ignore: avoid_print
+    print('[CALL] $event call_id=$id t=$t');
+  }
+
+  /// Direct GRID Chat URL for a cold-start or background Answer.
+  static Uri answerGridChatUri(PendingCallAnswer pending) {
+    final params = <String, String>{
+      'call_action': 'answer',
+      'call_id': pending.callId,
+      'call_type': pending.normalizedCallType,
+    };
+    if (pending.gridId.isNotEmpty) {
+      params['grid_id'] = pending.gridId;
+    }
+    return Uri.parse(IncomingCallData.defaultCallUrl).replace(
+      queryParameters: params,
+    );
+  }
+
+  void logGridChatNavigation(String callId) {
+    final id = callId.trim();
+    if (id.isEmpty || !_loggedNavigationCallIds.add(id)) return;
+    callTrace('GRID Chat navigation started', id);
+  }
+
+  /// First Android Answer wins. Later answer, show, or decline for this id are ignored.
+  bool beginAnswer(String callId) {
+    final id = callId.trim();
+    if (id.isEmpty) return true;
+    if (!_answeredCallIds.add(id)) {
+      // ignore: avoid_print
+      print('[CALL] blocked duplicate answer call_id=$id');
+      return false;
+    }
+    _clearedNotificationCallIds.add(id);
+    return true;
+  }
+
+  /// Records the notification Answer and keeps it until GRID Chat can take it.
+  Future<void> recordNotificationAnswer(IncomingCallData call) async {
+    final id = call.callId.trim();
+    if (id.isEmpty) return;
+    if (!beginAnswer(id)) return;
+    callTrace('notification Answer pressed', id);
+    await storePendingAnswer(call);
+  }
+
+  Future<void> storePendingAnswer(IncomingCallData call) async {
+    final pending = PendingCallAnswer.fromCall(call);
+    if (pending.callId.isEmpty) return;
+    final existing = _pendingAnswer;
+    if (existing != null &&
+        existing.callId == pending.callId &&
+        !existing.isExpired) {
+      return;
+    }
+    _pendingAnswer = pending;
+    pendingAnswerListenable.value = pending;
+    callTrace('pending Answer stored', pending.callId);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        PendingCallAnswer.prefsKey,
+        jsonEncode(pending.toJson()),
+      );
+    } catch (e) {
+      // ignore: avoid_print
+      print(
+        '[CALL] pending Answer persist failed call_id=${pending.callId} error=$e',
+      );
+    }
+  }
+
+  Future<void> restorePendingAnswer() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(PendingCallAnswer.prefsKey);
+      if (raw == null || raw.isEmpty) return;
+      final pending = PendingCallAnswer.fromJson(jsonDecode(raw));
+      if (pending == null || pending.isExpired) {
+        await prefs.remove(PendingCallAnswer.prefsKey);
+        return;
+      }
+      _pendingAnswer = pending;
+      pendingAnswerListenable.value = pending;
+      _answeredCallIds.add(pending.callId);
+      _clearedNotificationCallIds.add(pending.callId);
+      callTrace('pending Answer stored', pending.callId);
+    } catch (e) {
+      // ignore: avoid_print
+      print('[CALL] pending Answer restore failed error=$e');
+    }
+  }
+
+  /// Drops the queued Answer after it was injected, or the call is over.
+  /// Opening the Activity or WebView must not call this.
+  Future<void> clearPendingAnswer({
+    required String reason,
+    String? callId,
+  }) async {
+    final current = _pendingAnswer;
+    if (current == null) return;
+    final id = callId?.trim() ?? '';
+    if (id.isNotEmpty && current.callId != id) return;
+    _pendingAnswer = null;
+    pendingAnswerListenable.value = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(PendingCallAnswer.prefsKey);
+    } catch (_) {}
+    // ignore: avoid_print
+    print(
+      '[CALL] pending Answer cleared call_id=${current.callId} reason=$reason',
+    );
+  }
+
+  Future<void> deliverPendingAnswer() async {
+    final pending = pendingAnswer;
+    if (pending == null) {
+      final stale = _pendingAnswer;
+      if (stale != null && stale.isExpired) {
+        await clearPendingAnswer(reason: 'expired', callId: stale.callId);
+      }
+      return;
+    }
+    if (!GridInAppWebViewPage.isActiveCircleConnect) return;
+    final delivered = await GridInAppWebViewPage.injectAnswerOnce(pending.callId);
+    if (!delivered) return;
+    await clearPendingAnswer(reason: 'delivered', callId: pending.callId);
+  }
+
+  Future<void> deliverPendingAnswerWithRetry() async {
+    for (var attempt = 0; attempt < 8; attempt++) {
+      final pending = pendingAnswer;
+      if (pending == null) return;
+      if (!GridInAppWebViewPage.isActiveCircleConnect) return;
+      await deliverPendingAnswer();
+      if (pendingAnswer == null || hasDeliveredAnswerJs(pending.callId)) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+  }
+
+  /// GRID Chat called callUiReady(). Inject the stored Answer once it can run.
+  Future<void> onGridChatCallUiReady(String callId) async {
+    callTrace('callUiReady() received', callId);
+    await deliverPendingAnswerWithRetry();
+  }
+
+  bool hasDeliveredAnswerJs(String callId) {
+    return _answerJsSentCallIds.contains(callId.trim());
+  }
+
+  /// True only the first time the answer script is sent into GRID Chat.
+  bool claimAnswerJs(String callId) {
+    final id = callId.trim();
+    if (id.isEmpty) return true;
+    return _answerJsSentCallIds.add(id);
+  }
+
+  bool isAnswerInProgress(String callId) {
+    final id = callId.trim();
+    return id.isNotEmpty && _answeredCallIds.contains(id);
+  }
+
+  void markNotificationCleared(String callId) {
+    final id = callId.trim();
+    if (id.isNotEmpty) {
+      _clearedNotificationCallIds.add(id);
+    }
+  }
+
+  bool shouldIgnoreNotificationBodyTap(String callId) {
+    final id = callId.trim();
+    if (id.isEmpty) return false;
+    return _answeredCallIds.contains(id) ||
+        _clearedNotificationCallIds.contains(id);
+  }
+
+  /// GRID Chat became ready, was covered, or the app moved between foreground and background.
+  void onCircleConnectReadinessChanged() {
+    if (GridInAppWebViewPage.isCircleConnectReady) {
+      unawaited(
+        PushNotificationBootstrap.instance.cancelVisibleIncomingCallNotifications(),
+      );
+    }
+    unawaited(_syncIncomingCallPresentation());
+  }
+
+  /// Web confirmed its in-app banner is on screen for [callId].
+  void incomingCallDisplayedFromWeb(String callId) {
+    final id = callId.trim();
+    if (id.isEmpty) return;
+    activeWebCallId = id;
+    unawaited(_syncIncomingCallPresentation());
+  }
+
   /// Update or register the latest push token discovered from FCM or APNs.
   void setDeviceToken(String token) {
     _deviceToken = token.trim();
@@ -201,6 +507,7 @@ class IncomingCallService {
     required String action,
     required String actionToken,
     String? roomUrl,
+    http.Client? client,
   }) async {
     final token = actionToken.trim();
     if (token.isEmpty) {
@@ -235,16 +542,15 @@ class IncomingCallService {
     debugPrint('[NativeCallAction] >>> POST $targetUri | Body: $jsonBody');
 
     try {
-      var response = await http
-          .post(
-            targetUri,
-            headers: const <String, String>{
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonBody,
-          )
-          .timeout(const Duration(seconds: 10));
+      final postFn = client != null ? client.post : http.post;
+      var response = await postFn(
+        targetUri,
+        headers: const <String, String>{
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonBody,
+      ).timeout(const Duration(seconds: 10));
 
       debugPrint(
         '[NativeCallAction] <<< Response $targetUri -> Status: ${response.statusCode} | Body: ${response.body}',
@@ -256,16 +562,14 @@ class IncomingCallService {
           '${targetUri.origin}/index.php/grid-chat/api/call/native_action',
         );
         debugPrint('[NativeCallAction] 404 received; retrying at fallback $fallbackUri');
-        response = await http
-            .post(
-              fallbackUri,
-              headers: const <String, String>{
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              },
-              body: jsonBody,
-            )
-            .timeout(const Duration(seconds: 10));
+        response = await postFn(
+          fallbackUri,
+          headers: const <String, String>{
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonBody,
+        ).timeout(const Duration(seconds: 10));
         debugPrint(
           '[NativeCallAction] <<< Fallback Response $fallbackUri -> Status: ${response.statusCode} | Body: ${response.body}',
         );
@@ -337,14 +641,16 @@ class IncomingCallService {
       }
 
       unawaited(CallPermissionHelper.wakeAndUnlock());
-      // Avoid double incoming screen: if Circle Connect is already open in the foreground
-      // or already ringing for this callId, do not show a redundant native modal dialog.
+      // The in-app banner owns the UI while GRID Chat is visible. The native
+      // modal is only for when that page is not open.
       if (!isCallPageOpen && !isCallRingingInWeb(call.callId)) {
         unawaited(_displayIncomingCallModal(call));
       }
+      unawaited(_syncIncomingCallPresentation());
     } else if (type == 'MISSED_CALL' ||
         type == 'CALL_MISSED') {
       final call = IncomingCallData.fromJson(payload);
+      unawaited(clearPendingAnswer(reason: type, callId: call.callId));
       dismissCall();
       PushNotificationBootstrap.instance.showMissedCallNotification(call);
     } else if (type == 'CALL_HANDLED' ||
@@ -353,6 +659,7 @@ class IncomingCallService {
         type == 'REJECTED' ||
         type == 'HANGUP') {
       final callId = (payload['call_id'] ?? payload['callId'] ?? '').toString();
+      unawaited(clearPendingAnswer(reason: type, callId: callId));
       if (activeWebCallId == callId) {
         activeWebCallId = null;
       }
@@ -361,41 +668,111 @@ class IncomingCallService {
     }
   }
 
-  /// Dismiss the active incoming call banner/screen.
+  /// Dismiss the active incoming call banner/screen and stop native ringing.
   void dismissCall() {
+    _presentationGeneration++;
     _callTimeoutTimer?.cancel();
     _callTimeoutTimer = null;
     currentCall.value = null;
+    unawaited(_stopNativeRing());
   }
 
   /// Triggered by the web page via `CircleConnectPush.startRinging` when a call
   /// arrives over the in-page WebSocket connection while the page is already open.
+  /// Keeps the FCM payload when it is the same call_id. Does not post a second UI.
   Future<void> startRingingFromWeb({
     required String callId,
     required String callerName,
     required String callType,
     required String url,
   }) async {
-    activeWebCallId = callId;
-    final call = IncomingCallData(
-      callId: callId,
-      callerId: '',
-      callerName: callerName,
-      callType: callType,
-      roomUrl: url,
-    );
-    currentCall.value = call;
-    await PushNotificationBootstrap.instance.showIncomingCallNotification(call);
+    final id = callId.trim();
+    activeWebCallId = id;
+    final existing = currentCall.value;
+    if (existing == null || existing.callId != id) {
+      currentCall.value = IncomingCallData(
+        callId: id,
+        callerId: '',
+        callerName: callerName,
+        callType: callType,
+        roomUrl: url,
+      );
+    }
+    await _syncIncomingCallPresentation();
   }
 
   /// Triggered by the web page via `CircleConnectPush.stopRinging` when a call
   /// is answered, declined, or ended in the web UI.
   Future<void> stopRingingFromWeb(String callId) async {
-    if (activeWebCallId == callId || (callId.isEmpty && activeWebCallId != null)) {
+    final id = callId.trim();
+    if (id.isEmpty || activeWebCallId == id) {
       activeWebCallId = null;
     }
-    dismissCall();
-    await PushNotificationBootstrap.instance.cancelCallNotification(callId);
+    if (id.isEmpty || currentCall.value?.callId == id) {
+      dismissCall();
+    } else {
+      await _stopNativeRing();
+    }
+    await PushNotificationBootstrap.instance.cancelCallNotification(id);
+  }
+
+  /// One incoming call_id shows either the GRID Chat banner or the Android
+  /// notification, never both. Ringtone continues through the native ring
+  /// while the banner owns the screen.
+  Future<void> _syncIncomingCallPresentation() async {
+    final generation = ++_presentationGeneration;
+    final call = currentCall.value;
+    if (call == null) {
+      await _stopNativeRing();
+      return;
+    }
+
+    final postNotification = shouldPostNativeIncomingNotification(
+      circleConnectReady: GridInAppWebViewPage.isCircleConnectReady,
+    );
+    if (generation != _presentationGeneration) return;
+
+    if (!postNotification) {
+      await PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
+      if (generation != _presentationGeneration) return;
+      if (currentCall.value?.callId == call.callId) {
+        await _startNativeRing();
+      }
+      return;
+    }
+
+    await _stopNativeRing();
+    if (generation != _presentationGeneration) return;
+    if (currentCall.value?.callId != call.callId) return;
+    await PushNotificationBootstrap.instance.showIncomingCallNotification(call);
+  }
+
+  Future<void> _startNativeRing() async {
+    if (_nativeRingPlaying) return;
+    final generation = _presentationGeneration;
+    _nativeRingPlaying = true;
+    try {
+      const channel = MethodChannel('tech.efactor/circle_connect');
+      await channel.invokeMethod<void>('startIncomingRing');
+      if (generation != _presentationGeneration || currentCall.value == null) {
+        _nativeRingPlaying = false;
+        await channel.invokeMethod<void>('stopIncomingRing');
+      }
+    } catch (e) {
+      _nativeRingPlaying = false;
+      debugPrint('[IncomingCallService] startIncomingRing failed: $e');
+    }
+  }
+
+  Future<void> _stopNativeRing() async {
+    if (!_nativeRingPlaying) return;
+    _nativeRingPlaying = false;
+    try {
+      const channel = MethodChannel('tech.efactor/circle_connect');
+      await channel.invokeMethod<void>('stopIncomingRing');
+    } catch (e) {
+      debugPrint('[IncomingCallService] stopIncomingRing failed: $e');
+    }
   }
 
   /// User accepted the call. Dismiss UI and navigate immediately into Circle Connect WebView.
@@ -417,53 +794,45 @@ class IncomingCallService {
   }
 
   /// Answer the call.
-  /// If GRID Chat is open: calls window.gridChatCallAction({action: 'answer', call_id})
-  /// If closed: opens <url>?call_action=answer&call_id=<call_id>&grid_id=<caller_grid_id>
+  /// The pending Answer stays stored until callUiReady() and one
+  /// gridChatCallAction, or until the call expires or is cancelled.
+  /// GRID Chat is opened directly. The home dashboard is not pushed first.
   Future<void> answerCall(
     IncomingCallData call, {
     BuildContext? context,
   }) async {
+    await recordNotificationAnswer(call);
     dismissCall();
     await PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
 
-    if (GridInAppWebViewPage.isPageOpen) {
-      await GridInAppWebViewPage.handleCallAction(
-        action: 'answer',
-        callId: call.callId,
-        gridId: call.callerGridId,
-        userId: call.callerUserId,
-        callType: call.callType,
-      );
+    if (GridInAppWebViewPage.isActiveCircleConnect) {
+      if (GridInAppWebViewPage.isCircleConnectReady) {
+        await deliverPendingAnswerWithRetry();
+      }
       return;
     }
 
-    final base = call.roomUrl.isNotEmpty
-        ? call.roomUrl
-        : IncomingCallData.defaultCallUrl;
-    final uri = Uri.parse(base);
-    final qp = Map<String, String>.from(uri.queryParameters);
-    qp['call_action'] = 'answer';
-    qp['call_id'] = call.callId;
-    if (call.callerGridId.isNotEmpty) qp['grid_id'] = call.callerGridId;
-    if (call.callerName.isNotEmpty) qp['caller_name'] = call.callerName;
-    if (call.callerUserId.isNotEmpty) qp['user_id'] = call.callerUserId;
-    if (call.callType.isNotEmpty) qp['call_type'] = call.callType;
-    final answerUri = uri.replace(queryParameters: qp);
-
-    final targetContext = await _waitForNavigatorContext();
-    if (targetContext != null && targetContext.mounted) {
-      await Navigator.of(targetContext).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => GridInAppWebViewPage(
-            uri: answerUri,
-            title: 'Circle Connect',
-            showAppBar: false,
-            accessToken: activeAccessToken,
-            userId: activeUserId,
-          ),
-        ),
-      );
+    if (answerHandoffOwnedByShell && !navigatorCovered) {
+      return;
     }
+
+    final pending = pendingAnswer;
+    final targetContext = navigatorKey.currentState?.context;
+    if (pending == null || targetContext == null || !targetContext.mounted) {
+      return;
+    }
+    logGridChatNavigation(pending.callId);
+    await Navigator.of(targetContext).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => GridInAppWebViewPage(
+          uri: IncomingCallService.answerGridChatUri(pending),
+          title: 'Circle Connect',
+          showAppBar: false,
+          accessToken: activeAccessToken,
+          userId: activeUserId,
+        ),
+      ),
+    );
   }
 
   /// User tapped notification body: opens full-screen ringing UI with call_action=show.
@@ -473,6 +842,14 @@ class IncomingCallService {
     IncomingCallData call, {
     BuildContext? context,
   }) async {
+    if (isAnswerInProgress(call.callId) ||
+        shouldIgnoreNotificationBodyTap(call.callId)) {
+      // ignore: avoid_print
+      print(
+        '[CALL] blocked show call_id=${call.callId} reason=answer_or_notification_clear',
+      );
+      return;
+    }
     dismissCall();
 
     if (GridInAppWebViewPage.isPageOpen) {
@@ -535,6 +912,16 @@ class IncomingCallService {
     debugPrint(
       '[IncomingCallService] >>> declineCall() CALLED for callId=${call.callId}, caller=${call.callerName}, hasToken=${call.actionToken.isNotEmpty} <<<',
     );
+    if (isAnswerInProgress(call.callId)) {
+      // ignore: avoid_print
+      print(
+        '[CALL] blocked decline call_id=${call.callId} reason=already_answered',
+      );
+      dismissCall();
+      await PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
+      return;
+    }
+    await clearPendingAnswer(reason: 'decline', callId: call.callId);
     dismissCall();
     await PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
 
@@ -563,6 +950,7 @@ class IncomingCallService {
         action: 'decline',
         actionToken: call.actionToken,
         roomUrl: call.roomUrl,
+        client: client,
       );
       if (success) {
         debugPrint('[IncomingCallService] declineCall completed via native_action endpoint.');

@@ -1,5 +1,6 @@
 package com.example.efactor_sdui
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -7,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
@@ -45,6 +47,7 @@ class OngoingCallService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var callAudioModeActive = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -136,7 +139,8 @@ class OngoingCallService : Service() {
             Log.w(TAG, "Failed acquiring WifiLock: ${e.message}")
         }
 
-        // Tap on notification brings MainActivity back to the active call screen
+        // Reuse the existing singleTop MainActivity and its WebView.
+        // Do not add data that would reload the chat URL; a reload ends the call.
         val tapIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             putExtra("route_to_call", true)
@@ -174,26 +178,50 @@ class OngoingCallService : Service() {
             .setContentIntent(pendingIntent)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            var serviceType = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                if (isVideo) {
-                    serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-                }
-            }
-            try {
-                startForeground(NOTIFICATION_ID, notification, serviceType)
-            } catch (e: Exception) {
-                Log.w(TAG, "startForeground with type $serviceType failed, fallback to default: ${e.message}")
-                try {
-                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
-                } catch (_: Exception) {
-                    startForeground(NOTIFICATION_ID, notification)
-                }
-            }
-        } else {
+        promoteToForeground(notification, isVideo)
+        setCallAudioMode(inCall = true)
+    }
+
+    /**
+     * Android 14+ throws SecurityException if type phoneCall is used without a
+     * dialer role or a self-managed ConnectionService. Voice uses microphone.
+     * Video adds camera. A failed video start falls back to microphone only.
+     */
+    private fun promoteToForeground(notification: Notification, isVideo: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             startForeground(NOTIFICATION_ID, notification)
+            Log.i(TAG, "Foreground service started without microphone type (API < 30)")
+            return
+        }
+
+        val microphone = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        if (isVideo) {
+            val microphoneAndCamera = microphone or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+            try {
+                startForeground(NOTIFICATION_ID, notification, microphoneAndCamera)
+                Log.i(TAG, "Foreground service type=microphone|camera")
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "microphone|camera rejected, falling back to microphone: ${e.message}")
+            }
+        }
+
+        startForeground(NOTIFICATION_ID, notification, microphone)
+        Log.i(TAG, "Foreground service type=microphone")
+    }
+
+    private fun setCallAudioMode(inCall: Boolean) {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            audioManager.mode = if (inCall) {
+                AudioManager.MODE_IN_COMMUNICATION
+            } else {
+                AudioManager.MODE_NORMAL
+            }
+            callAudioModeActive = inCall
+            Log.i(TAG, "AudioManager mode=${if (inCall) "MODE_IN_COMMUNICATION" else "MODE_NORMAL"}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Audio mode change failed: ${e.message}")
         }
     }
 
@@ -218,6 +246,10 @@ class OngoingCallService : Service() {
             wifiLock = null
         } catch (e: Exception) {
             Log.w(TAG, "Error releasing wifiLock: ${e.message}")
+        }
+
+        if (callAudioModeActive) {
+            setCallAudioMode(inCall = false)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

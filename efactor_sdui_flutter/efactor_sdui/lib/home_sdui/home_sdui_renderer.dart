@@ -1707,8 +1707,8 @@ class HomeSduiRenderer {
         _tokenNumber(appearance['radiusToken']?.toString()) ??
         themeRadius ??
         _tokenNumber('radius.card') ??
-        14.0;
-    final radius = rawRadius.clamp(0.0, 16.0);
+        0.0;
+    final radius = rawRadius >= 0 ? rawRadius : 0.0;
 
     final bg =
         _color(appearance['backgroundColor']) ??
@@ -2060,21 +2060,20 @@ class HomeSduiRenderer {
         final layoutName = _responsiveBreakpointName(context);
         final layout = _gridLayoutForBreakpoint(c, layoutName);
 
-        final columnGap = _d(layout['columnGap']);
-        final rowGap = _d(layout['rowGap']);
-        final rowHeight = _d(layout['rowHeight']);
+        final columnGap = _d(layout['columnGap']) ?? _d(layout['gap']) ?? 0.0;
+        final rowGap = _d(layout['rowGap']) ?? _d(layout['gap']) ?? 0.0;
+        final rowHeight = _d(layout['rowHeight']) ?? _d(layout['minRowHeight']);
         final minimumRowHeight =
             _d(layout['minRowHeight']) ??
             _d(_map(c['layout'])?['minRowHeight']);
         final columns = (layout['columns'] as num?)?.toInt();
 
         if (columns == null ||
-            columnGap == null ||
-            rowGap == null ||
-            rowHeight == null) {
+            (_d(layout['columnGap']) == null && _d(layout['gap']) == null) ||
+            (_d(layout['rowGap']) == null && _d(layout['gap']) == null)) {
           return _error(
             'Schema path missing: components.${c['id']}.layouts.$layoutName '
-            '(columns, columnGap, rowGap, rowHeight). '
+            '(columns, columnGap/gap, rowGap/gap). '
             'Got columns=$columns columnGap=$columnGap rowGap=$rowGap '
             'rowHeight=$rowHeight',
           );
@@ -2148,17 +2147,6 @@ class HomeSduiRenderer {
           }
         }
 
-        final effectiveRowHeight = minimumRowHeight == null
-            ? rowHeight
-            : math.max(rowHeight, minimumRowHeight);
-
-        if (columnCount <= 0 || effectiveRowHeight <= 0) {
-          return _error(
-            'Schema layout invalid: components.${c['id']}.layouts.'
-            '$layoutName columns and rowHeight must be greater than zero.',
-          );
-        }
-
         var cellWidth =
             (availableWidth - ((columnCount - 1) * columnGap)) / columnCount;
         if (!cellWidth.isFinite || cellWidth <= 0) {
@@ -2166,10 +2154,53 @@ class HomeSduiRenderer {
           cellWidth = availableWidth <= 0 ? viewportWidth : availableWidth;
         }
 
+        // Resolve schema-driven sizing directive (sizeFormula / aspectRatio / metroGrid).
+        // Web AHP and SDUI contracts declare sizeFormula: 'slotWidth' for square boxes.
+        final sizeFormula = (layout['sizeFormula'] ??
+                _map(c['layout'])?['sizeFormula'] ??
+                _map(c['dimensions'])?['sizeFormula'] ??
+                state.schema['uiRenderContract']?['cubeGeometry']?['sizeFormula'] ??
+                state.schema['uiRenderContract']?['tileRotation']?['geometry']?['sizeFormula'] ??
+                state.schema['layoutContract']?['gridCalculation']?['sizeFormula'])
+            ?.toString()
+            .trim()
+            .toLowerCase();
+
+        final explicitAspectRatio = _d(layout['aspectRatio']) ??
+            _d(_map(c['layout'])?['aspectRatio']) ??
+            _d(c['aspectRatio']) ??
+            _d(state.schema['layoutContract']?['gridCalculation']?['aspectRatio']);
+
+        final isMetro = preserveMetroColumns || _isMetroMosaic(c);
+
+        double unitCellHeight;
+        if (sizeFormula == 'slotwidth' || sizeFormula == 'cellwidth') {
+          unitCellHeight = cellWidth;
+        } else if (explicitAspectRatio != null && explicitAspectRatio > 0) {
+          unitCellHeight = cellWidth / explicitAspectRatio;
+        } else if (isMetro) {
+          unitCellHeight = cellWidth;
+        } else if (rowHeight != null && rowHeight > 0) {
+          unitCellHeight = rowHeight;
+        } else {
+          unitCellHeight = cellWidth;
+        }
+
+        final effectiveRowHeight = minimumRowHeight == null
+            ? unitCellHeight
+            : math.max(unitCellHeight, minimumRowHeight);
+
+        if (columnCount <= 0 || effectiveRowHeight <= 0) {
+          return _error(
+            'Schema layout invalid: components.${c['id']}.layouts.'
+            '$layoutName columns and effectiveRowHeight must be greater than zero.',
+          );
+        }
+
         final placements = _packGrid(
           items,
           columns: columnCount,
-          layoutName: preserveMetroColumns ? 'compact' : layoutName,
+          layoutName: layoutName,
           clampColumnSpan:
               c['clampChildColumnSpan'] != false &&
               (c['clampChildColumnSpan'] == true ||
@@ -2348,10 +2379,15 @@ class HomeSduiRenderer {
     }
 
     bool hasMetrics(Map<String, dynamic> layout) {
+      final colGap = _d(layout['columnGap']) ?? _d(layout['gap']);
+      final rGap = _d(layout['rowGap']) ?? _d(layout['gap']);
+      final rHeight = _d(layout['rowHeight']) ?? _d(layout['minRowHeight']);
       return layout['columns'] is num &&
-          _d(layout['columnGap']) != null &&
-          _d(layout['rowGap']) != null &&
-          _d(layout['rowHeight']) != null;
+          colGap != null &&
+          rGap != null &&
+          (rHeight != null ||
+              layout['sizeFormula'] != null ||
+              layout['type']?.toString().toLowerCase() == 'metrogrid');
     }
 
     var layout = pick(name);
@@ -2382,21 +2418,21 @@ class HomeSduiRenderer {
     final appearance = _map(c['appearance']);
     final explicit = _d(appearance?['borderRadius']) ??
         _d(appearance?['cardBorderRadius']);
-    if (explicit != null) return explicit;
+    if (explicit != null && explicit >= 0) return explicit;
 
     final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
         _d(state.schema['theme']?['cardBorderRadius']) ??
         _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
         _d(state.schema['grid']?['cardBorderRadius']);
-    if (themeRadius != null && themeRadius > 0) {
-      return themeRadius.clamp(0.0, 20.0);
+    if (themeRadius != null && themeRadius >= 0) {
+      return themeRadius;
     }
 
-    final token = _tokenNumber('radius.card');
-    if (token != null && token > 0) {
-      return token.clamp(0.0, 20.0);
+    final token = _tokenNumber('radius.card') ?? _tokenNumber('radius.small');
+    if (token != null && token >= 0) {
+      return token;
     }
-    return 14.0;
+    return 0.0;
   }
 
   /// Matches web `.ahp-card { overflow: hidden; border-radius }`.
@@ -2571,6 +2607,8 @@ class HomeSduiRenderer {
     final parentAppearance =
         _map(parent['appearance']) ?? const <String, dynamic>{};
     final appearance = faceAppearance ?? parentAppearance;
+    final contentLayout =
+        _map(face['contentLayout']) ?? const <String, dynamic>{};
 
     // A face-level background is authoritative. Only fall back to the parent
     // card background when the face does not declare a background at all.
@@ -2617,10 +2655,11 @@ class HomeSduiRenderer {
         _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
         _d(state.schema['grid']?['cardBorderRadius']);
     final rawRadius = _d(appearance['borderRadius']) ??
+        _d(appearance['cardBorderRadius']) ??
         themeRadius ??
         _tokenNumber('radius.card') ??
-        14.0;
-    final radius = rawRadius.clamp(0.0, 20.0);
+        0.0;
+    final radius = rawRadius >= 0 ? rawRadius : 0.0;
 
     final titleSize =
         _d(appearance['titleFontSize']) ??
@@ -2653,9 +2692,17 @@ class HomeSduiRenderer {
 
     final statWeight = _tokenFontWeight('typography.statValue.fontWeight');
 
-    final titleMaxLines = _tokenInt('typography.cardTitle.maxLines');
+    final tokenTitleMaxLines = _tokenInt('typography.cardTitle.maxLines');
+    final schemaTitleMaxLines = _int(face['titleMaxLines']) ??
+        _int(contentLayout['titleMaxLines']) ??
+        _int(appearance['titleMaxLines']);
+    final titleMaxLines = schemaTitleMaxLines ?? tokenTitleMaxLines;
 
-    final subtitleMaxLines = _tokenInt('typography.cardSubtitle.maxLines');
+    final tokenSubtitleMaxLines = _tokenInt('typography.cardSubtitle.maxLines');
+    final schemaSubtitleMaxLines = _int(face['subtitleMaxLines']) ??
+        _int(contentLayout['subtitleMaxLines']) ??
+        _int(appearance['subtitleMaxLines']);
+    final subtitleMaxLines = schemaSubtitleMaxLines ?? tokenSubtitleMaxLines;
 
     final titleOverflow = _tokenTextOverflow('typography.cardTitle.overflow');
 
@@ -2725,7 +2772,6 @@ class HomeSduiRenderer {
       );
     }
 
-    final contentLayout = _map(face['contentLayout']) ?? const <String, dynamic>{};
     final tileStyle = (appearance['style'] ??
             parentAppearance['style'] ??
             contentLayout['style'])
@@ -2763,10 +2809,17 @@ class HomeSduiRenderer {
         : (imageTextColor ?? iconColor!);
 
     final layoutPadding = _paddingOrNull(contentLayout['padding']);
+    final tokenPadding = _tokenNumber('spacing.sm');
     final metroPad = layoutPadding ??
         EdgeInsets.symmetric(
-          horizontal: _d(_map(contentLayout['padding'])?['horizontal']) ?? 10,
-          vertical: _d(_map(contentLayout['padding'])?['vertical']) ?? 8,
+          horizontal: _d(_map(contentLayout['padding'])?['horizontal']) ??
+              tokenPadding ??
+              _d(state.schema['designTokens']?['spacing']?['sm']) ??
+              0.0,
+          vertical: _d(_map(contentLayout['padding'])?['vertical']) ??
+              _tokenNumber('spacing.xs') ??
+              _d(state.schema['designTokens']?['spacing']?['xs']) ??
+              0.0,
         );
 
     Widget titleBlock({required TextAlign align}) {
@@ -2780,13 +2833,16 @@ class HomeSduiRenderer {
             Text(
               title,
               textAlign: align,
-              maxLines: titleMaxLines!,
+              maxLines: titleMaxLines ?? 2,
               overflow: titleOverflow!,
               style: TextStyle(
                 color: foregroundTitle,
                 fontWeight: titleWeight!,
                 fontSize: titleSize!,
                 height: _d(appearance['titleLineHeight']),
+                shadows: image != null
+                    ? const [Shadow(color: Color(0x99000000), blurRadius: 4)]
+                    : null,
               ),
             ),
           if (!isMetroTile && subtitle.isNotEmpty) ...[
@@ -2794,13 +2850,16 @@ class HomeSduiRenderer {
             Text(
               subtitle,
               textAlign: align,
-              maxLines: subtitleMaxLines!,
+              maxLines: subtitleMaxLines ?? 2,
               overflow: subtitleOverflow!,
               style: TextStyle(
                 color: foregroundSubtitle,
                 fontWeight: subtitleWeight!,
                 fontSize: subtitleSize!,
                 height: _d(appearance['subtitleLineHeight']),
+                shadows: image != null
+                    ? const [Shadow(color: Color(0x99000000), blurRadius: 4)]
+                    : null,
               ),
             ),
           ],
@@ -2934,7 +2993,10 @@ class HomeSduiRenderer {
                   padding: metroPad,
                   child: Align(
                     alignment: Alignment.bottomLeft,
-                    child: titleBlock(align: TextAlign.left),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: double.infinity),
+                      child: titleBlock(align: TextAlign.left),
+                    ),
                   ),
                 )
               else
@@ -3991,6 +4053,11 @@ class HomeSduiRenderer {
     return null;
   }
 
+  int? _int(dynamic raw) {
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw?.toString() ?? '');
+  }
+
   double? _d(dynamic raw) {
     if (raw is num) return raw.toDouble();
     return double.tryParse(raw?.toString() ?? '');
@@ -4824,11 +4891,25 @@ class _RotatingCardState extends State<_RotatingCard>
               ? raw.toDouble()
               : double.tryParse(raw?.toString() ?? '');
         }
+        double? asDouble(dynamic raw) {
+          if (raw is num) return raw.toDouble();
+          return double.tryParse(raw?.toString() ?? '');
+        }
+
+        if (radius == null || radius <= 0) {
+          final themeRadius = asDouble(widget.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+              asDouble(widget.schema['theme']?['cardBorderRadius']) ??
+              asDouble(widget.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+              asDouble(widget.schema['grid']?['cardBorderRadius']);
+          if (themeRadius != null && themeRadius > 0) {
+            radius = themeRadius;
+          }
+        }
         if (radius == null || radius <= 0) {
           final tokens = widget.schema['designTokens'];
           if (tokens is Map) {
             final tokenRadius = tokens['radius'] is Map
-                ? tokens['radius']['card']
+                ? tokens['radius']['card'] ?? tokens['radius']['small']
                 : null;
             radius = tokenRadius is num
                 ? tokenRadius.toDouble()

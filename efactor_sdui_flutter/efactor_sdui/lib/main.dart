@@ -8,6 +8,7 @@ import 'home_sdui/dynamic_home_sdui_page.dart';
 import 'iot_sdui/dynamic_iot_sdui_page.dart';
 import 'iot_sdui/iot_schema_repository.dart';
 import 'grid_sdui/dynamic_grid_sdui_page.dart';
+import 'grid_sdui/grid_in_app_webview_page.dart';
 import 'grid_sdui/grid_offline_outbox_service.dart';
 import 'device_sdui/device_ui_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -37,10 +38,15 @@ Future<void> main() async {
   }
   EfactorCloudService.instance.configureLogs();
 
+  await IncomingCallService.instance.restorePendingAnswer();
+  await PushNotificationBootstrap.instance.captureColdStartAnswer();
+
   Map<String, dynamic>? initialAuthSchema;
-  try {
-    initialAuthSchema = await SchemaLoadQueue.instance.loadAuth();
-  } catch (_) {}
+  if (IncomingCallService.instance.pendingAnswer == null) {
+    try {
+      initialAuthSchema = await SchemaLoadQueue.instance.loadAuth();
+    } catch (_) {}
+  }
 
   runApp(
     AuthUiGate(
@@ -55,9 +61,101 @@ Future<void> main() async {
 }
 
 Widget _buildAuthenticatedFlow(BuildContext context, AuthState authState) {
-  return LocationStartupGate(
-    child: AuthenticatedHomeGate(authState: authState),
-  );
+  return AnswerFirstShell(authState: authState);
+}
+
+/// Cold-start Answer shows GRID Chat as the first screen. The home dashboard
+/// stays unbuilt until there is no pending Answer.
+class AnswerFirstShell extends StatefulWidget {
+  const AnswerFirstShell({super.key, required this.authState});
+
+  final AuthState authState;
+
+  @override
+  State<AnswerFirstShell> createState() => _AnswerFirstShellState();
+}
+
+class _AnswerFirstShellState extends State<AnswerFirstShell> {
+  PendingCallAnswer? _latched;
+  final IncomingCallService _calls = IncomingCallService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _calls.answerHandoffOwnedByShell = true;
+    _adoptPending();
+    _calls.pendingAnswerListenable.addListener(_onPending);
+  }
+
+  @override
+  void didUpdateWidget(covariant AnswerFirstShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _adoptPending();
+  }
+
+  @override
+  void dispose() {
+    _calls.pendingAnswerListenable.removeListener(_onPending);
+    if (_calls.answerHandoffOwnedByShell) {
+      _calls.answerHandoffOwnedByShell = false;
+    }
+    super.dispose();
+  }
+
+  void _onPending() {
+    if (!mounted) return;
+    final before = _latched?.callId;
+    _adoptPending();
+    if (_latched?.callId != before) {
+      setState(() {});
+    }
+  }
+
+  void _adoptPending() {
+    final pending = _calls.pendingAnswer;
+    if (pending == null) return;
+    if (_calls.navigatorCovered) return;
+    if (_latched?.callId == pending.callId) return;
+    _latched = pending;
+    _calls.logGridChatNavigation(pending.callId);
+    final token = widget.authState.accessToken?.trim();
+    if (token != null && token.isNotEmpty) {
+      _calls.activeAccessToken = token;
+    }
+    _calls.activeUserId = _userId();
+  }
+
+  int? _userId() {
+    final rawCandidates = <dynamic>[
+      widget.authState.read('auth.userId'),
+      widget.authState.read('auth.user_id'),
+      widget.authState.read('auth.id'),
+    ];
+    for (final raw in rawCandidates) {
+      if (raw is num) return raw.toInt();
+      final parsed = int.tryParse(raw?.toString().trim() ?? '');
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final latched = _latched;
+    if (latched != null) {
+      return GridInAppWebViewPage(
+        key: ValueKey<String>('answer-handoff-${latched.callId}'),
+        uri: IncomingCallService.answerGridChatUri(latched),
+        title: 'Circle Connect',
+        showAppBar: false,
+        accessToken: widget.authState.accessToken,
+        userId: _userId(),
+      );
+    }
+    return LocationStartupGate(
+      child: AuthenticatedHomeGate(authState: widget.authState),
+    );
+  }
 }
 
 /// Temporary post-authentication bridge:

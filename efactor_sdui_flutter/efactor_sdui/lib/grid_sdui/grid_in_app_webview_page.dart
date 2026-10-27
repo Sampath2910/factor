@@ -179,6 +179,65 @@ class GridInAppWebViewPage extends StatefulWidget {
   static bool get isPageOpen =>
       _activeState != null && (_activeState?.mounted ?? false);
 
+  /// The mounted page is GRID Chat, including while it is still loading.
+  static bool get isActiveCircleConnect {
+    final state = _activeState;
+    if (state == null || !state.mounted) return false;
+    return state._isCircleConnect;
+  }
+
+  static bool _answerInjectInFlight = false;
+
+  /// Runs gridChatCallAction once. Returns false when the function is not
+  /// on the page yet, so the pending Answer can be tried again.
+  static Future<bool> injectAnswerOnce(String callId) async {
+    final id = callId.trim();
+    if (id.isEmpty || !isActiveCircleConnect) return false;
+    if (IncomingCallService.instance.hasDeliveredAnswerJs(id)) {
+      return true;
+    }
+    if (_answerInjectInFlight) return false;
+    _answerInjectInFlight = true;
+    final callIdJson = jsonEncode(id);
+    final answerJs = '''
+(function() {
+  if (typeof window.gridChatCallAction !== 'function') return false;
+  try {
+    window.gridChatCallAction({ action: 'answer', call_id: $callIdJson });
+    return true;
+  } catch (e) {
+    console.error('gridChatCallAction error:', e);
+    return false;
+  }
+})()
+''';
+    try {
+      final result = await _activeState?._controller.runJavaScriptReturningResult(
+        answerJs,
+      );
+      final text = result?.toString().trim().toLowerCase().replaceAll('"', '') ?? '';
+      final delivered = text == 'true' || text == '1';
+      if (!delivered) return false;
+      if (!IncomingCallService.instance.claimAnswerJs(id)) {
+        // ignore: avoid_print
+        print('[CALL] blocked duplicate gridChatCallAction answer call_id=$id');
+        return false;
+      }
+      IncomingCallService.callTrace('gridChatCallAction injected', id);
+      return true;
+    } catch (e) {
+      debugPrint('[GridInAppWebView] injectAnswerOnce failed: $e');
+      return false;
+    } finally {
+      _answerInjectInFlight = false;
+    }
+  }
+
+  /// GRID Chat is the visible route, the app is resumed, and the page has loaded.
+  /// Professional Space does not count: it does not draw the in-app call banner.
+  static bool get isCircleConnectReady =>
+      _activeState?.circleConnectReady ?? false;
+
   /// Dispatches call action to active web page via both:
   /// 1. CustomEvent 'circleConnectCallAction' with { action: 'ANSWER', callId }
   /// 2. window.gridChatCallAction({ action: 'answer', call_id })
@@ -192,6 +251,21 @@ class GridInAppWebViewPage extends StatefulWidget {
     if (!isPageOpen) return;
     final upperAction = action.toUpperCase();
     final lowerAction = action.toLowerCase();
+    if (lowerAction == 'answer') {
+      final pending = IncomingCallService.instance.pendingAnswer;
+      if (pending != null && pending.callId == callId) {
+        await IncomingCallService.instance.deliverPendingAnswerWithRetry();
+        return;
+      }
+      final delivered = await injectAnswerOnce(callId);
+      if (delivered) {
+        await IncomingCallService.instance.clearPendingAnswer(
+          reason: 'delivered',
+          callId: callId,
+        );
+      }
+      return;
+    }
     final payload = <String, dynamic>{
       'action': lowerAction,
       'call_id': callId,
@@ -288,7 +362,8 @@ class GridInAppWebViewPage extends StatefulWidget {
   State<GridInAppWebViewPage> createState() => _GridInAppWebViewPageState();
 }
 
-class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
+class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
+    with WidgetsBindingObserver {
   late final WebViewController _controller;
   var _loading = true;
   var _showingSnapshot = false;
@@ -302,6 +377,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   bool _isPopping = false;
   bool _isConnectingCall = false;
   Timer? _connectingCallTimer;
+  bool _routeIsCurrent = true;
+  bool _webCallUiReady = false;
+
+  /// True when this GRID Chat page can show the in-app incoming-call banner.
+  bool get circleConnectReady {
+    if (!mounted || !_isCircleConnect || !_routeIsCurrent) return false;
+    if (_error != null) return false;
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life != null && life != AppLifecycleState.resumed) return false;
+    if (_loading && !_webCallUiReady) return false;
+    return true;
+  }
 
   Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
 
@@ -322,8 +409,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
         callAction.isNotEmpty &&
         callId != null &&
         callId.isNotEmpty) {
-      final upperAction = callAction.toUpperCase();
       final lowerAction = callAction.toLowerCase();
+      if (lowerAction == 'answer') {
+        return;
+      }
+      final upperAction = callAction.toUpperCase();
       final js = '''
 (function() {
   setTimeout(function() {
@@ -356,6 +446,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _isPopping = false;
     GridInAppWebViewPage._activeState = this;
 
@@ -389,7 +480,23 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final current = ModalRoute.of(context)?.isCurrent ?? true;
+    if (current == _routeIsCurrent) return;
+    _routeIsCurrent = current;
+    IncomingCallService.instance.onCircleConnectReadinessChanged();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive) return;
+    IncomingCallService.instance.onCircleConnectReadinessChanged();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _connectingCallTimer?.cancel();
     unawaited(OngoingCallService.instance.stopCall());
     PushNotificationBootstrap.instance.setActiveConversationId(null);
@@ -402,6 +509,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     if (GridInAppWebViewPage._activeState == this) {
       GridInAppWebViewPage._activeState = null;
     }
+    IncomingCallService.instance.onCircleConnectReadinessChanged();
     super.dispose();
   }
 
@@ -539,10 +647,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
           },
           onPageStarted: (_) {
             if (!mounted) return;
+            _webCallUiReady = false;
             setState(() {
               _loading = true;
               _error = null;
             });
+            IncomingCallService.instance.onCircleConnectReadinessChanged();
             unawaited(_injectCircleConnectPushBridge());
             unawaited(_injectGridBackButton());
           },
@@ -552,6 +662,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
               _loading = false;
               _error = null;
             });
+            IncomingCallService.instance.onCircleConnectReadinessChanged();
             _completeNavigation();
             unawaited(_injectCircleConnectPushBridge());
             unawaited(_injectGridBackButton());
@@ -815,33 +926,50 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
                 callType: String(cType)
               };
             }
-            // If callee_user_id is available, dispatch working call/notify immediately
-            if (calleeUid && cId) {
-              var fallbackFd = new FormData();
-              fallbackFd.append('call_id', String(cId));
-              fallbackFd.append('callee_user_id', String(calleeUid));
-              fallbackFd.append('user_id', String(calleeUid));
-              fallbackFd.append('callee_id', String(calleeUid));
-              fallbackFd.append('chat_user_id', String(calleeUid));
-              if (portalUid) fallbackFd.append('portal_user_id', String(portalUid));
-              if (convId) fallbackFd.append('conversation_id', String(convId));
-              fallbackFd.append('call_type', String(cType));
-              fallbackFd.append('status', 'ringing');
-
-              origFetch('/index.php/grid-chat/api/call/notify', {
-                method: 'POST',
-                body: fallbackFd,
-                headers: bearerToken ? { 'Authorization': 'Bearer ' + bearerToken } : {}
-              }).then(function(r) { return r.json(); }).then(function(d) {
-                console.log('[PUSH_DISPATCH] Auto-dispatched call/notify from inviteCall:', d);
-              }).catch(function(_) {});
-            }
           }
         } catch(e) {}
       }
 
-      // Intercept call/notify and enrich with required callee_user_id and portal_user_id
-      if (url && (url.indexOf('call/notify') !== -1 || url.indexOf('call_invite') !== -1 || url.indexOf('call') !== -1)) {
+      if (url && url.indexOf('live/ice') !== -1) {
+        return origFetch.call(this, resource, init).then(function(response) {
+          try {
+            response.clone().text().then(function(bodyText) {
+              var hasTurn = false;
+              var servers = [];
+              try {
+                var json = JSON.parse(bodyText);
+                var data = (json && json.data) ? json.data : json;
+                hasTurn = !!(data && (data.hasTurn === true || data.has_turn === true));
+                var list = (data && (data.iceServers || data.ice_servers)) || [];
+                if (!Array.isArray(list) && data && data.urls) list = [data];
+                list.forEach(function(server) {
+                  var urls = server && (server.urls || server.url);
+                  if (typeof urls === 'string') urls = [urls];
+                  if (!Array.isArray(urls)) return;
+                  urls.forEach(function(item) {
+                    var value = String(item || '');
+                    if (value.indexOf('turn:') === 0 || value.indexOf('turns:') === 0) {
+                      servers.push(value);
+                    }
+                  });
+                });
+              } catch (e) {}
+              if (window.CircleConnectPushBridge) {
+                window.CircleConnectPushBridge.postMessage(JSON.stringify({
+                  action: 'callIceLog',
+                  hasTurn: hasTurn,
+                  servers: servers.join(','),
+                  status: response.status
+                }));
+              }
+            }).catch(function(_) {});
+          } catch (e) {}
+          return response;
+        });
+      }
+
+      // Enrich only call/notify. Do not rewrite live/ice, answer, accept, end, or cancel.
+      if (url && url.indexOf('call/notify') !== -1) {
         var payloadSummary = '';
         try {
           if (init.body && typeof FormData !== 'undefined' && init.body instanceof FormData) {
@@ -944,6 +1072,65 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
     };
   }
 
+  if (!window.__efactorSignalLog) {
+    window.__efactorSignalLog = true;
+    function postSignal(name, callId) {
+      try {
+        if (window.CircleConnectPushBridge) {
+          window.CircleConnectPushBridge.postMessage(JSON.stringify({
+            action: 'callSignalLog',
+            name: String(name || ''),
+            callId: String(callId || '')
+          }));
+        }
+      } catch (e) {}
+    }
+    function readSignal(text) {
+      if (typeof text !== 'string' || text.charAt(0) !== '{') return;
+      try {
+        var msg = JSON.parse(text);
+        var name = String(msg.type || msg.event || msg.action || '').toUpperCase();
+        var callId = msg.call_id || msg.callId || '';
+        var iceState = String(msg.iceState || msg.ice_state || msg.connectionState || '').toLowerCase();
+        if (iceState === 'failed') name = 'ICE_FAILED';
+        if (name === 'CALL_ACCEPTED' || name === 'SDP_OFFER' || name === 'SDP_ANSWER' || name === 'ICE_CANDIDATE' || name === 'ICE_FAILED' || name === 'CALL_END' || name === 'CALL_CANCELLED' || name === 'CALL_ENDED') {
+          postSignal(name, callId);
+        }
+      } catch (e) {}
+    }
+    var OrigWS = window.WebSocket;
+    var WrappedWS = function(url, protocols) {
+      var ws = (protocols === undefined) ? new OrigWS(url) : new OrigWS(url, protocols);
+      ws.addEventListener('message', function(ev) {
+        if (typeof ev.data === 'string') readSignal(ev.data);
+      });
+      var origSend = ws.send;
+      ws.send = function(data) {
+        if (typeof data === 'string') readSignal(data);
+        return origSend.apply(ws, arguments);
+      };
+      return ws;
+    };
+    WrappedWS.prototype = OrigWS.prototype;
+    WrappedWS.CONNECTING = OrigWS.CONNECTING;
+    WrappedWS.OPEN = OrigWS.OPEN;
+    WrappedWS.CLOSING = OrigWS.CLOSING;
+    WrappedWS.CLOSED = OrigWS.CLOSED;
+    window.WebSocket = WrappedWS;
+    if (window.RTCPeerConnection) {
+      var OrigPC = window.RTCPeerConnection;
+      var WrappedPC = function(config, constraints) {
+        var pc = (constraints === undefined) ? new OrigPC(config) : new OrigPC(config, constraints);
+        pc.addEventListener('iceconnectionstatechange', function() {
+          if (pc.iceConnectionState === 'failed') postSignal('ICE_FAILED', '');
+        });
+        return pc;
+      };
+      WrappedPC.prototype = OrigPC.prototype;
+      window.RTCPeerConnection = WrappedPC;
+    }
+  }
+
   // Auto-register device token on Circle Connect native-token endpoint
   function syncPushTokenToChat(uid) {
     if (!fcmToken) return;
@@ -996,32 +1183,61 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   window.CircleConnectPush.getTokenPromise = function() {
     return Promise.resolve(window.__efactor_fcm_token || "");
   };
-  window.CircleConnectPush.startRinging = function(callId, callerName, callType) {
-    try {
-      if (window.CircleConnectPushBridge) {
-        window.CircleConnectPushBridge.postMessage(JSON.stringify({
-          action: 'startRinging',
-          callId: String(callId || ''),
-          callerName: String(callerName || ''),
-          callType: String(callType || 'audio')
-        }));
-      }
-    } catch (e) {
-      console.error('startRinging error:', e);
+  function bindNativeCallBridge() {
+    if (!window.CircleConnectPush || typeof window.CircleConnectPush !== 'object') {
+      window.CircleConnectPush = {};
     }
-  };
-  window.CircleConnectPush.stopRinging = function(callId) {
-    try {
-      if (window.CircleConnectPushBridge) {
-        window.CircleConnectPushBridge.postMessage(JSON.stringify({
-          action: 'stopRinging',
-          callId: String(callId || '')
-        }));
+    var api = window.CircleConnectPush;
+    function post(payload) {
+      try {
+        if (window.CircleConnectPushBridge) {
+          window.CircleConnectPushBridge.postMessage(JSON.stringify(payload));
+        }
+      } catch (e) {
+        console.error('CircleConnectPush bridge error:', e);
       }
-    } catch (e) {
-      console.error('stopRinging error:', e);
     }
-  };
+    api.startRinging = function(callId, callerName, callType) {
+      post({
+        action: 'startRinging',
+        callId: String(callId || ''),
+        callerName: String(callerName || ''),
+        callType: String(callType || 'audio')
+      });
+    };
+    api.stopRinging = function(callId) {
+      post({
+        action: 'stopRinging',
+        callId: String(callId || '')
+      });
+    };
+    api.callUiReady = function() {
+      post({ action: 'callUiReady' });
+    };
+    api.incomingCallDisplayed = function(callId) {
+      post({
+        action: 'incomingCallDisplayed',
+        callId: String(callId || '')
+      });
+    };
+    api.__efactorNativeBridge = true;
+  }
+  bindNativeCallBridge();
+  window.__efactorRebindCircleConnectPush = bindNativeCallBridge;
+  if (!window.__efactorPushKeepAlive) {
+    var keepCount = 0;
+    window.__efactorPushKeepAlive = setInterval(function() {
+      keepCount++;
+      var api = window.CircleConnectPush;
+      if (!api || api.__efactorNativeBridge !== true) {
+        bindNativeCallBridge();
+      }
+      if (keepCount >= 40) {
+        clearInterval(window.__efactorPushKeepAlive);
+        window.__efactorPushKeepAlive = null;
+      }
+    }, 500);
+  }
   window.CircleConnectPush.clearChatNotifications = function(conversationId) {
     try {
       if (window.CircleConnectPushBridge) {
@@ -1285,6 +1501,24 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
           callType: callType,
           url: widget.uri.toString(),
         );
+      } else if (action == 'callUiReady') {
+        _webCallUiReady = true;
+        if (_isCircleConnect) {
+          final pendingId =
+              IncomingCallService.instance.pendingAnswer?.callId ?? '';
+          final urlId = _effectiveUri.queryParameters['call_id'] ??
+              _effectiveUri.queryParameters['callId'] ??
+              '';
+          final callId = pendingId.isNotEmpty ? pendingId : urlId;
+          unawaited(
+            IncomingCallService.instance.onGridChatCallUiReady(callId),
+          );
+        }
+        IncomingCallService.instance.onCircleConnectReadinessChanged();
+      } else if (action == 'incomingCallDisplayed') {
+        _webCallUiReady = true;
+        final callId = data['callId']?.toString() ?? '';
+        IncomingCallService.instance.incomingCallDisplayedFromWeb(callId);
       } else if (action == 'callStarted') {
         final callId = data['callId']?.toString() ?? '';
         final callType = data['callType']?.toString() ?? 'audio';
@@ -1334,6 +1568,23 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
       } else if (action == 'conversationClosed' ||
           action == 'clearActiveConversation') {
         PushNotificationBootstrap.instance.setActiveConversationId(null);
+      } else if (action == 'callSignalLog') {
+        final name = data['name']?.toString() ?? '';
+        final callId = data['callId']?.toString() ?? '';
+        final t = DateTime.now().millisecondsSinceEpoch;
+        // ignore: avoid_print
+        print('[CALL] call_id=$callId event=$name t=$t');
+        if (name == 'CALL_ACCEPTED') {
+          IncomingCallService.callTrace('CALL_ACCEPTED observed', callId);
+        }
+      } else if (action == 'callIceLog') {
+        final hasTurn = data['hasTurn'] == true;
+        final servers = data['servers']?.toString() ?? '';
+        final status = data['status']?.toString() ?? '';
+        // ignore: avoid_print
+        print(
+          '[CALL] live/ice status=$status hasTurn=$hasTurn servers=$servers',
+        );
       } else if (action == 'outboundCallAttempt') {
         final url = data['url']?.toString() ?? '';
         final method = data['method']?.toString() ?? 'POST';

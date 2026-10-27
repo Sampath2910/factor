@@ -1,3 +1,5 @@
+import AudioToolbox
+import AVFoundation
 import Flutter
 import UIKit
 import UserNotifications
@@ -6,6 +8,8 @@ import UserNotifications
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let wifiNativeBridge = WifiNativeBridge()
   private var isBridgeRegistered = false
+  private var incomingRingPlayer: AVAudioPlayer?
+  private var incomingRingTimer: Timer?
 
   override func application(
     _ application: UIApplication,
@@ -39,8 +43,13 @@ import UserNotifications
 
   private func registerCircleConnectBridge(with messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: messenger)
-    channel.setMethodCallHandler { (call, result) in
-      if call.method == "getCookies" {
+    channel.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      switch call.method {
+      case "getCookies":
         let urlStr = (call.arguments as? [String: Any])?["url"] as? String ?? "https://efactor.tech"
         if let url = URL(string: urlStr), let cookies = HTTPCookieStorage.shared.cookies(for: url) {
           let cookieHeader = cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
@@ -48,10 +57,44 @@ import UserNotifications
         } else {
           result("")
         }
-      } else {
+      case "startIncomingRing":
+        self.startIncomingRing()
+        result(true)
+      case "stopIncomingRing":
+        self.stopIncomingRing()
+        result(true)
+      default:
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  private func startIncomingRing() {
+    stopIncomingRing()
+    guard let url = Bundle.main.url(forResource: "call_ringtone", withExtension: "aiff") else {
+      return
+    }
+    do {
+      try AVAudioSession.sharedInstance().setCategory(.playback, options: [.duckOthers])
+      try AVAudioSession.sharedInstance().setActive(true)
+      let player = try AVAudioPlayer(contentsOf: url)
+      player.numberOfLoops = -1
+      player.play()
+      incomingRingPlayer = player
+    } catch {
+      NSLog("Incoming ring failed: \(error.localizedDescription)")
+    }
+    AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+    incomingRingTimer = Timer.scheduledTimer(withTimeInterval: 1.6, repeats: true) { _ in
+      AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+    }
+  }
+
+  private func stopIncomingRing() {
+    incomingRingTimer?.invalidate()
+    incomingRingTimer = nil
+    incomingRingPlayer?.stop()
+    incomingRingPlayer = nil
   }
 
   override func application(

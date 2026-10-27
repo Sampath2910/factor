@@ -4,12 +4,21 @@ import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import android.util.Log
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebView
@@ -29,6 +38,13 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterActivity() {
     private lateinit var wifiNativeBridge: WifiNativeBridge
+    private var incomingRingtone: Ringtone? = null
+    private val callWebViewHandler = Handler(Looper.getMainLooper())
+    private val resumeCallWebViewRunnable = Runnable {
+        if (OngoingCallService.isCallActive) {
+            resumeCallWebViews()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +53,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Bring this same Activity forward. Do not load the chat URL again.
+        setIntent(intent)
         wakeAndUnlock()
     }
 
@@ -223,6 +241,14 @@ class MainActivity : FlutterActivity() {
                     startService(serviceIntent)
                     result.success(true)
                 }
+                "startIncomingRing" -> {
+                    startIncomingRing()
+                    result.success(true)
+                }
+                "stopIncomingRing" -> {
+                    stopIncomingRing()
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -230,12 +256,49 @@ class MainActivity : FlutterActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (OngoingCallService.isCallActive) {
-            // Circle Connect spec: Keep WebView running in background during an active call.
-            // Never allow pauseTimers() to freeze WebRTC audio/video JS timers.
+        scheduleCallWebViewResume()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Home / Recents hides the window after onPause, and WebView pauses itself then.
+        scheduleCallWebViewResume()
+    }
+
+    override fun onResume() {
+        callWebViewHandler.removeCallbacks(resumeCallWebViewRunnable)
+        super.onResume()
+    }
+
+    /**
+     * Flutter calls WebView.onPause() after the Activity pauses. Timers alone
+     * do not restore the mic and camera. onResume() on the same WebView does.
+     */
+    private fun scheduleCallWebViewResume() {
+        if (!OngoingCallService.isCallActive) return
+        resumeCallWebViews()
+        callWebViewHandler.removeCallbacks(resumeCallWebViewRunnable)
+        window?.decorView?.post(resumeCallWebViewRunnable)
+        callWebViewHandler.postDelayed(resumeCallWebViewRunnable, 250)
+    }
+
+    private fun resumeCallWebViews() {
+        val root = window?.decorView ?: return
+        resumeWebViewTree(root)
+    }
+
+    private fun resumeWebViewTree(view: View) {
+        if (view is WebView) {
             try {
-                WebView.resumeTimers()
-            } catch (_: Exception) {}
+                view.onResume()
+                view.resumeTimers()
+            } catch (_: Exception) {
+            }
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                resumeWebViewTree(view.getChildAt(i))
+            }
         }
     }
 
@@ -281,9 +344,61 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        stopIncomingRing()
+        callWebViewHandler.removeCallbacks(resumeCallWebViewRunnable)
         if (::wifiNativeBridge.isInitialized) {
             wifiNativeBridge.dispose()
         }
         super.onDestroy()
+    }
+
+    private fun startIncomingRing() {
+        stopIncomingRing()
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val tone = RingtoneManager.getRingtone(applicationContext, uri)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                tone?.isLooping = true
+            }
+            tone?.play()
+            incomingRingtone = tone
+        } catch (e: Exception) {
+            Log.w("IncomingRing", "ringtone failed: ${e.message}")
+        }
+        try {
+            val pattern = longArrayOf(0, 700, 500, 700, 800)
+            val vibrator = incomingVibrator()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(pattern, 0)
+            }
+        } catch (e: Exception) {
+            Log.w("IncomingRing", "vibrate failed: ${e.message}")
+        }
+    }
+
+    private fun stopIncomingRing() {
+        try {
+            incomingRingtone?.stop()
+        } catch (_: Exception) {
+        }
+        incomingRingtone = null
+        try {
+            incomingVibrator()?.cancel()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun incomingVibrator(): Vibrator? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            manager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
     }
 }

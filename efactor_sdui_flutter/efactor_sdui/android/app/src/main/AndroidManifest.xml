@@ -38,7 +38,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <!-- microphone (+ camera for video). phoneCall is not used: this app is not a dialer
+         and does not register a self-managed ConnectionService. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
@@ -113,11 +114,13 @@
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="false" />
 
-        <!-- Ongoing active call foreground service keeping WebRTC audio/video alive in background -->
+        <!-- Ongoing call. microphone for voice, camera added at runtime for video.
+             phoneCall is omitted: Android 14+ only allows it for dialers or a
+             self-managed ConnectionService, which this app does not register. -->
         <service
             android:name=".OngoingCallService"
             android:exported="false"
-            android:foregroundServiceType="phoneCall|microphone|camera" />
+            android:foregroundServiceType="microphone|camera" />
 
     </application>
 
