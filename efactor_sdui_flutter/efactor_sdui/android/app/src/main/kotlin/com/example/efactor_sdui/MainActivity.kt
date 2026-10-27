@@ -12,6 +12,8 @@ import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
 import android.webkit.CookieManager
+import android.webkit.WebView
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -194,8 +196,46 @@ class MainActivity : FlutterActivity() {
                 "getDeviceManufacturer" -> {
                     result.success(Build.MANUFACTURER.lowercase())
                 }
+                "startOngoingCallService" -> {
+                    val callId = call.argument<String>("callId") ?: ""
+                    val callType = call.argument<String>("callType") ?: "audio"
+                    val name = call.argument<String>("name") ?: ""
+                    val isGroup = call.argument<Boolean>("isGroup") ?: false
+
+                    val serviceIntent = Intent(this, OngoingCallService::class.java).apply {
+                        action = OngoingCallService.ACTION_START_CALL
+                        putExtra(OngoingCallService.EXTRA_CALL_ID, callId)
+                        putExtra(OngoingCallService.EXTRA_CALL_TYPE, callType)
+                        putExtra(OngoingCallService.EXTRA_NAME, name)
+                        putExtra(OngoingCallService.EXTRA_IS_GROUP, isGroup)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        ContextCompat.startForegroundService(this, serviceIntent)
+                    } else {
+                        startService(serviceIntent)
+                    }
+                    result.success(true)
+                }
+                "stopOngoingCallService" -> {
+                    val serviceIntent = Intent(this, OngoingCallService::class.java).apply {
+                        action = OngoingCallService.ACTION_STOP_CALL
+                    }
+                    startService(serviceIntent)
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (OngoingCallService.isCallActive) {
+            // Circle Connect spec: Keep WebView running in background during an active call.
+            // Never allow pauseTimers() to freeze WebRTC audio/video JS timers.
+            try {
+                WebView.resumeTimers()
+            } catch (_: Exception) {}
         }
     }
 

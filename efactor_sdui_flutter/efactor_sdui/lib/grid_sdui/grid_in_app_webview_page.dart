@@ -14,6 +14,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../services/incoming_call_service.dart';
+import '../services/ongoing_call_service.dart';
 import '../services/push_notification_bootstrap.dart';
 import 'dynamic_grid_sdui_page.dart';
 import 'grid_live_location_service.dart';
@@ -390,6 +391,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
   @override
   void dispose() {
     _connectingCallTimer?.cancel();
+    unawaited(OngoingCallService.instance.stopCall());
     PushNotificationBootstrap.instance.setActiveConversationId(null);
     GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
     _outboxSyncedSub?.cancel();
@@ -1283,10 +1285,33 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage> {
           callType: callType,
           url: widget.uri.toString(),
         );
+      } else if (action == 'callStarted') {
+        final callId = data['callId']?.toString() ?? '';
+        final callType = data['callType']?.toString() ?? 'audio';
+        final name = data['name']?.toString() ?? '';
+        final isGroup = data['isGroup'] == true;
+
+        IncomingCallService.instance.stopRingingFromWeb(callId);
+        if (_isConnectingCall && mounted) {
+          setState(() => _isConnectingCall = false);
+        }
+
+        unawaited(OngoingCallService.instance.startCall(
+          callId: callId,
+          callType: callType,
+          name: name,
+          isGroup: isGroup,
+        ));
+      } else if (action == 'callEnded') {
+        final callId = data['callId']?.toString() ?? '';
+        IncomingCallService.instance.stopRingingFromWeb(callId);
+        if (_isConnectingCall && mounted) {
+          setState(() => _isConnectingCall = false);
+        }
+        unawaited(OngoingCallService.instance.stopCall(callId));
       } else if (action == 'stopRinging' ||
           action == 'callConnected' ||
-          action == 'callActive' ||
-          action == 'callEnded') {
+          action == 'callActive') {
         final callId = data['callId']?.toString() ?? '';
         IncomingCallService.instance.stopRingingFromWeb(callId);
         if (_isConnectingCall && mounted) {
