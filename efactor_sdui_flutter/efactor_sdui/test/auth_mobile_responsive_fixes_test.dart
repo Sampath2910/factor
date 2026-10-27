@@ -311,10 +311,11 @@ void main() {
     );
     await tester.pump();
 
-    // Fill valid credentials: email, 10-digit phone, complex password
+    // Fill valid credentials: email, 10-digit phone, complex password, confirm password
     state.write('signupForm.email', 'testuser@efactor.tech');
     state.write('signupForm.phone', '9876543210');
     state.write('signupForm.password', 'SecurePass123!');
+    state.write('signupForm.confirm_password', 'SecurePass123!');
     await tester.pump();
 
     // Verify Send OTP button is displayed

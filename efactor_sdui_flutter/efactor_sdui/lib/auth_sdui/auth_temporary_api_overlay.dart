@@ -28,7 +28,10 @@ class AuthTemporaryApiOverlay {
     }
     final app = schema['app'];
     if (app is Map) {
-      app['initialPageId'] = 'login';
+      final current = app['initialPageId']?.toString();
+      if (current == null || current.isEmpty || current == 'welcome') {
+        app['initialPageId'] = 'login';
+      }
     }
     return schema;
   }

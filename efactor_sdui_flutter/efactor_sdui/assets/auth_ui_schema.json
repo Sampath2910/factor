@@ -2,26 +2,26 @@
   "status": true,
   "message": "Auth UI schema loaded successfully.",
   "data": {
-    "id": 33,
+    "id": 60,
     "schema_key": "efactor-auth",
     "schema_type": "auth-ui",
-    "schema_version": 16,
-    "schema_hash": "f7465d725bddd5aadb3789cd75f6874d17ae0b2d3221d3ce2b73bb32b3a943c4",
+    "schema_version": 42,
+    "schema_hash": "0fb8d5e7c5fde7e61b4c9908ff2f48ff4db45adf926d4c3ee0f1d704d153ecda",
     "status": 1,
-    "created_at": "2026-09-24 12:24:34",
-    "updated_at": "2026-09-24 12:24:34"
+    "created_at": "2026-10-17 16:54:22",
+    "updated_at": "2026-10-17 16:54:22"
   },
   "schema": {
     "schemaType": "auth-ui",
-    "schemaVersion": 16,
+    "schemaVersion": 42,
     "schemaId": "efactor-auth",
     "schemaStatus": "production",
     "contractVersion": "2026-08-08.auth.v7",
     "minRendererVersion": "1.0.0",
-    "generatedAt": "2026-09-24T12:24:34+05:30",
+    "generatedAt": "2026-10-17T16:54:22+05:30",
     "generatedBy": "App\\Services\\AuthUiSchemaBuilder",
-    "revision": 16,
-    "contentHash": "f7465d725bddd5aadb3789cd75f6874d17ae0b2d3221d3ce2b73bb32b3a943c4",
+    "revision": 42,
+    "contentHash": "0fb8d5e7c5fde7e61b4c9908ff2f48ff4db45adf926d4c3ee0f1d704d153ecda",
     "syncToken": null,
     "responsive": {
       "version": "1.0",
@@ -32,7 +32,7 @@
       "breakpoints": {
         "narrow": {
           "minimumWidth": 0,
-          "maximumWidth": 390
+          "maximumWidth": 359
         },
         "compact": {
           "minimumWidth": 360,
@@ -89,8 +89,8 @@
       "timezone": "Asia/Kolkata",
       "description": "Production-ready schema for welcome, login, signup, and forgot-password auth screens.",
       "sourceOfTruth": "https://efactor.tech/v8/api_auth_schema.php",
-      "sourceFingerprint": "45e9d48eecf1b1d835f33ebfe04adee4a80865cfb96b2da7ea7606317dd72efe",
-      "mappingSyncedAt": "2026-09-24T12:24:34+05:30"
+      "sourceFingerprint": "25df26e1738370c3568a78674618d1abf907a1ca9221266b444ab4e9877abcb2",
+      "mappingSyncedAt": "2026-10-17T16:54:22+05:30"
     },
     "contract": {
       "format": "efactor-auth-ui",
@@ -126,7 +126,7 @@
       }
     },
     "compatibility": {
-      "php": "\u003E=7.4",
+      "php": ">=7.4",
       "codeIgniter": "4.x",
       "mysql": "5.x",
       "renderers": [
@@ -201,10 +201,10 @@
           "signup_email",
           "signup_phone",
           "signup_password",
+          "signup_confirm_password",
           "signup_send_otp",
           "signup_otp_boxes",
           "signup_verify_otp",
-          "signup_confirm_password",
           "signup_terms",
           "signup_submit",
           "signup_footer"
@@ -315,10 +315,10 @@
       "url": "https://efactor.tech/v8/api_auth_schema.php?action=delta",
       "method": "GET",
       "params": {
-        "from_revision": "integer — the client's currently cached revision",
-        "to_revision": "integer — omit to get latest",
-        "base_hash": "string — SHA-256 of the client's cached schema JSON",
-        "target_hash": "string — SHA-256 of the target schema JSON (in response)"
+        "from_revision": "integer \u2014 the client's currently cached revision",
+        "to_revision": "integer \u2014 omit to get latest",
+        "base_hash": "string \u2014 SHA-256 of the client's cached schema JSON",
+        "target_hash": "string \u2014 SHA-256 of the target schema JSON (in response)"
       },
       "response": {
         "patchField": "patch",
@@ -331,7 +331,7 @@
     },
     "fullRequiredPolicy": {
       "triggerConditions": [
-        "revision gap \u003E 10",
+        "revision gap > 10",
         "base_hash mismatch",
         "schema restructure"
       ],
@@ -342,10 +342,10 @@
       "transport": "websocket",
       "channel": "efactor-cloud",
       "payloadShape": {
-        "schema_id": "string — efactor-auth",
-        "revision": "integer — new revision",
-        "content_hash": "string — SHA-256",
-        "sync_token": "string — for missed-event recovery"
+        "schema_id": "string \u2014 efactor-auth",
+        "revision": "integer \u2014 new revision",
+        "content_hash": "string \u2014 SHA-256",
+        "sync_token": "string \u2014 for missed-event recovery"
       },
       "clientBehavior": {
         "onEvent": "call metadataEndpoint to confirm revision",
@@ -356,15 +356,11 @@
     },
     "app": {
       "name": "Efactor",
-      "initialPageId": "login",
+      "initialPageId": "welcome",
       "safeArea": true,
       "orientation": "portrait|landscape",
       "keyboardAvoidance": true,
       "scrollBehavior": "inside-screen",
-      "defaults": {
-        "countryCode": "+91",
-        "userType": "User"
-      },
       "postAuthDestination": {
         "type": "flutterAppHome",
         "targetPageId": "home",
@@ -493,16 +489,16 @@
           "apple"
         ],
         "paths": {
-          "arrow-left": "\u003Cpath d=\"M19 12H5\"\u003E\u003C/path\u003E\u003Cpath d=\"m12 19-7-7 7-7\"\u003E\u003C/path\u003E",
-          "mail": "\u003Crect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"\u003E\u003C/path\u003E",
-          "lock": "\u003Crect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M7 11V7a5 5 0 0 1 10 0v4\"\u003E\u003C/path\u003E",
-          "phone": "\u003Crect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M12 18h.01\"\u003E\u003C/path\u003E",
-          "shield-check": "\u003Cpath d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"\u003E\u003C/path\u003E\u003Cpath d=\"m9 12 2 2 4-4\"\u003E\u003C/path\u003E",
-          "eye": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-          "eye-off": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-          "facebook": "\u003Cpath d=\"M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z\"\u003E\u003C/path\u003E",
-          "google": "\u003Cpath d=\"M21.8 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.2c1.9-1.7 3.1-4.3 3.1-7.5z\"\u003E\u003C/path\u003E\u003Cpath d=\"M12 22c2.7 0 5-0.9 6.7-2.4l-3.2-2.6c-.9.6-2 .9-3.5.9-2.7 0-5-1.8-5.8-4.2H2.9v2.6A10 10 0 0 0 12 22z\"\u003E\u003C/path\u003E\u003Cpath d=\"M6.2 13.7A6 6 0 0 1 6.2 10.3V7.7H2.9a10 10 0 0 0 0 8.6z\"\u003E\u003C/path\u003E\u003Cpath d=\"M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-9.1 5.7l3.3 2.6C7 7.9 9.3 6.1 12 6.1z\"\u003E\u003C/path\u003E",
-          "apple": "\u003Cpath d=\"M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25C11.88 5.02 13.69 3.18 15.77 3c.29 2.58-2.34 4.5-3.74 4.25z\"\u003E\u003C/path\u003E"
+          "arrow-left": "<path d=\"M19 12H5\"></path><path d=\"m12 19-7-7 7-7\"></path>",
+          "mail": "<rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"></rect><path d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"></path>",
+          "lock": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path>",
+          "phone": "<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"></rect><path d=\"M12 18h.01\"></path>",
+          "shield-check": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"></path><path d=\"m9 12 2 2 4-4\"></path>",
+          "eye": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+          "eye-off": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+          "facebook": "<path d=\"M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z\"></path>",
+          "google": "<path d=\"M21.8 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.2c1.9-1.7 3.1-4.3 3.1-7.5z\"></path><path d=\"M12 22c2.7 0 5-0.9 6.7-2.4l-3.2-2.6c-.9.6-2 .9-3.5.9-2.7 0-5-1.8-5.8-4.2H2.9v2.6A10 10 0 0 0 12 22z\"></path><path d=\"M6.2 13.7A6 6 0 0 1 6.2 10.3V7.7H2.9a10 10 0 0 0 0 8.6z\"></path><path d=\"M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-9.1 5.7l3.3 2.6C7 7.9 9.3 6.1 12 6.1z\"></path>",
+          "apple": "<path d=\"M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25C11.88 5.02 13.69 3.18 15.77 3c.29 2.58-2.34 4.5-3.74 4.25z\"></path>"
         }
       },
       "default": "lock",
@@ -591,10 +587,10 @@
           {
             "name": "identity",
             "stateKey": "loginForm.identity",
-            "type": "text",
+            "type": "tel",
             "required": true,
             "maxLength": 191,
-            "autocomplete": "username"
+            "autocomplete": "tel"
           },
           {
             "name": "password",
@@ -808,6 +804,11 @@
             "number",
             "special"
           ]
+        },
+        "confirm_password": {
+          "required": true,
+          "matchesStateKey": "signupForm.password",
+          "stateKey": "signupForm.confirm_password"
         }
       },
       "signupOtpVerification": {
@@ -899,10 +900,25 @@
         "url": "https://efactor.tech/user_agreement.html",
         "presentation": "externalBrowser"
       },
+      "openSocialGoogle": {
+        "type": "url",
+        "url": "https://efactor.tech/sd-social/google",
+        "presentation": "externalBrowser"
+      },
+      "openSocialApple": {
+        "type": "url",
+        "url": "https://efactor.tech/sd-social/apple",
+        "presentation": "externalBrowser"
+      },
+      "openSocialFacebook": {
+        "type": "url",
+        "url": "https://efactor.tech/sd-social/facebook",
+        "presentation": "externalBrowser"
+      },
       "sendSignupOtp": {
         "type": "http",
         "method": "POST",
-        "url": "https://efactor.tech/v8/api.php?action=user",
+        "url": "https://efactor.tech/sd-signup/otp",
         "contentType": "application/json",
         "csrf": false,
         "payload": {
@@ -960,7 +976,7 @@
       "verifySignupOtp": {
         "type": "http",
         "method": "POST",
-        "url": "https://efactor.tech/v8/api.php?action=userverify",
+        "url": "https://efactor.tech/sd-signup/verify",
         "contentType": "application/json",
         "csrf": false,
         "payload": {
@@ -1194,13 +1210,14 @@
       "submitSignup": {
         "type": "http",
         "method": "POST",
-        "url": "https://efactor.tech/v8/api.php?action=userlogin",
+        "url": "https://efactor.tech/sd-signup/complete",
         "contentType": "application/json",
         "csrf": false,
         "payload": {
-          "username": "$state.signupForm.phone",
-          "password": "$state.signupForm.password",
-          "user_type": "$state.signupForm.user_type"
+          "email": "$state.signupForm.email",
+          "phone": "$state.signupForm.phone",
+          "verification_code": "$state.signupForm.otp",
+          "password": "$state.signupForm.password"
         },
         "validationGroup": "signup",
         "loadingStateKey": "auth.isLoading",
@@ -1416,7 +1433,7 @@
               "height": "100%",
               "overflow": "hidden",
               "border-radius": "34px",
-              "background": "linear-gradient(to bottom,rgba(15,42,24,.10),rgba(11,39,21,.48) 58%,rgba(8,29,15,.82)),\n    url(\"\u003C?= base_url('assets/images/efactor-ecosystem.jpg') ?\u003E\") center/cover no-repeat"
+              "background": "linear-gradient(to bottom,rgba(15,42,24,.10),rgba(11,39,21,.48) 58%,rgba(8,29,15,.82)),\n    url(\"<?= base_url('assets/images/efactor-ecosystem.jpg') ?>\") center/cover no-repeat"
             },
             "ef-brand": {
               "position": "absolute",
@@ -1759,11 +1776,14 @@
                 "type": "min",
                 "values": [
                   "100%",
-                  390]
+                  390
+                ]
               },
               "height": {
                 "type": "min",
-                "values": [820, "calc(100vh - 48px)"
+                "values": [
+                  820,
+                  "calc(100vh - 48px)"
                 ]
               },
               "minHeight": 620,
@@ -1958,7 +1978,11 @@
               "rgba(13,18,28,0.48)",
               "rgba(13,18,28,0.84)"
             ],
-            "stops": [0, 0.58, 1]
+            "stops": [
+              0,
+              0.58,
+              1
+            ]
           }
         },
         "layout": {
@@ -2122,12 +2146,12 @@
         "analyticsName": "auth_login",
         "scrollable": true,
         "safeArea": true,
-        "keyboardAvoidance": true,
+        "keyboardAvoidance": false,
         "verticalOverflow": "scroll",
         "sourcePage": {
           "view": "Views/sd_auth/login.php",
           "generatedFromView": true,
-          "contentHash": "31619e58f23c31ac6b57bde898d8abf456bbcdb1a5c0893b77422152c7607204",
+          "contentHash": "a53197f94a326f0ce9eeb309cb9bf983feb8f74118563c371aaa696281f9c3dd",
           "cssVariables": {
             "ef-primary": "#202940",
             "ef-dark": "#1F150C",
@@ -2136,7 +2160,7 @@
             "ef-text": "#F8FAFC",
             "ef-muted": "rgba(248,250,252,.72)",
             "ef-danger": "#FCA5A5",
-            "ef-success": "#86EFAC}\n*{box-sizing:border-box}html{min-width:320px"
+            "ef-success": "#86EFAC}\r\n*{box-sizing:border-box}html{min-width:320px"
           },
           "classStyles": {
             "ef-page": {
@@ -2169,10 +2193,26 @@
               "top": "36px",
               "right": "24px"
             },
+            "ef-scroll": {
+              "position": "relative",
+              "z-index": "3",
+              "flex": "0 1 auto",
+              "min-height": "0",
+              "width": "100%",
+              "overflow-y": "auto",
+              "overflow-x": "hidden",
+              "padding": "4px 0 2px",
+              "scrollbar-width": "none",
+              "-webkit-overflow-scrolling": "touch",
+              "overscroll-behavior": "contain"
+            },
             "ef-card": {
               "position": "relative",
               "z-index": "3",
               "width": "100%",
+              "height": "auto",
+              "flex": "0 0 auto",
+              "align-self": "flex-start",
               "padding": "26px 22px 22px",
               "border": "1px solid var(--ef-line)",
               "border-radius": "28px",
@@ -2294,16 +2334,27 @@
           },
           "mobileOverrides": {
             "ef-page": {
+              "position": "fixed",
+              "inset": "0",
               "display": "block",
-              "min-height": "100dvh",
-              "padding": "0"
+              "height": "100%",
+              "min-height": "0",
+              "padding": "0",
+              "overflow": "hidden"
             },
             "ef-back": {
-              "top": "22px"
+              "top": "18px",
+              "left": "16px",
+              "z-index": "8"
             },
-            "ef-card": {
-              "padding": "24px 20px 21px",
-              "border-radius": "26px"
+            "ef-scroll": {
+              "flex": "1 1 auto",
+              "min-height": "0",
+              "max-height": "none",
+              "width": "100%"
+            },
+            "ef-title": {
+              "font-size": "1.85rem"
             }
           },
           "assetUrls": [
@@ -2367,8 +2418,10 @@
             {
               "order": 6,
               "tag": "div",
-              "id": null,
-              "classes": [],
+              "id": "loginScroll",
+              "classes": [
+                "ef-scroll"
+              ],
               "name": null,
               "inputType": null,
               "placeholder": null
@@ -2496,7 +2549,7 @@
                 "ef-control"
               ],
               "name": "identity",
-              "inputType": "text",
+              "inputType": "tel",
               "placeholder": null
             },
             {
@@ -2512,15 +2565,6 @@
             },
             {
               "order": 20,
-              "tag": "span",
-              "id": null,
-              "classes": [],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 21,
               "tag": "div",
               "id": null,
               "classes": [
@@ -2531,7 +2575,7 @@
               "placeholder": null
             },
             {
-              "order": 22,
+              "order": 21,
               "tag": "div",
               "id": null,
               "classes": [],
@@ -2540,7 +2584,7 @@
               "placeholder": null
             },
             {
-              "order": 23,
+              "order": 22,
               "tag": "input",
               "id": "login_password",
               "classes": [
@@ -2551,7 +2595,7 @@
               "placeholder": "Password"
             },
             {
-              "order": 24,
+              "order": 23,
               "tag": "button",
               "id": null,
               "classes": [
@@ -2562,7 +2606,7 @@
               "placeholder": null
             },
             {
-              "order": 25,
+              "order": 24,
               "tag": "div",
               "id": null,
               "classes": [
@@ -2573,7 +2617,7 @@
               "placeholder": null
             },
             {
-              "order": 26,
+              "order": 25,
               "tag": "div",
               "id": null,
               "classes": [
@@ -2584,7 +2628,7 @@
               "placeholder": null
             },
             {
-              "order": 27,
+              "order": 26,
               "tag": "input",
               "id": null,
               "classes": [],
@@ -2593,7 +2637,7 @@
               "placeholder": null
             },
             {
-              "order": 28,
+              "order": 27,
               "tag": "span",
               "id": null,
               "classes": [],
@@ -2602,7 +2646,7 @@
               "placeholder": null
             },
             {
-              "order": 29,
+              "order": 28,
               "tag": "a",
               "id": null,
               "classes": [
@@ -2613,7 +2657,7 @@
               "placeholder": null
             },
             {
-              "order": 30,
+              "order": 29,
               "tag": "button",
               "id": null,
               "classes": [
@@ -2624,7 +2668,7 @@
               "placeholder": null
             },
             {
-              "order": 31,
+              "order": 30,
               "tag": "span",
               "id": null,
               "classes": [],
@@ -2633,7 +2677,7 @@
               "placeholder": null
             },
             {
-              "order": 32,
+              "order": 31,
               "tag": "div",
               "id": null,
               "classes": [
@@ -2644,11 +2688,22 @@
               "placeholder": null
             },
             {
-              "order": 33,
+              "order": 32,
               "tag": "div",
               "id": null,
               "classes": [
                 "ef-socials"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 33,
+              "tag": "a",
+              "id": null,
+              "classes": [
+                "ef-social"
               ],
               "name": null,
               "inputType": null,
@@ -2681,17 +2736,6 @@
               "tag": "a",
               "id": null,
               "classes": [
-                "ef-social"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 37,
-              "tag": "a",
-              "id": null,
-              "classes": [
                 "ef-link"
               ],
               "name": null,
@@ -2699,162 +2743,7 @@
               "placeholder": null
             }
           ],
-          "obsoleteDomMap": [
-            {
-              "order": 19,
-              "tag": "button",
-              "id": "loginSendOtpButton",
-              "classes": [
-                "ef-send-otp"
-              ],
-              "name": null,
-              "inputType": "button",
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 20,
-              "tag": "div",
-              "id": "loginOtpBadge",
-              "classes": [
-                "ef-otp-badge"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 22,
-              "tag": "div",
-              "id": "loginOtpSection",
-              "classes": [
-                "ef-otp"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 23,
-              "tag": "div",
-              "id": null,
-              "classes": [
-                "ef-otp-head"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 25,
-              "tag": "div",
-              "id": null,
-              "classes": [
-                "ef-otp-boxes"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 26,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 27,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 28,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 29,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 30,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 31,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            },
-            {
-              "order": 32,
-              "tag": "input",
-              "id": "login_otp",
-              "classes": [],
-              "name": "otp",
-              "inputType": "hidden",
-              "placeholder": null,
-              "obsolete": true,
-              "reason": "Login OTP is not part of the mobile password-login contract."
-            }
-          ]
+          "obsoleteDomMap": []
         },
         "pageLayout": {
           "layoutEngine": "auth-phone-preview",
@@ -2872,11 +2761,14 @@
                 "type": "min",
                 "values": [
                   "100%",
-                  390]
+                  390
+                ]
               },
               "height": {
                 "type": "min",
-                "values": [820, "calc(100vh - 48px)"
+                "values": [
+                  820,
+                  "calc(100vh - 48px)"
                 ]
               },
               "minHeight": 620,
@@ -2896,7 +2788,7 @@
               "height": "100%",
               "borderRadius": 34,
               "overflowX": "hidden",
-              "overflowY": "auto",
+              "overflowY": "hidden",
               "backgroundColor": "#FFFFFF",
               "backgroundAsset": null
             }
@@ -2986,7 +2878,7 @@
               "position": "absolute",
               "top": 35,
               "right": 24,
-              "zIndex": 4,
+              "zIndex": 20,
               "logoSize": {
                 "maxWidth": 104,
                 "maxHeight": 38
@@ -3037,6 +2929,8 @@
         "presentation": "phoneFrameGlassmorphism",
         "responsiveLayout": {
           "narrow": {
+            "scrollable": true,
+            "keyboardAvoidance": false,
             "glassPanel": {
               "maxWidth": "fill",
               "padding": {
@@ -3046,6 +2940,8 @@
             }
           },
           "compact": {
+            "scrollable": true,
+            "keyboardAvoidance": false,
             "glassPanel": {
               "maxWidth": "fill",
               "padding": {
@@ -3055,6 +2951,8 @@
             }
           },
           "medium": {
+            "scrollable": true,
+            "keyboardAvoidance": false,
             "glassPanel": {
               "maxWidth": 480,
               "padding": {
@@ -3065,6 +2963,8 @@
             "maxContentWidth": 560
           },
           "expanded": {
+            "scrollable": true,
+            "keyboardAvoidance": false,
             "glassPanel": {
               "maxWidth": 520,
               "padding": {
@@ -3078,6 +2978,7 @@
             "landscape": {
               "scrollable": true,
               "verticalOverflow": "scroll",
+              "keyboardAvoidance": false,
               "glassPanel": {
                 "maxWidth": 460
               }
@@ -3115,8 +3016,8 @@
               "strokeLinejoin": "round",
               "fill": "none",
               "size": 18,
-              "path": "\u003Cpath d=\"M19 12H5\"\u003E\u003C/path\u003E\u003Cpath d=\"m12 19-7-7 7-7\"\u003E\u003C/path\u003E",
-              "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M19 12H5\"\u003E\u003C/path\u003E\u003Cpath d=\"m12 19-7-7 7-7\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+              "path": "<path d=\"M19 12H5\"></path><path d=\"m12 19-7-7 7-7\"></path>",
+              "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M19 12H5\"></path><path d=\"m12 19-7-7 7-7\"></path></svg>"
             },
             "position": {
               "top": 22,
@@ -3164,8 +3065,9 @@
             "position": {
               "left": 24,
               "right": 24,
-              "verticalCenter": true
+              "top": 88
             },
+            "mainAxisSize": "min",
             "style": {
               "backgroundColor": "rgba(18,24,38,0.58)",
               "borderColor": "rgba(255,255,255,0.18)",
@@ -3184,7 +3086,9 @@
                 "blur": 70,
                 "color": "rgba(0,0,0,0.32)"
               },
-              "hideScrollbar": true
+              "hideScrollbar": true,
+              "height": "wrap",
+              "mainAxisSize": "min"
             },
             "children": [
               {
@@ -3222,14 +3126,14 @@
                 "type": "textInput",
                 "name": "identity",
                 "stateKey": "loginForm.identity",
-                "placeholder": "Email or mobile number",
-                "leadingIcon": "mail",
-                "leadingIconRef": "mail",
+                "placeholder": "Enter Mobile Number",
+                "leadingIcon": "phone",
+                "leadingIconRef": "phone",
                 "leadingIconAsset": {
                   "type": "inlineSvg",
                   "source": "inline-svg",
                   "style": "lucide-feather",
-                  "name": "mail",
+                  "name": "phone",
                   "viewBox": "0 0 24 24",
                   "stroke": "currentColor",
                   "strokeWidth": 2,
@@ -3237,8 +3141,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Crect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"></rect><path d=\"M12 18h.01\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"></rect><path d=\"M12 18h.01\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -3257,8 +3161,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -3272,8 +3176,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -3287,8 +3191,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -3302,8 +3206,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "login.identity",
@@ -3322,8 +3226,9 @@
                   "leadingIconSize": 18,
                   "trailingIconSize": 18
                 },
-                "inputType": "text",
-                "autocomplete": "username",
+                "inputType": "phone",
+                "keyboardType": "number",
+                "autocomplete": "tel",
                 "maxLength": 191
               },
               {
@@ -3346,8 +3251,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Crect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M7 11V7a5 5 0 0 1 10 0v4\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M7 11V7a5 5 0 0 1 10 0v4\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -3366,8 +3271,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -3381,8 +3286,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -3396,8 +3301,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -3411,8 +3316,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "login.password",
@@ -3496,36 +3401,34 @@
                 },
                 "validationGroup": "login",
                 "actionRef": "submitLogin"
-              }
-            ]
-          },
-          {
-            "id": "login_footer",
-            "type": "inlineText",
-            "alignment": "center",
-            "position": {
-              "left": 24,
-              "right": 24,
-              "bottom": "calc(30px + safeAreaBottom)"
-            },
-            "spans": [
-              {
-                "text": "Don't have an account? ",
-                "style": {
-                  "color": "rgba(248,250,252,0.72)",
-                  "fontSize": 11,
-                  "letterSpacing": 0
-                }
               },
               {
-                "text": "Sign up",
-                "style": {
-                  "color": "#FFFFFF",
-                  "fontSize": 11,
-                  "fontWeight": 800,
-                  "letterSpacing": 0
+                "id": "login_footer",
+                "type": "inlineText",
+                "alignment": "center",
+                "margin": {
+                  "top": 16
                 },
-                "actionRef": "goSignup"
+                "spans": [
+                  {
+                    "text": "Don't have an account? ",
+                    "style": {
+                      "color": "rgba(248,250,252,0.72)",
+                      "fontSize": 11,
+                      "letterSpacing": 0
+                    }
+                  },
+                  {
+                    "text": "Sign up",
+                    "style": {
+                      "color": "#FFFFFF",
+                      "fontSize": 11,
+                      "fontWeight": 800,
+                      "letterSpacing": 0
+                    },
+                    "actionRef": "goSignup"
+                  }
+                ]
               }
             ]
           }
@@ -3539,12 +3442,12 @@
         "analyticsName": "auth_signup",
         "scrollable": true,
         "safeArea": true,
-        "keyboardAvoidance": true,
+        "keyboardAvoidance": false,
         "verticalOverflow": "scroll",
         "sourcePage": {
           "view": "Views/sd_auth/signup.php",
           "generatedFromView": true,
-          "contentHash": "a800c0a5a7e8e816f860c7c20a75aa2dbb302b54db03d54c30b5265c976399f9",
+          "contentHash": "741fbeb31bd3fa75f52f83c9951f21acf7768bd2987b0852fcab0a816b74ef95",
           "cssVariables": {
             "ef-primary": "#202940",
             "ef-dark": "#1F150C",
@@ -3553,7 +3456,7 @@
             "ef-text": "#F8FAFC",
             "ef-muted": "rgba(248,250,252,.72)",
             "ef-danger": "#FCA5A5",
-            "ef-good": "#16A34A}\n*{box-sizing:border-box}html{min-width:320px"
+            "ef-good": "#16A34A}\r\n*{box-sizing:border-box}\r\nhtml{min-width:320px"
           },
           "classStyles": {
             "ef-page": {
@@ -3563,9 +3466,24 @@
               "padding": "24px",
               "background": "linear-gradient(135deg,#E8EDF2,#F5F5F5)"
             },
+            "ef-shell": {
+              "position": "relative",
+              "width": "min(100%,390px)",
+              "height": "min(820px,calc(100vh - 48px))",
+              "min-height": "620px",
+              "display": "flex",
+              "flex-direction": "column",
+              "align-items": "stretch",
+              "justify-content": "flex-start",
+              "padding": "74px 24px 24px",
+              "overflow": "hidden",
+              "border-radius": "42px",
+              "background": "linear-gradient(160deg,rgba(32,41,64,.72),rgba(31,21,12,.78)),url(\"<?= base_url('assets/images/efactor-ecosystem.jpg') ?>\") center bottom/cover no-repeat",
+              "box-shadow": "0 32px 80px rgba(32,41,64,.24)"
+            },
             "ef-back": {
               "position": "absolute",
-              "z-index": "6",
+              "z-index": "8",
               "top": "30px",
               "left": "22px",
               "width": "42px",
@@ -3580,48 +3498,113 @@
               "text-decoration": "none",
               "box-shadow": "0 12px 30px rgba(0,0,0,.18)"
             },
-            "ef-brand": {
-              "position": "absolute",
-              "z-index": "6",
-              "top": "34px",
-              "right": "24px"
+            "ef-logo": {
+              "display": "flex",
+              "align-items": "center",
+              "justify-content": "flex-start",
+              "width": "148px",
+              "height": "48px",
+              "margin": "0 0 14px",
+              "padding": "6px 10px",
+              "border-radius": "10px",
+              "background": "#fff",
+              "box-shadow": "0 8px 18px rgba(0,0,0,.16)"
             },
             "ef-scroll": {
               "position": "relative",
               "z-index": "3",
+              "flex": "1 1 auto",
+              "min-height": "0",
               "width": "100%",
-              "max-height": "100%",
               "overflow-y": "auto",
               "overflow-x": "hidden",
               "padding": "4px 0 2px",
-              "scrollbar-width": "none"
+              "scrollbar-width": "none",
+              "-webkit-overflow-scrolling": "touch",
+              "overscroll-behavior": "contain"
             },
             "ef-card": {
               "width": "100%",
-              "padding": "24px 22px 21px",
+              "padding": "20px 18px 18px",
               "border": "1px solid var(--ef-line)",
-              "border-radius": "28px",
+              "border-radius": "26px",
               "background": "var(--ef-panel)",
               "box-shadow": "0 24px 70px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.14)",
               "backdrop-filter": "blur(22px)",
               "animation": "efRise .45s ease both"
             },
+            "ef-heading-wrap": {
+              "text-align": "left",
+              "margin-bottom": "16px"
+            },
             "ef-title": {
               "margin": "0",
               "color": "#fff",
-              "font-size": "1.92rem",
-              "line-height": "1.05",
-              "font-weight": "850",
+              "font-size": "1.75rem",
+              "line-height": "1.08",
+              "font-weight": "800",
               "letter-spacing": "0"
+            },
+            "ef-subtitle": {
+              "margin": "8px 0 0",
+              "color": "var(--ef-muted)",
+              "font-size": ".76rem",
+              "line-height": "1.45"
             },
             "ef-field": {
               "margin-bottom": "10px"
+            },
+            "ef-label": {
+              "display": "flex",
+              "align-items": "center",
+              "justify-content": "space-between",
+              "gap": "8px",
+              "margin": "0 2px 5px",
+              "color": "rgba(248,250,252,.86)",
+              "font-size": ".68rem",
+              "font-weight": "750"
+            },
+            "ef-req": {
+              "display": "inline-flex",
+              "align-items": "center",
+              "padding": "2px 7px",
+              "border-radius": "999px",
+              "color": "#FEE2E2",
+              "background": "rgba(127,29,29,.38)",
+              "border": "1px solid rgba(252,165,165,.45)",
+              "font-size": ".58rem",
+              "font-weight": "800",
+              "letter-spacing": ".02em",
+              "white-space": "nowrap"
+            },
+            "ef-input": {
+              "min-height": "46px",
+              "display": "flex",
+              "align-items": "center",
+              "gap": "10px",
+              "padding": "0 13px",
+              "border": "1px solid rgba(255,255,255,.16)",
+              "border-radius": "12px",
+              "background": "rgba(255,255,255,.10)",
+              "box-shadow": "inset 0 1px 0 rgba(255,255,255,.08)",
+              "transition": "border-color .2s ease,background .2s ease,box-shadow .2s ease"
             },
             "ef-icon": {
               "width": "18px",
               "height": "18px",
               "flex": "0 0 18px",
               "color": "#E8EDF2"
+            },
+            "ef-control": {
+              "flex": "1",
+              "width": "100%",
+              "min-width": "0",
+              "border": "0",
+              "outline": "0",
+              "padding": "12px 0",
+              "color": "#fff",
+              "background": "transparent",
+              "font-size": ".8rem"
             },
             "ef-toggle": {
               "width": "32px",
@@ -3641,20 +3624,7 @@
               "color": "var(--ef-danger)",
               "font-size": ".65rem"
             },
-            "ef-otp-badge": {
-              "display": "none",
-              "width": "max-content",
-              "margin": "5px 0 0 auto",
-              "padding": "4px 8px",
-              "border-radius": "999px",
-              "color": "#DCFCE7",
-              "background": "rgba(22,101,52,.26)",
-              "border": "1px solid rgba(134,239,172,.35)",
-              "font-size": ".6rem",
-              "font-weight": "850"
-            },
             "ef-otp": {
-              "display": "none",
               "margin": "0 0 10px"
             },
             "ef-otp-head": {
@@ -3669,8 +3639,80 @@
             },
             "ef-otp-boxes": {
               "display": "grid",
-              "grid-template-columns": "repeat(6,1fr)",
-              "gap": "7px"
+              "grid-template-columns": "repeat(6,minmax(0,1fr))",
+              "gap": "8px"
+            },
+            "ef-otp-box": {
+              "width": "100%",
+              "height": "46px",
+              "border": "1px solid rgba(255,255,255,.22)",
+              "border-radius": "10px",
+              "background": "rgba(255,255,255,.12)",
+              "text-align": "center",
+              "color": "#fff",
+              "font-size": "18px",
+              "font-weight": "700",
+              "outline": "0"
+            },
+            "ef-otp-actions": {
+              "display": "flex",
+              "gap": "8px",
+              "margin-top": "10px"
+            },
+            "ef-send-otp": {
+              "width": "100%",
+              "display": "inline-flex",
+              "min-height": "44px",
+              "margin": "2px 0 8px",
+              "align-items": "center",
+              "justify-content": "center",
+              "border": "1px solid rgba(255,255,255,.55)",
+              "border-radius": "14px",
+              "color": "#fff",
+              "background": "rgba(255,255,255,.18)",
+              "padding": "8px 12px",
+              "font-size": ".82rem",
+              "font-weight": "850",
+              "cursor": "pointer",
+              "touch-action": "manipulation"
+            },
+            "ef-badges": {
+              "display": "flex",
+              "flex-direction": "column",
+              "align-items": "flex-start",
+              "gap": "6px",
+              "min-height": "0",
+              "margin": "0 0 8px"
+            },
+            "ef-badge": {
+              "display": "none",
+              "align-items": "center",
+              "max-width": "100%",
+              "padding": "5px 10px",
+              "border-radius": "999px",
+              "font-size": ".68rem",
+              "font-weight": "800",
+              "line-height": "1.35"
+            },
+            "ef-badge-progress": {
+              "color": "#E0F2FE",
+              "background": "rgba(14,116,144,.38)",
+              "border": "1px solid rgba(125,211,252,.45)"
+            },
+            "ef-badge-success": {
+              "color": "#DCFCE7",
+              "background": "rgba(22,101,52,.34)",
+              "border": "1px solid rgba(134,239,172,.45)"
+            },
+            "ef-badge-danger": {
+              "color": "#FEE2E2",
+              "background": "rgba(127,29,29,.38)",
+              "border": "1px solid rgba(252,165,165,.45)"
+            },
+            "ef-retry": {
+              "display": "none",
+              "width": "100%",
+              "margin-top": "8px"
             },
             "ef-meter": {
               "height": "4px",
@@ -3687,6 +3729,16 @@
               "color": "var(--ef-muted)",
               "font-size": ".56rem"
             },
+            "ef-terms": {
+              "display": "grid",
+              "grid-template-columns": "18px 1fr",
+              "gap": "8px",
+              "align-items": "start",
+              "margin": "4px 0 12px",
+              "color": "rgba(248,250,252,.84)",
+              "font-size": ".75rem",
+              "line-height": "1.45"
+            },
             "ef-link": {
               "color": "#fff",
               "font-weight": "850",
@@ -3694,7 +3746,7 @@
             },
             "ef-submit": {
               "width": "100%",
-              "min-height": "49px",
+              "min-height": "50px",
               "display": "flex",
               "align-items": "center",
               "justify-content": "center",
@@ -3702,11 +3754,20 @@
               "border": "1px solid rgba(255,255,255,.2)",
               "border-radius": "14px",
               "color": "#fff",
-              "background": "linear-gradient(135deg,#202940,#1F150C)",
+              "background": "#243044",
               "box-shadow": "0 16px 34px rgba(0,0,0,.24)",
               "cursor": "pointer",
-              "font-size": ".8rem",
-              "font-weight": "850"
+              "font-size": ".84rem",
+              "font-weight": "800",
+              "touch-action": "manipulation"
+            },
+            "ef-divider": {
+              "display": "flex",
+              "align-items": "center",
+              "gap": "10px",
+              "margin": "13px 0 10px",
+              "color": "var(--ef-muted)",
+              "font-size": ".62rem"
             },
             "ef-socials": {
               "display": "flex",
@@ -3715,10 +3776,39 @@
               "gap": "14px",
               "margin-bottom": "12px"
             },
+            "ef-social": {
+              "width": "40px",
+              "height": "40px",
+              "display": "grid",
+              "place-items": "center",
+              "border": "1px solid rgba(255,255,255,.18)",
+              "border-radius": "14px",
+              "color": "#fff",
+              "background": "rgba(255,255,255,.10)",
+              "box-shadow": "inset 0 1px 0 rgba(255,255,255,.08)",
+              "cursor": "pointer",
+              "text-decoration": "none"
+            },
             "ef-footer": {
+              "margin-top": "14px",
               "color": "var(--ef-muted)",
               "text-align": "center",
-              "font-size": ".69rem"
+              "font-size": ".75rem"
+            },
+            "ef-otp-status": {
+              "min-height": "16px",
+              "margin-top": "6px",
+              "color": "#86EFAC",
+              "font-size": ".72rem"
+            },
+            "ef-alert": {
+              "display": "none",
+              "gap": "8px",
+              "margin-bottom": "10px",
+              "padding": "9px 10px",
+              "border-radius": "12px",
+              "font-size": ".7rem",
+              "line-height": "1.4"
             },
             "ef-alert-danger": {
               "color": "#FEE2E2",
@@ -3728,16 +3818,46 @@
           },
           "mobileOverrides": {
             "ef-page": {
+              "position": "fixed",
+              "inset": "0",
               "display": "block",
-              "min-height": "100dvh",
-              "padding": "0"
+              "height": "100%",
+              "min-height": "0",
+              "padding": "0",
+              "overflow": "hidden"
+            },
+            "ef-shell": {
+              "position": "absolute",
+              "inset": "0",
+              "width": "100%",
+              "height": "100%",
+              "min-height": "0",
+              "display": "flex",
+              "flex-direction": "column",
+              "align-items": "stretch",
+              "justify-content": "flex-start",
+              "padding": "72px 16px calc(16px + env(safe-area-inset-bottom))",
+              "overflow": "hidden",
+              "border-radius": "0",
+              "box-shadow": "none"
             },
             "ef-back": {
-              "top": "22px"
+              "top": "18px",
+              "left": "16px"
+            },
+            "ef-scroll": {
+              "flex": "1 1 auto",
+              "min-height": "0",
+              "max-height": "none",
+              "width": "100%"
             },
             "ef-card": {
-              "padding": "22px 19px 20px",
-              "border-radius": "26px"
+              "padding": "22px 16px 18px",
+              "border-radius": "26px",
+              "animation": "none"
+            },
+            "ef-title": {
+              "font-size": "1.78rem"
             },
             "ef-otp-boxes": {
               "gap": "6px"
@@ -3784,9 +3904,9 @@
             {
               "order": 4,
               "tag": "div",
-              "id": null,
+              "id": "signupScroll",
               "classes": [
-                "ef-brand"
+                "ef-scroll"
               ],
               "name": null,
               "inputType": null,
@@ -3794,9 +3914,11 @@
             },
             {
               "order": 5,
-              "tag": "img",
+              "tag": "main",
               "id": null,
-              "classes": [],
+              "classes": [
+                "ef-card"
+              ],
               "name": null,
               "inputType": null,
               "placeholder": null
@@ -3806,7 +3928,7 @@
               "tag": "div",
               "id": null,
               "classes": [
-                "ef-scroll"
+                "ef-logo"
               ],
               "name": null,
               "inputType": null,
@@ -3814,11 +3936,9 @@
             },
             {
               "order": 7,
-              "tag": "main",
+              "tag": "img",
               "id": null,
-              "classes": [
-                "ef-card"
-              ],
+              "classes": [],
               "name": null,
               "inputType": null,
               "placeholder": null
@@ -3859,7 +3979,7 @@
             {
               "order": 11,
               "tag": "div",
-              "id": null,
+              "id": "formAlert",
               "classes": [
                 "ef-alert",
                 "ef-alert-danger"
@@ -3870,8 +3990,8 @@
             },
             {
               "order": 12,
-              "tag": "span",
-              "id": null,
+              "tag": "form",
+              "id": "signupForm",
               "classes": [],
               "name": null,
               "inputType": null,
@@ -3879,9 +3999,11 @@
             },
             {
               "order": 13,
-              "tag": "form",
-              "id": "signupForm",
-              "classes": [],
+              "tag": "div",
+              "id": "emailField",
+              "classes": [
+                "ef-field"
+              ],
               "name": null,
               "inputType": null,
               "placeholder": null
@@ -3891,7 +4013,7 @@
               "tag": "div",
               "id": null,
               "classes": [
-                "ef-field"
+                "ef-label"
               ],
               "name": null,
               "inputType": null,
@@ -3899,7 +4021,7 @@
             },
             {
               "order": 15,
-              "tag": "div",
+              "tag": "span",
               "id": null,
               "classes": [],
               "name": null,
@@ -3908,6 +4030,28 @@
             },
             {
               "order": 16,
+              "tag": "span",
+              "id": null,
+              "classes": [
+                "ef-req"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 17,
+              "tag": "div",
+              "id": "emailWrap",
+              "classes": [
+                "ef-input"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 18,
               "tag": "input",
               "id": "email",
               "classes": [
@@ -3918,9 +4062,9 @@
               "placeholder": null
             },
             {
-              "order": 17,
+              "order": 19,
               "tag": "div",
-              "id": null,
+              "id": "emailError",
               "classes": [
                 "ef-error"
               ],
@@ -3929,9 +4073,9 @@
               "placeholder": null
             },
             {
-              "order": 18,
+              "order": 20,
               "tag": "div",
-              "id": null,
+              "id": "phoneField",
               "classes": [
                 "ef-field"
               ],
@@ -3940,8 +4084,19 @@
               "placeholder": null
             },
             {
-              "order": 19,
+              "order": 21,
               "tag": "div",
+              "id": null,
+              "classes": [
+                "ef-label"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 22,
+              "tag": "span",
               "id": null,
               "classes": [],
               "name": null,
@@ -3949,7 +4104,29 @@
               "placeholder": null
             },
             {
-              "order": 20,
+              "order": 23,
+              "tag": "span",
+              "id": null,
+              "classes": [
+                "ef-req"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 24,
+              "tag": "div",
+              "id": "phoneWrap",
+              "classes": [
+                "ef-input"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 25,
               "tag": "input",
               "id": "phone",
               "classes": [
@@ -3960,32 +4137,9 @@
               "placeholder": null
             },
             {
-              "order": 21,
-              "tag": "button",
-              "id": "sendOtpButton",
-              "classes": [
-                "ef-send-otp",
-                "ef-send-otp-inline"
-              ],
-              "name": null,
-              "inputType": "button",
-              "placeholder": null
-            },
-            {
-              "order": 22,
+              "order": 26,
               "tag": "div",
-              "id": "otpBadge",
-              "classes": [
-                "ef-otp-badge"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 23,
-              "tag": "div",
-              "id": null,
+              "id": "phoneError",
               "classes": [
                 "ef-error"
               ],
@@ -3994,144 +4148,7 @@
               "placeholder": null
             },
             {
-              "order": 24,
-              "tag": "div",
-              "id": "otpSection",
-              "classes": [
-                "ef-otp"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 25,
-              "tag": "div",
-              "id": null,
-              "classes": [
-                "ef-otp-head"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 26,
-              "tag": "span",
-              "id": null,
-              "classes": [],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
               "order": 27,
-              "tag": "button",
-              "id": "verifyOtpButton",
-              "classes": [
-                "ef-verify-otp"
-              ],
-              "name": null,
-              "inputType": "button",
-              "placeholder": null
-            },
-            {
-              "order": 28,
-              "tag": "div",
-              "id": null,
-              "classes": [
-                "ef-otp-boxes"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 29,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 30,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 31,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 32,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 33,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 34,
-              "tag": "input",
-              "id": null,
-              "classes": [
-                "ef-otp-box"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 35,
-              "tag": "input",
-              "id": "otp",
-              "classes": [],
-              "name": "otp",
-              "inputType": "hidden",
-              "placeholder": null
-            },
-            {
-              "order": 36,
-              "tag": "input",
-              "id": "phone_verified",
-              "classes": [],
-              "name": "phone_verified",
-              "inputType": "hidden",
-              "placeholder": null
-            },
-            {
-              "order": 37,
               "tag": "div",
               "id": null,
               "classes": [
@@ -4142,8 +4159,19 @@
               "placeholder": null
             },
             {
-              "order": 38,
+              "order": 28,
               "tag": "div",
+              "id": null,
+              "classes": [
+                "ef-label"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 29,
+              "tag": "span",
               "id": null,
               "classes": [],
               "name": null,
@@ -4151,7 +4179,29 @@
               "placeholder": null
             },
             {
-              "order": 39,
+              "order": 30,
+              "tag": "span",
+              "id": null,
+              "classes": [
+                "ef-req"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 31,
+              "tag": "div",
+              "id": "passwordWrap",
+              "classes": [
+                "ef-input"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 32,
               "tag": "input",
               "id": "password",
               "classes": [
@@ -4162,7 +4212,7 @@
               "placeholder": "Password"
             },
             {
-              "order": 40,
+              "order": 33,
               "tag": "button",
               "id": null,
               "classes": [
@@ -4173,7 +4223,7 @@
               "placeholder": null
             },
             {
-              "order": 41,
+              "order": 34,
               "tag": "div",
               "id": null,
               "classes": [
@@ -4184,7 +4234,7 @@
               "placeholder": null
             },
             {
-              "order": 42,
+              "order": 35,
               "tag": "span",
               "id": "passwordMeterBar",
               "classes": [],
@@ -4193,7 +4243,7 @@
               "placeholder": null
             },
             {
-              "order": 43,
+              "order": 36,
               "tag": "div",
               "id": null,
               "classes": [
@@ -4204,7 +4254,7 @@
               "placeholder": null
             },
             {
-              "order": 44,
+              "order": 37,
               "tag": "span",
               "id": "passwordStrength",
               "classes": [],
@@ -4213,7 +4263,7 @@
               "placeholder": null
             },
             {
-              "order": 45,
+              "order": 38,
               "tag": "span",
               "id": null,
               "classes": [],
@@ -4222,9 +4272,9 @@
               "placeholder": null
             },
             {
-              "order": 46,
+              "order": 39,
               "tag": "div",
-              "id": null,
+              "id": "passwordError",
               "classes": [
                 "ef-error"
               ],
@@ -4233,7 +4283,7 @@
               "placeholder": null
             },
             {
-              "order": 47,
+              "order": 40,
               "tag": "div",
               "id": null,
               "classes": [
@@ -4244,8 +4294,19 @@
               "placeholder": null
             },
             {
-              "order": 48,
+              "order": 41,
               "tag": "div",
+              "id": null,
+              "classes": [
+                "ef-label"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 42,
+              "tag": "span",
               "id": null,
               "classes": [],
               "name": null,
@@ -4253,7 +4314,29 @@
               "placeholder": null
             },
             {
-              "order": 49,
+              "order": 43,
+              "tag": "span",
+              "id": null,
+              "classes": [
+                "ef-req"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 44,
+              "tag": "div",
+              "id": "confirmWrap",
+              "classes": [
+                "ef-input"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 45,
               "tag": "input",
               "id": "confirm_password",
               "classes": [
@@ -4264,7 +4347,7 @@
               "placeholder": "Confirm password"
             },
             {
-              "order": 50,
+              "order": 46,
               "tag": "button",
               "id": null,
               "classes": [
@@ -4275,7 +4358,7 @@
               "placeholder": null
             },
             {
-              "order": 51,
+              "order": 47,
               "tag": "div",
               "id": "confirmPasswordError",
               "classes": [
@@ -4286,7 +4369,159 @@
               "placeholder": null
             },
             {
+              "order": 48,
+              "tag": "button",
+              "id": "sendOtpButton",
+              "classes": [
+                "ef-send-otp"
+              ],
+              "name": null,
+              "inputType": "button",
+              "placeholder": null
+            },
+            {
+              "order": 49,
+              "tag": "div",
+              "id": "flowBadges",
+              "classes": [
+                "ef-badges"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 50,
+              "tag": "div",
+              "id": "otpSection",
+              "classes": [
+                "ef-otp"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 51,
+              "tag": "div",
+              "id": null,
+              "classes": [
+                "ef-otp-head"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
               "order": 52,
+              "tag": "span",
+              "id": null,
+              "classes": [],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 53,
+              "tag": "span",
+              "id": null,
+              "classes": [
+                "ef-req"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 54,
+              "tag": "div",
+              "id": "otpBoxes",
+              "classes": [
+                "ef-otp-boxes"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 55,
+              "tag": "input",
+              "id": "signup_otp_digit_1",
+              "classes": [
+                "ef-otp-box"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 56,
+              "tag": "input",
+              "id": "signup_otp_digit_2",
+              "classes": [
+                "ef-otp-box"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 57,
+              "tag": "input",
+              "id": "signup_otp_digit_3",
+              "classes": [
+                "ef-otp-box"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 58,
+              "tag": "input",
+              "id": "signup_otp_digit_4",
+              "classes": [
+                "ef-otp-box"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 59,
+              "tag": "input",
+              "id": "signup_otp_digit_5",
+              "classes": [
+                "ef-otp-box"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 60,
+              "tag": "input",
+              "id": "signup_otp_digit_6",
+              "classes": [
+                "ef-otp-box"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 61,
+              "tag": "div",
+              "id": "otpError",
+              "classes": [
+                "ef-error"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 62,
               "tag": "div",
               "id": null,
               "classes": [
@@ -4297,7 +4532,7 @@
               "placeholder": null
             },
             {
-              "order": 53,
+              "order": 63,
               "tag": "input",
               "id": "terms",
               "classes": [],
@@ -4306,7 +4541,7 @@
               "placeholder": null
             },
             {
-              "order": 54,
+              "order": 64,
               "tag": "div",
               "id": null,
               "classes": [],
@@ -4315,7 +4550,7 @@
               "placeholder": null
             },
             {
-              "order": 55,
+              "order": 65,
               "tag": "a",
               "id": null,
               "classes": [
@@ -4326,9 +4561,20 @@
               "placeholder": null
             },
             {
-              "order": 56,
-              "tag": "div",
+              "order": 66,
+              "tag": "span",
               "id": null,
+              "classes": [
+                "ef-req"
+              ],
+              "name": null,
+              "inputType": null,
+              "placeholder": null
+            },
+            {
+              "order": 67,
+              "tag": "div",
+              "id": "termsError",
               "classes": [
                 "ef-error"
               ],
@@ -4337,7 +4583,7 @@
               "placeholder": null
             },
             {
-              "order": 57,
+              "order": 68,
               "tag": "button",
               "id": "submitButton",
               "classes": [
@@ -4348,7 +4594,7 @@
               "placeholder": null
             },
             {
-              "order": 58,
+              "order": 69,
               "tag": "span",
               "id": null,
               "classes": [
@@ -4359,75 +4605,7 @@
               "placeholder": null
             },
             {
-              "order": 59,
-              "tag": "span",
-              "id": null,
-              "classes": [
-                "spinner-border",
-                "spinner-border-sm",
-                "d-none"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 60,
-              "tag": "div",
-              "id": null,
-              "classes": [
-                "ef-divider"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 61,
-              "tag": "div",
-              "id": null,
-              "classes": [
-                "ef-socials"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 62,
-              "tag": "a",
-              "id": null,
-              "classes": [
-                "ef-social"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 63,
-              "tag": "a",
-              "id": null,
-              "classes": [
-                "ef-social"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 64,
-              "tag": "a",
-              "id": null,
-              "classes": [
-                "ef-social"
-              ],
-              "name": null,
-              "inputType": null,
-              "placeholder": null
-            },
-            {
-              "order": 65,
+              "order": 70,
               "tag": "a",
               "id": null,
               "classes": [
@@ -4456,11 +4634,14 @@
                 "type": "min",
                 "values": [
                   "100%",
-                  390]
+                  390
+                ]
               },
               "height": {
                 "type": "min",
-                "values": [820, "calc(100vh - 48px)"
+                "values": [
+                  820,
+                  "calc(100vh - 48px)"
                 ]
               },
               "minHeight": 620,
@@ -4480,9 +4661,9 @@
               "height": "100%",
               "borderRadius": 34,
               "overflowX": "hidden",
-              "overflowY": "auto",
-              "backgroundColor": "#FFFFFF",
-              "backgroundAsset": null
+              "overflowY": "hidden",
+              "backgroundColor": null,
+              "backgroundAsset": "authHeroBackground"
             }
           },
           "mobileViewport": {
@@ -4507,7 +4688,7 @@
               "borderRadius": 0
             },
             "hero": {
-              "minHeight": 220
+              "minHeight": 0
             }
           },
           "responsiveLayout": {
@@ -4549,53 +4730,53 @@
           "regions": {
             "backButton": {
               "position": "absolute",
-              "top": 29,
-              "left": 19,
-              "width": 36,
-              "height": 36,
+              "top": 30,
+              "left": 22,
+              "width": 42,
+              "height": 42,
               "zIndex": 25
             },
             "hero": {
               "position": "relative",
-              "minHeight": 230,
+              "minHeight": 0,
               "backgroundAsset": "authHeroBackground",
-              "backgroundPosition": "center 28%",
+              "backgroundPosition": "center bottom",
               "curve": {
-                "bottom": -78,
-                "height": 132,
-                "color": "#FFFFFF"
+                "bottom": 0,
+                "height": 0,
+                "color": "transparent"
               }
             },
             "brand": {
               "position": "absolute",
-              "top": 35,
+              "top": 34,
               "right": 24,
               "zIndex": 4,
               "logoSize": {
-                "maxWidth": 102,
-                "maxHeight": 36
+                "maxWidth": 108,
+                "maxHeight": 38
               }
             },
             "card": {
               "position": "relative",
               "zIndex": 7,
-              "marginTop": -58,
+              "marginTop": 0,
               "padding": {
-                "top": 0,
-                "right": 28,
-                "bottom": 18,
-                "left": 28
+                "top": 24,
+                "right": 22,
+                "bottom": 21,
+                "left": 22
               },
-              "backgroundColor": "#FFFFFF"
+              "backgroundColor": "rgba(18,24,38,0.58)"
             },
             "heading": {
-              "textAlign": "center",
-              "marginBottom": 17
+              "textAlign": "left",
+              "marginBottom": 18
             },
             "form": {
               "fieldGap": 10,
-              "inputHeight": 49,
-              "inputRadius": 14
+              "inputHeight": 46,
+              "inputRadius": 12
             },
             "footer": {
               "padding": {
@@ -4604,7 +4785,7 @@
                 "bottom": 24,
                 "left": 24
               },
-              "backgroundColor": "#FFFFFF"
+              "backgroundColor": "transparent"
             }
           },
           "renderOrder": [
@@ -4621,6 +4802,8 @@
         "presentation": "phoneFrameGlassmorphism",
         "responsiveLayout": {
           "narrow": {
+            "scrollable": true,
+            "keyboardAvoidance": false,
             "glassPanel": {
               "maxWidth": "fill",
               "padding": {
@@ -4630,6 +4813,8 @@
             }
           },
           "compact": {
+            "scrollable": true,
+            "keyboardAvoidance": false,
             "glassPanel": {
               "maxWidth": "fill",
               "padding": {
@@ -4639,6 +4824,8 @@
             }
           },
           "medium": {
+            "scrollable": true,
+            "keyboardAvoidance": false,
             "glassPanel": {
               "maxWidth": 480,
               "padding": {
@@ -4649,6 +4836,8 @@
             "maxContentWidth": 560
           },
           "expanded": {
+            "scrollable": true,
+            "keyboardAvoidance": false,
             "glassPanel": {
               "maxWidth": 520,
               "padding": {
@@ -4662,6 +4851,7 @@
             "landscape": {
               "scrollable": true,
               "verticalOverflow": "scroll",
+              "keyboardAvoidance": false,
               "glassPanel": {
                 "maxWidth": 460
               }
@@ -4699,12 +4889,12 @@
               "strokeLinejoin": "round",
               "fill": "none",
               "size": 18,
-              "path": "\u003Cpath d=\"M19 12H5\"\u003E\u003C/path\u003E\u003Cpath d=\"m12 19-7-7 7-7\"\u003E\u003C/path\u003E",
-              "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M19 12H5\"\u003E\u003C/path\u003E\u003Cpath d=\"m12 19-7-7 7-7\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+              "path": "<path d=\"M19 12H5\"></path><path d=\"m12 19-7-7 7-7\"></path>",
+              "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M19 12H5\"></path><path d=\"m12 19-7-7 7-7\"></path></svg>"
             },
             "position": {
-              "top": 22,
-              "left": 22
+              "top": 18,
+              "left": 16
             },
             "size": {
               "width": 42,
@@ -4728,27 +4918,15 @@
             "actionRef": "goWelcome"
           },
           {
-            "id": "signup_logo",
-            "type": "image",
-            "asset": "logo",
-            "position": {
-              "top": 30,
-              "right": 24
-            },
-            "size": {
-              "width": 108,
-              "height": 38
-            }
-          },
-          {
             "id": "signup_glass_panel",
             "type": "glassPanel",
             "className": "ef-card",
             "sourceClass": "ef-card",
             "position": {
-              "left": 24,
-              "right": 24,
-              "verticalCenter": true
+              "left": 16,
+              "right": 16,
+              "top": 72,
+              "bottom": 16
             },
             "scrollInside": true,
             "hideScrollbar": true,
@@ -4756,13 +4934,13 @@
               "backgroundColor": "rgba(18,24,38,0.58)",
               "borderColor": "rgba(255,255,255,0.18)",
               "borderWidth": 1,
-              "borderRadius": 28,
+              "borderRadius": 26,
               "backdropBlur": 22,
               "padding": {
-                "top": 24,
-                "right": 22,
-                "bottom": 21,
-                "left": 22
+                "top": 20,
+                "right": 18,
+                "bottom": 18,
+                "left": 18
               },
               "shadow": {
                 "offsetX": 0,
@@ -4774,11 +4952,29 @@
             },
             "children": [
               {
+                "id": "signup_logo",
+                "type": "image",
+                "asset": "logo",
+                "margin": {
+                  "bottom": 14
+                },
+                "size": {
+                  "width": 148,
+                  "height": 48
+                },
+                "style": {
+                  "fit": "contain",
+                  "backgroundColor": "#FFFFFF",
+                  "borderRadius": 10,
+                  "alignment": "centerLeft"
+                }
+              },
+              {
                 "id": "signup_title",
                 "type": "text",
                 "text": "Get Started",
                 "style": {
-                  "fontSize": 31,
+                  "fontSize": 28,
                   "fontWeight": 850,
                   "lineHeight": 1.05,
                   "letterSpacing": 0,
@@ -4799,8 +4995,8 @@
                   "textAlign": "left"
                 },
                 "margin": {
-                  "top": 8,
-                  "bottom": 18
+                  "top": 6,
+                  "bottom": 16
                 }
               },
               {
@@ -4823,8 +5019,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Crect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"></rect><path d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"></rect><path d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -4843,8 +5039,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -4858,8 +5054,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -4873,8 +5069,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -4888,25 +5084,31 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "signup.email",
                 "style": {
-                  "height": 50,
-                  "backgroundColor": "#E8EDF2",
-                  "borderRadius": 14,
+                  "height": 46,
+                  "backgroundColor": "rgba(255,255,255,0.10)",
+                  "borderRadius": 12,
                   "borderWidth": 1,
-                  "borderColor": "#CDD5DF",
-                  "focusBorderColor": "#202940",
-                  "focusRingColor": "rgba(32,41,64,0.10)",
-                  "textColor": "#1E1E1E",
-                  "placeholderColor": "#667085",
-                  "iconColor": "#202940",
-                  "horizontalPadding": 14,
+                  "borderColor": "rgba(255,255,255,0.16)",
+                  "focusBorderColor": "rgba(232,237,242,0.56)",
+                  "focusRingColor": "rgba(232,237,242,0.10)",
+                  "textColor": "#FFFFFF",
+                  "placeholderColor": "rgba(248,250,252,0.62)",
+                  "iconColor": "#E8EDF2",
+                  "fontSize": 13,
+                  "horizontalPadding": 13,
                   "leadingIconSize": 18,
-                  "trailingIconSize": 18
+                  "trailingIconSize": 17,
+                  "margin": {
+                    "bottom": 10
+                  },
+                  "errorBorderColor": "rgba(252,165,165,0.70)",
+                  "errorBackgroundColor": "rgba(127,29,29,0.20)"
                 },
                 "inputType": "email",
                 "autocomplete": "email",
@@ -4917,7 +5119,7 @@
                 "type": "textInput",
                 "name": "phone",
                 "stateKey": "signupForm.phone",
-                "placeholder": "10-digit mobile number",
+                "placeholder": "Enter phone number",
                 "leadingIcon": "phone",
                 "leadingIconRef": "phone",
                 "leadingIconAsset": {
@@ -4932,8 +5134,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Crect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M12 18h.01\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M12 18h.01\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"></rect><path d=\"M12 18h.01\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"></rect><path d=\"M12 18h.01\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -4952,8 +5154,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -4967,8 +5169,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -4982,8 +5184,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -4997,25 +5199,31 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "signup.phone",
                 "style": {
-                  "height": 50,
-                  "backgroundColor": "#E8EDF2",
-                  "borderRadius": 14,
+                  "height": 46,
+                  "backgroundColor": "rgba(255,255,255,0.10)",
+                  "borderRadius": 12,
                   "borderWidth": 1,
-                  "borderColor": "#CDD5DF",
-                  "focusBorderColor": "#202940",
-                  "focusRingColor": "rgba(32,41,64,0.10)",
-                  "textColor": "#1E1E1E",
-                  "placeholderColor": "#667085",
-                  "iconColor": "#202940",
-                  "horizontalPadding": 14,
+                  "borderColor": "rgba(255,255,255,0.16)",
+                  "focusBorderColor": "rgba(232,237,242,0.56)",
+                  "focusRingColor": "rgba(232,237,242,0.10)",
+                  "textColor": "#FFFFFF",
+                  "placeholderColor": "rgba(248,250,252,0.62)",
+                  "iconColor": "#E8EDF2",
+                  "fontSize": 13,
+                  "horizontalPadding": 13,
                   "leadingIconSize": 18,
-                  "trailingIconSize": 18
+                  "trailingIconSize": 17,
+                  "margin": {
+                    "bottom": 10
+                  },
+                  "errorBorderColor": "rgba(252,165,165,0.70)",
+                  "errorBackgroundColor": "rgba(127,29,29,0.20)"
                 },
                 "inputType": "phone",
                 "keyboardType": "number",
@@ -5043,8 +5251,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Crect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M7 11V7a5 5 0 0 1 10 0v4\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M7 11V7a5 5 0 0 1 10 0v4\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -5063,8 +5271,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -5078,8 +5286,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -5093,8 +5301,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -5108,25 +5316,31 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "signup.password",
                 "style": {
-                  "height": 50,
-                  "backgroundColor": "#E8EDF2",
-                  "borderRadius": 14,
+                  "height": 46,
+                  "backgroundColor": "rgba(255,255,255,0.10)",
+                  "borderRadius": 12,
                   "borderWidth": 1,
-                  "borderColor": "#CDD5DF",
-                  "focusBorderColor": "#202940",
-                  "focusRingColor": "rgba(32,41,64,0.10)",
-                  "textColor": "#1E1E1E",
-                  "placeholderColor": "#667085",
-                  "iconColor": "#202940",
-                  "horizontalPadding": 14,
+                  "borderColor": "rgba(255,255,255,0.16)",
+                  "focusBorderColor": "rgba(232,237,242,0.56)",
+                  "focusRingColor": "rgba(232,237,242,0.10)",
+                  "textColor": "#FFFFFF",
+                  "placeholderColor": "rgba(248,250,252,0.62)",
+                  "iconColor": "#E8EDF2",
+                  "fontSize": 13,
+                  "horizontalPadding": 13,
                   "leadingIconSize": 18,
-                  "trailingIconSize": 18
+                  "trailingIconSize": 17,
+                  "margin": {
+                    "bottom": 10
+                  },
+                  "errorBorderColor": "rgba(252,165,165,0.70)",
+                  "errorBackgroundColor": "rgba(127,29,29,0.20)"
                 },
                 "autocomplete": "new-password",
                 "maxLength": 72,
@@ -5143,6 +5357,7 @@
                   "number",
                   "special"
                 ],
+                "caption": "Upper / lower / number / special",
                 "labels": [
                   "Password strength",
                   "Very weak",
@@ -5154,30 +5369,36 @@
                 "levels": [
                   {
                     "score": 0,
-                    "label": "Very weak",
-                    "color": "#EF4444",
+                    "label": "Password strength",
+                    "color": "rgba(255,255,255,0.18)",
                     "minPassedRules": 0
                   },
                   {
                     "score": 1,
-                    "label": "Weak",
-                    "color": "#F97316",
+                    "label": "Very weak",
+                    "color": "#EF4444",
                     "minPassedRules": 1
                   },
                   {
                     "score": 2,
-                    "label": "Fair",
-                    "color": "#F59E0B",
+                    "label": "Weak",
+                    "color": "#F97316",
                     "minPassedRules": 2
                   },
                   {
                     "score": 3,
+                    "label": "Fair",
+                    "color": "#F59E0B",
+                    "minPassedRules": 3
+                  },
+                  {
+                    "score": 4,
                     "label": "Strong",
                     "color": "#22C55E",
                     "minPassedRules": 4
                   },
                   {
-                    "score": 4,
+                    "score": 5,
                     "label": "Excellent",
                     "color": "#16A34A",
                     "minPassedRules": 5
@@ -5189,95 +5410,11 @@
                   "borderRadius": 999,
                   "marginTop": 5,
                   "labelColor": "rgba(248,250,252,0.72)",
-                  "labelFontSize": 10,
+                  "labelFontSize": 9,
+                  "captionColor": "rgba(248,250,252,0.72)",
+                  "captionFontSize": 9,
                   "gap": 9
                 }
-              },
-              {
-                "id": "signup_send_otp",
-                "type": "textButton",
-                "text": "Send OTP",
-                "resendText": "Resend OTP",
-                "otpVisibilityStateKey": "signupForm.otpVisible",
-                "style": {
-                  "color": "#FFFFFF",
-                  "fontSize": 11,
-                  "fontWeight": 850,
-                  "letterSpacing": 0,
-                  "alignment": "right"
-                },
-                "actionRef": "sendSignupOtp",
-                "validationGroup": "signupOtpRequest",
-                "enabledWhen": {
-                  "validationGroup": "signupOtpRequest"
-                }
-              },
-              {
-                "id": "signup_otp_boxes",
-                "type": "otpInput",
-                "name": "otp",
-                "stateKey": "signupForm.otp",
-                "digitCount": 6,
-                "boxIds": [
-                  "signup_otp_digit_1",
-                  "signup_otp_digit_2",
-                  "signup_otp_digit_3",
-                  "signup_otp_digit_4",
-                  "signup_otp_digit_5",
-                  "signup_otp_digit_6"
-                ],
-                "inputMode": "numeric",
-                "visibleStateKey": "signupForm.otpVisible",
-                "visibility": {
-                  "dependsOn": "signupForm.otpVisible",
-                  "condition": "equals",
-                  "value": true
-                },
-                "hiddenByDefault": true,
-                "validationRef": "signup.otp",
-                "style": {
-                  "boxSize": 42,
-                  "gap": 7,
-                  "borderRadius": 9,
-                  "backgroundColor": "rgba(255,255,255,0.12)",
-                  "borderColor": "rgba(255,255,255,0.22)",
-                  "focusBorderColor": "rgba(232,237,242,0.68)",
-                  "textColor": "#FFFFFF",
-                  "fontSize": 16,
-                  "fontWeight": 850,
-                  "letterSpacing": 0
-                }
-              },
-              {
-                "id": "signup_verify_otp",
-                "type": "button",
-                "text": "Verify",
-                "verifiedText": "Verified",
-                "verifiedStateKey": "signupForm.otpVerified",
-                "variant": "glassPill",
-                "size": {
-                  "height": 30,
-                  "width": "content"
-                },
-                "visibleWhen": {
-                  "stateKey": "signupForm.otp",
-                  "condition": "lengthEquals",
-                  "value": 6
-                },
-                "style": {
-                  "backgroundColor": "rgba(255,255,255,0.12)",
-                  "verifiedBackgroundColor": "rgba(22,101,52,0.25)",
-                  "borderColor": "rgba(255,255,255,0.22)",
-                  "verifiedBorderColor": "rgba(134,239,172,0.45)",
-                  "textColor": "#FFFFFF",
-                  "verifiedTextColor": "#DCFCE7",
-                  "borderRadius": 999,
-                  "fontSize": 10,
-                  "fontWeight": 850,
-                  "letterSpacing": 0
-                },
-                "actionRef": "verifySignupOtp",
-                "validationGroup": "signupOtpVerification"
               },
               {
                 "id": "signup_confirm_password",
@@ -5299,8 +5436,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Cpath d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"\u003E\u003C/path\u003E\u003Cpath d=\"m9 12 2 2 4-4\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"\u003E\u003C/path\u003E\u003Cpath d=\"m9 12 2 2 4-4\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"></path><path d=\"m9 12 2 2 4-4\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"></path><path d=\"m9 12 2 2 4-4\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -5319,8 +5456,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -5334,8 +5471,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -5349,8 +5486,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -5364,59 +5501,50 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "signup.confirm_password",
                 "style": {
-                  "height": 50,
-                  "backgroundColor": "#E8EDF2",
-                  "borderRadius": 14,
+                  "height": 46,
+                  "backgroundColor": "rgba(255,255,255,0.10)",
+                  "borderRadius": 12,
                   "borderWidth": 1,
-                  "borderColor": "#CDD5DF",
-                  "focusBorderColor": "#202940",
-                  "focusRingColor": "rgba(32,41,64,0.10)",
-                  "textColor": "#1E1E1E",
-                  "placeholderColor": "#667085",
-                  "iconColor": "#202940",
-                  "horizontalPadding": 14,
+                  "borderColor": "rgba(255,255,255,0.16)",
+                  "focusBorderColor": "rgba(232,237,242,0.56)",
+                  "focusRingColor": "rgba(232,237,242,0.10)",
+                  "textColor": "#FFFFFF",
+                  "placeholderColor": "rgba(248,250,252,0.62)",
+                  "iconColor": "#E8EDF2",
+                  "fontSize": 13,
+                  "horizontalPadding": 13,
                   "leadingIconSize": 18,
-                  "trailingIconSize": 18
+                  "trailingIconSize": 17,
+                  "margin": {
+                    "bottom": 10
+                  },
+                  "errorBorderColor": "rgba(252,165,165,0.70)",
+                  "errorBackgroundColor": "rgba(127,29,29,0.20)"
                 },
                 "autocomplete": "new-password",
                 "maxLength": 72,
                 "trailingAction": "togglePasswordVisibility"
               },
               {
-                "id": "signup_terms",
-                "type": "checkboxWithInlineLink",
-                "name": "terms",
-                "stateKey": "signupForm.terms",
-                "valueWhenChecked": true,
-                "text": "I agree to the ",
-                "linkText": "Terms & Conditions",
-                "validationRef": "signup.terms",
-                "linkActionRef": "openTerms",
-                "style": {
-                  "activeColor": "#E8EDF2",
-                  "textColor": "rgba(248,250,252,0.72)",
-                  "linkColor": "#FFFFFF",
-                  "fontSize": 11,
-                  "letterSpacing": 0
-                }
-              },
-              {
-                "id": "signup_submit",
+                "id": "signup_send_otp",
                 "type": "button",
-                "text": "Create account",
-                "loadingText": "Creating account...",
+                "text": "Send OTP",
+                "resendText": "Resend OTP",
+                "loadingText": "Sending OTP...",
+                "variant": "primary",
+                "cooldownSeconds": 30,
                 "size": {
-                  "height": 49,
+                  "height": 50,
                   "width": "fill"
                 },
                 "style": {
-                  "backgroundColor": "linear-gradient(135deg,#202940,#1F150C)",
+                  "backgroundColor": "#243044",
                   "textColor": "#FFFFFF",
                   "borderColor": "rgba(255,255,255,0.20)",
                   "borderWidth": 1,
@@ -5429,127 +5557,189 @@
                     "offsetY": 16,
                     "blur": 34,
                     "color": "rgba(0,0,0,0.24)"
-                  }
+                  },
+                  "disabledOpacity": 1
                 },
-                "validationGroup": "signup",
-                "actionRef": "submitSignup"
-              },
-              {
-                "id": "signup_divider",
-                "type": "dividerLabel",
-                "text": "Or continue with",
-                "style": {
-                  "lineColor": "rgba(255,255,255,0.18)",
-                  "textColor": "rgba(248,250,252,0.72)",
-                  "fontSize": 10,
-                  "gap": 10
+                "actionRef": "sendSignupOtp",
+                "validationGroup": "signupOtpRequest",
+                "margin": {
+                  "top": 8,
+                  "bottom": 12
                 }
               },
               {
-                "id": "signup_social_row",
+                "id": "signup_otp_boxes",
+                "type": "otpInput",
+                "name": "otp",
+                "stateKey": "signupForm.otp",
+                "label": "Enter OTP",
+                "digitCount": 6,
+                "boxIds": [
+                  "signup_otp_digit_1",
+                  "signup_otp_digit_2",
+                  "signup_otp_digit_3",
+                  "signup_otp_digit_4",
+                  "signup_otp_digit_5",
+                  "signup_otp_digit_6"
+                ],
+                "inputMode": "numeric",
+                "visibleStateKey": "signupForm.otpVisible",
+                "visibility": {
+                  "dependsOn": "signupForm.otpVisible",
+                  "condition": "equals",
+                  "value": true
+                },
+                "visibleWhen": {
+                  "stateKey": "signupForm.otpVisible",
+                  "condition": "equals",
+                  "value": true
+                },
+                "hiddenByDefault": true,
+                "validationRef": "signup.otp",
+                "labelStyle": {
+                  "color": "rgba(248,250,252,0.72)",
+                  "fontSize": 10,
+                  "fontWeight": 800,
+                  "letterSpacing": 0
+                },
+                "style": {
+                  "boxSize": 40,
+                  "boxHeight": 46,
+                  "gap": 8,
+                  "borderRadius": 10,
+                  "backgroundColor": "rgba(255,255,255,0.12)",
+                  "borderColor": "rgba(255,255,255,0.22)",
+                  "focusBorderColor": "rgba(232,237,242,0.68)",
+                  "textColor": "#FFFFFF",
+                  "fontSize": 18,
+                  "fontWeight": 700,
+                  "letterSpacing": 0
+                }
+              },
+              {
+                "id": "signup_otp_actions",
                 "type": "row",
                 "mainAxisAlignment": "center",
-                "gap": 14,
+                "gap": 8,
+                "visibility": {
+                  "dependsOn": "signupForm.otpVisible",
+                  "condition": "equals",
+                  "value": true
+                },
+                "visibleWhen": {
+                  "stateKey": "signupForm.otpVisible",
+                  "condition": "equals",
+                  "value": true
+                },
+                "hiddenByDefault": true,
+                "margin": {
+                  "top": 10
+                },
                 "children": [
                   {
-                    "id": "social_google",
-                    "type": "socialButton",
-                    "provider": "google",
-                    "iconRef": "google",
-                    "iconAsset": {
-                      "type": "inlineSvg",
-                      "source": "inline-svg",
-                      "style": "brand-multicolor",
-                      "name": "google",
-                      "viewBox": "0 0 24 24",
-                      "stroke": "none",
-                      "strokeWidth": 0,
-                      "fill": "multiColor",
-                      "size": 18,
-                      "path": "\u003Cpath d=\"M21.8 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.2c1.9-1.7 3.1-4.3 3.1-7.5z\"\u003E\u003C/path\u003E\u003Cpath d=\"M12 22c2.7 0 5-0.9 6.7-2.4l-3.2-2.6c-.9.6-2 .9-3.5.9-2.7 0-5-1.8-5.8-4.2H2.9v2.6A10 10 0 0 0 12 22z\"\u003E\u003C/path\u003E\u003Cpath d=\"M6.2 13.7A6 6 0 0 1 6.2 10.3V7.7H2.9a10 10 0 0 0 0 8.6z\"\u003E\u003C/path\u003E\u003Cpath d=\"M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-9.1 5.7l3.3 2.6C7 7.9 9.3 6.1 12 6.1z\"\u003E\u003C/path\u003E",
-                      "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\"\u003E\u003Cpath fill=\"#4285F4\" d=\"M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z\"\u003E\u003C/path\u003E\u003Cpath fill=\"#34A853\" d=\"M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z\"\u003E\u003C/path\u003E\u003Cpath fill=\"#FBBC05\" d=\"M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z\"\u003E\u003C/path\u003E\u003Cpath fill=\"#EA4335\" d=\"M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z\"\u003E\u003C/path\u003E\u003C/svg\u003E"
-                    },
-                    "enabled": false,
+                    "id": "signup_verify_otp",
+                    "type": "button",
+                    "text": "Verify",
+                    "verifiedText": "Verified",
+                    "variant": "glassPill",
                     "size": {
-                      "width": 40,
-                      "height": 40
+                      "height": 44,
+                      "width": "fill"
                     },
-                    "iconSize": 18,
+                    "verifiedStateKey": "signupForm.otpVerified",
+                    "enabledWhen": {
+                      "validationGroup": "signupOtpVerification"
+                    },
+                    "visibility": {
+                      "dependsOn": "signupForm.otpVisible",
+                      "condition": "equals",
+                      "value": true
+                    },
+                    "visibleWhen": {
+                      "stateKey": "signupForm.otpVisible",
+                      "condition": "equals",
+                      "value": true
+                    },
+                    "hiddenByDefault": true,
                     "style": {
-                      "borderColor": "rgba(255,255,255,0.18)",
-                      "backgroundColor": "rgba(255,255,255,0.10)"
-                    }
-                  },
-                  {
-                    "id": "social_apple",
-                    "type": "socialButton",
-                    "provider": "apple",
-                    "iconRef": "apple",
-                    "iconAsset": {
-                      "type": "inlineSvg",
-                      "source": "inline-svg",
-                      "style": "brand-filled",
-                      "name": "apple",
-                      "viewBox": "0 0 24 24",
-                      "stroke": "none",
-                      "strokeWidth": 0,
-                      "strokeLinecap": "round",
-                      "strokeLinejoin": "round",
-                      "fill": "currentColor",
-                      "size": 18,
-                      "path": "\u003Cpath d=\"M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25C11.88 5.02 13.69 3.18 15.77 3c.29 2.58-2.34 4.5-3.74 4.25z\"\u003E\u003C/path\u003E",
-                      "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"none\"\u003E\u003Cpath d=\"M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25C11.88 5.02 13.69 3.18 15.77 3c.29 2.58-2.34 4.5-3.74 4.25z\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                      "backgroundColor": "rgba(255,255,255,0.18)",
+                      "verifiedBackgroundColor": "rgba(22,101,52,0.25)",
+                      "borderColor": "rgba(255,255,255,0.55)",
+                      "verifiedBorderColor": "rgba(134,239,172,0.45)",
+                      "textColor": "#FFFFFF",
+                      "verifiedTextColor": "#DCFCE7",
+                      "borderWidth": 1,
+                      "borderRadius": 14,
+                      "fontSize": 13,
+                      "fontWeight": 850,
+                      "letterSpacing": 0
                     },
-                    "enabled": false,
-                    "size": {
-                      "width": 40,
-                      "height": 40
-                    },
-                    "iconSize": 18,
-                    "style": {
-                      "borderColor": "rgba(255,255,255,0.18)",
-                      "iconColor": "#FFFFFF",
-                      "backgroundColor": "rgba(255,255,255,0.10)"
-                    }
-                  },
-                  {
-                    "id": "social_facebook",
-                    "type": "socialButton",
-                    "provider": "facebook",
-                    "iconRef": "facebook",
-                    "iconAsset": {
-                      "type": "inlineSvg",
-                      "source": "inline-svg",
-                      "style": "brand-filled",
-                      "name": "facebook",
-                      "viewBox": "0 0 24 24",
-                      "stroke": "none",
-                      "strokeWidth": 0,
-                      "strokeLinecap": "round",
-                      "strokeLinejoin": "round",
-                      "fill": "currentColor",
-                      "size": 18,
-                      "path": "\u003Cpath d=\"M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z\"\u003E\u003C/path\u003E",
-                      "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"none\"\u003E\u003Cpath d=\"M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z\"\u003E\u003C/path\u003E\u003C/svg\u003E"
-                    },
-                    "enabled": false,
-                    "size": {
-                      "width": 40,
-                      "height": 40
-                    },
-                    "iconSize": 18,
-                    "style": {
-                      "borderColor": "rgba(255,255,255,0.18)",
-                      "iconColor": "#FFFFFF",
-                      "backgroundColor": "rgba(255,255,255,0.10)"
-                    }
+                    "actionRef": "verifySignupOtp",
+                    "validationGroup": "signupOtpVerification"
                   }
                 ]
+              },
+              {
+                "id": "signup_terms",
+                "type": "checkboxWithInlineLink",
+                "name": "terms",
+                "stateKey": "signupForm.terms",
+                "valueWhenChecked": true,
+                "text": "I agree to the ",
+                "linkText": "Terms & Conditions",
+                "validationRef": "signup.terms",
+                "linkActionRef": "openTerms",
+                "margin": {
+                  "top": 4,
+                  "bottom": 12
+                },
+                "style": {
+                  "activeColor": "#FFFFFF",
+                  "textColor": "rgba(248,250,252,0.84)",
+                  "linkColor": "#FFFFFF",
+                  "fontSize": 12,
+                  "letterSpacing": 0
+                }
+              },
+              {
+                "id": "signup_submit",
+                "type": "button",
+                "text": "Create account",
+                "loadingText": "Creating account...",
+                "size": {
+                  "height": 50,
+                  "width": "fill"
+                },
+                "style": {
+                  "backgroundColor": "#243044",
+                  "textColor": "#FFFFFF",
+                  "borderColor": "rgba(255,255,255,0.20)",
+                  "borderWidth": 1,
+                  "borderRadius": 14,
+                  "fontSize": 13,
+                  "fontWeight": 850,
+                  "letterSpacing": 0,
+                  "shadow": {
+                    "offsetX": 0,
+                    "offsetY": 16,
+                    "blur": 34,
+                    "color": "rgba(0,0,0,0.24)"
+                  },
+                  "disabledOpacity": 0.55
+                },
+                "validationGroup": "signup",
+                "enabledWhen": {
+                  "validationGroup": "signup"
+                },
+                "actionRef": "submitSignup"
               },
               {
                 "id": "signup_footer",
                 "type": "inlineText",
                 "alignment": "center",
+                "margin": {
+                  "top": 14
+                },
                 "spans": [
                   {
                     "text": "Already have an account? ",
@@ -5584,7 +5774,6 @@
         "scrollable": true,
         "safeArea": true,
         "keyboardAvoidance": true,
-        "verticalOverflow": "scroll",
         "sourcePage": {
           "view": "Views/sd_auth/forgot_password.php",
           "generatedFromView": true,
@@ -6152,11 +6341,14 @@
                 "type": "min",
                 "values": [
                   "100%",
-                  390]
+                  390
+                ]
               },
               "height": {
                 "type": "min",
-                "values": [820, "calc(100vh - 48px)"
+                "values": [
+                  820,
+                  "calc(100vh - 48px)"
                 ]
               },
               "minHeight": 620,
@@ -6395,8 +6587,8 @@
               "strokeLinejoin": "round",
               "fill": "none",
               "size": 18,
-              "path": "\u003Cpath d=\"M19 12H5\"\u003E\u003C/path\u003E\u003Cpath d=\"m12 19-7-7 7-7\"\u003E\u003C/path\u003E",
-              "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M19 12H5\"\u003E\u003C/path\u003E\u003Cpath d=\"m12 19-7-7 7-7\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+              "path": "<path d=\"M19 12H5\"></path><path d=\"m12 19-7-7 7-7\"></path>",
+              "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M19 12H5\"></path><path d=\"m12 19-7-7 7-7\"></path></svg>"
             },
             "position": {
               "top": 30,
@@ -6519,8 +6711,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Crect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M12 18h.01\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M12 18h.01\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"></rect><path d=\"M12 18h.01\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"></rect><path d=\"M12 18h.01\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -6539,8 +6731,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -6554,8 +6746,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -6569,8 +6761,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -6584,8 +6776,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "forgotPassword.phone",
@@ -6623,7 +6815,6 @@
                 "type": "textButton",
                 "text": "Resend OTP",
                 "resendText": "Resend OTP",
-                "otpVisibilityStateKey": "forgotPasswordForm.otpVisible",
                 "style": {
                   "color": "#FFFFFF",
                   "fontSize": 11,
@@ -6695,8 +6886,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Crect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M7 11V7a5 5 0 0 1 10 0v4\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Crect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"\u003E\u003C/rect\u003E\u003Cpath d=\"M7 11V7a5 5 0 0 1 10 0v4\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -6715,8 +6906,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -6730,8 +6921,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -6745,8 +6936,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -6760,8 +6951,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "forgotPassword.password",
@@ -6804,8 +6995,8 @@
                   "strokeLinejoin": "round",
                   "fill": "none",
                   "size": 18,
-                  "path": "\u003Cpath d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"\u003E\u003C/path\u003E\u003Cpath d=\"m9 12 2 2 4-4\"\u003E\u003C/path\u003E",
-                  "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"\u003E\u003C/path\u003E\u003Cpath d=\"m9 12 2 2 4-4\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                  "path": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"></path><path d=\"m9 12 2 2 4-4\"></path>",
+                  "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"></path><path d=\"m9 12 2 2 4-4\"></path></svg>"
                 },
                 "trailingIconRefs": [
                   "eye",
@@ -6824,8 +7015,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "eye-off": {
                     "type": "inlineSvg",
@@ -6839,8 +7030,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   },
                   "visibility": {
                     "type": "inlineSvg",
@@ -6854,8 +7045,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"\u003E\u003C/path\u003E\u003Ccircle cx=\"12\" cy=\"12\" r=\"3\"\u003E\u003C/circle\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg>"
                   },
                   "visibility_off": {
                     "type": "inlineSvg",
@@ -6869,8 +7060,8 @@
                     "strokeLinejoin": "round",
                     "fill": "none",
                     "size": 18,
-                    "path": "\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E",
-                    "svg": "\u003Csvg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"\u003E\u003Cpath d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"\u003E\u003C/path\u003E\u003Cpath d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"\u003E\u003C/path\u003E\u003Cpath d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"\u003E\u003C/path\u003E\u003Cpath d=\"m2 2 20 20\"\u003E\u003C/path\u003E\u003C/svg\u003E"
+                    "path": "<path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path>",
+                    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.733 5.076A10.744 10.744 0 0 1 12 5c5.105 0 9.232 3.254 10.936 7.652a1 1 0 0 1-.059.808 10.7 10.7 0 0 1-1.444 2.022\"></path><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"></path><path d=\"M17.479 17.499A10.75 10.75 0 0 1 12 19c-5.105 0-9.232-3.254-10.936-7.652a1 1 0 0 1 .059-.808 10.7 10.7 0 0 1 4.158-4.641\"></path><path d=\"m2 2 20 20\"></path></svg>"
                   }
                 },
                 "validationRef": "forgotPassword.confirm_password",
@@ -6951,7 +7142,7 @@
         ]
       }
     ],
-    "sourceFingerprint": "45e9d48eecf1b1d835f33ebfe04adee4a80865cfb96b2da7ea7606317dd72efe"
+    "sourceFingerprint": "25df26e1738370c3568a78674618d1abf907a1ca9221266b444ab4e9877abcb2"
   },
   "success": true
 }

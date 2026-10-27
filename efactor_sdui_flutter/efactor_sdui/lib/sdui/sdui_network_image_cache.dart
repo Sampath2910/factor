@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/painting.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
@@ -26,14 +27,23 @@ class SduiNetworkImageCache {
     Map<String, dynamic> schema, {
     int maxUrls = 150,
   }) async {
-    final urls = collectImageUrls(schema, maxUrls: maxUrls);
-    for (final url in urls) {
+    await runZonedGuarded(() async {
       try {
-        await manager.getSingleFile(url);
+        final urls = collectImageUrls(schema, maxUrls: maxUrls);
+        if (urls.isEmpty) return;
+        for (final url in urls) {
+          try {
+            await manager.getSingleFile(url);
+          } catch (_) {
+            // Offline or unreachable during prefetch — continue; cache hit later if already saved.
+          }
+        }
       } catch (_) {
-        // Offline or unreachable during prefetch — continue; cache hit later if already saved.
+        // Storage provider or cache manager unavailable in this environment
       }
-    }
+    }, (error, stack) {
+      // Storage provider or sqflite uninitialized in unit test environments
+    });
   }
 
   /// Backward-compatible alias for [collectImageUrls].

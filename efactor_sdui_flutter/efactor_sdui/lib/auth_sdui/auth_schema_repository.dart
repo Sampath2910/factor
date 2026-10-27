@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 
 import '../services/json_http.dart';
 import '../services/schema_invalidation_event.dart';
-import '../services/schema_offline.dart';
 import '../sdui/sdui_network_image_cache.dart';
 import 'auth_json_patch.dart';
 import 'auth_schema_cache.dart';
@@ -57,16 +56,58 @@ class AuthSchemaRepository {
     defaultValue: 30000,
   );
 
+  static const int _startupTimeoutMs = int.fromEnvironment(
+    'AUTH_SCHEMA_STARTUP_TIMEOUT_MS',
+    defaultValue: 4000,
+  );
+
   final http.Client _client;
   final AuthSchemaCache _cache;
 
-  /// Cached-first load used at app startup.
+  /// Loads the Auth SDUI schema.
   ///
-  /// `forceRefresh=true` is reserved for explicit retry/full-refresh paths and
-  /// bypasses the local schema cache.
+  /// Network-first on startup: attempts to fetch the authoritative live schema
+  /// from the server first (with a fast 4s timeout) so the app renders the
+  /// updated schema immediately without displaying an old schema first.
+  ///
+  /// If the network request fails or times out (offline mode), falls back
+  /// gracefully to the newest local cache or bundled production asset.
   Future<Map<String, dynamic>> load({bool forceRefresh = false}) async {
-    if (!forceRefresh) {
-      final cached = await _readUsableCache();
+    try {
+      final canonical = await _fetchFullCanonical(
+        forceRefresh: forceRefresh,
+        timeout: Duration(
+          milliseconds: forceRefresh ? _timeoutMs : _startupTimeoutMs,
+        ),
+      );
+      await _storeIfAllowed(canonical);
+      return _finalize(
+        _cloneMap(canonical),
+        source: _fullSchemaUri(canonical).toString(),
+        cacheHit: false,
+      );
+    } catch (error) {
+      debugPrint('[AuthSchemaRepository] Live schema load offline/error: $error');
+
+      final cached = await _readUsableCache(allowStale: true);
+      final bundled = await _loadBundledAsset();
+
+      final cachedRev = cached != null ? _revision(cached.schema) : null;
+      final bundledRev = bundled != null ? _revision(bundled) : null;
+
+      // Prefer bundled asset if it has a higher revision than stale cache
+      if (bundled != null &&
+          (cached == null ||
+              (bundledRev != null &&
+                  cachedRev != null &&
+                  bundledRev > cachedRev))) {
+        return _finalize(
+          _cloneMap(bundled),
+          source: 'asset://assets/auth_ui_schema.json',
+          cacheHit: true,
+        );
+      }
+
       if (cached != null) {
         return _finalize(
           _cloneMap(cached.schema),
@@ -75,26 +116,6 @@ class AuthSchemaRepository {
         );
       }
 
-      final bundled = await _loadBundledAsset();
-      if (bundled != null) {
-        return _finalize(
-          _cloneMap(bundled),
-          source: 'asset://assets/auth_ui_schema.json',
-          cacheHit: true,
-        );
-      }
-    }
-
-    try {
-      final canonical = await _fetchFullCanonical(forceRefresh: forceRefresh);
-      await _storeIfAllowed(canonical);
-      return _finalize(
-        _cloneMap(canonical),
-        source: _fullSchemaUri(canonical).toString(),
-        cacheHit: false,
-      );
-    } catch (error) {
-      final bundled = await _loadBundledAsset();
       if (bundled != null) {
         return _finalize(
           _cloneMap(bundled),
@@ -102,15 +123,8 @@ class AuthSchemaRepository {
           cacheHit: true,
         );
       }
-      if (!isTransientNetworkFailure(error)) rethrow;
-      final stale = await _readUsableCache(allowStale: true);
-      if (stale == null) rethrow;
-      debugPrint('[AuthSchemaRepository] OFFLINE FALLBACK to saved schema');
-      return _finalize(
-        _cloneMap(stale.schema),
-        source: 'local-auth-schema-cache-stale',
-        cacheHit: true,
-      );
+
+      rethrow;
     }
   }
 
@@ -271,6 +285,18 @@ class AuthSchemaRepository {
         debugPrint('[AuthSchemaRepository] DELTA_FALLBACK $error');
         debugPrintStack(stackTrace: stackTrace);
       }
+    }
+
+    // If remote revision is newer than local, but delta was not applied (e.g. server
+    // returned full_required: true, gap > 10, or patch failed), automatically fall back
+    // to downloading the full canonical schema rather than abandoning the update!
+    if (remoteRevision != null && (localRevision == null || remoteRevision > localRevision)) {
+      debugPrint('[AuthSchemaRepository] DELTA NOT APPLIED — falling back to full schema download');
+      return _fullSyncAgainst(
+        cached,
+        event: event,
+        source: 'full-delta-fallback',
+      );
     }
 
     debugPrint(
@@ -478,6 +504,7 @@ class AuthSchemaRepository {
   Future<Map<String, dynamic>> _fetchFullCanonical({
     required bool forceRefresh,
     Map<String, dynamic>? schemaHint,
+    Duration? timeout,
   }) async {
     final base = schemaHint == null
         ? _configuredBootstrapUri()
@@ -500,7 +527,7 @@ class AuthSchemaRepository {
             'Pragma': 'no-cache',
           },
         )
-        .timeout(const Duration(milliseconds: _timeoutMs));
+        .timeout(timeout ?? const Duration(milliseconds: _timeoutMs));
 
     debugPrint('[AuthSchemaRepository] HTTP ${response.statusCode}');
 

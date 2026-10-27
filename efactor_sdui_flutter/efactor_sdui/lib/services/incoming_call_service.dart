@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../grid_sdui/grid_in_app_webview_page.dart';
 import 'call_permission_helper.dart';
+import 'grid_chat_message_notification.dart';
 import 'push_notification_bootstrap.dart';
 
 /// Data structure representing an incoming call payload delivered via
@@ -1098,13 +1099,81 @@ class IncomingCallService {
   }
 
   /// Opens or focuses chat by conversationId.
+  /// A loaded GRID Chat page gets one gridChatOpenChat call.
+  /// A cold start opens the grid-chat URL and does not cover a pending Answer.
   Future<void> openChatFromNotification({
     required String conversationId,
     required String url,
+    bool compose = false,
     BuildContext? context,
   }) async {
-    if (GridInAppWebViewPage.isPageOpen) {
-      await GridInAppWebViewPage.openChat(conversationId: conversationId);
+    final id = conversationId.trim();
+    final messages = GridChatMessageNotifications.instance;
+    if (id.isNotEmpty) {
+      GridChatMessageNotifications.chatTrace(
+        compose ? 'Reply pressed' : 'notification pressed',
+        id,
+        '',
+      );
+      if (GridInAppWebViewPage.isChatUiReady) {
+        final delivered = await GridInAppWebViewPage.openChat(
+          conversationId: id,
+          compose: compose,
+        );
+        if (delivered) {
+          await messages.clearPendingOpen(reason: 'delivered');
+          return;
+        }
+      }
+      final current = GridInAppWebViewPage.activeCircleConnectUri;
+      if (current != null &&
+          current.queryParameters['conversation_id'] == id &&
+          (current.queryParameters['compose'] == '1') == compose) {
+        return;
+      }
+      if (GridInAppWebViewPage.isActiveCircleConnect) {
+        await messages.storePendingOpen(
+          conversationId: id,
+          compose: compose,
+          needsJs: true,
+        );
+        return;
+      }
+      final existing = messages.pendingOpen;
+      if (existing != null &&
+          existing.conversationId == id &&
+          existing.compose == compose &&
+          !existing.needsJs) {
+        return;
+      }
+      await messages.storePendingOpen(
+        conversationId: id,
+        compose: compose,
+        needsJs: false,
+      );
+      if (pendingAnswer != null) return;
+      if (answerHandoffOwnedByShell && !navigatorCovered) return;
+      final targetContext = navigatorKey.currentState?.context;
+      if (targetContext == null || !targetContext.mounted) return;
+      GridChatMessageNotifications.chatTrace(
+        'GRID Chat navigation started',
+        id,
+        '',
+      );
+      await Navigator.of(targetContext).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => GridInAppWebViewPage(
+            uri: GridChatMessageNotifications.conversationUri(
+              id,
+              compose: compose,
+            ),
+            title: 'Circle Connect',
+            showAppBar: false,
+            accessToken: activeAccessToken,
+            userId: activeUserId,
+          ),
+        ),
+      );
       return;
     }
 
@@ -1115,10 +1184,7 @@ class IncomingCallService {
       final sanitized = effectiveUrl.replaceAll(RegExp(r'^/+'), '');
       effectiveUrl = 'https://efactor.tech/$sanitized';
     }
-    if (effectiveUrl.isEmpty) {
-      effectiveUrl =
-          'https://efactor.tech/index.php/grid-chat?conversation_id=$conversationId';
-    }
+    if (effectiveUrl.isEmpty) return;
     final uri = Uri.parse(effectiveUrl);
     final targetContext = await _waitForNavigatorContext();
     if (targetContext != null && targetContext.mounted) {

@@ -16,6 +16,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/app_cache_manager.dart';
 import 'services/call_permission_helper.dart';
 import 'services/efactor_cloud_service.dart';
+import 'services/grid_chat_message_notification.dart';
 import 'services/incoming_call_service.dart';
 import 'services/location_startup_gate.dart';
 import 'services/push_notification_bootstrap.dart';
@@ -39,10 +40,12 @@ Future<void> main() async {
   EfactorCloudService.instance.configureLogs();
 
   await IncomingCallService.instance.restorePendingAnswer();
+  await GridChatMessageNotifications.instance.restorePendingOpen();
   await PushNotificationBootstrap.instance.captureColdStartAnswer();
 
   Map<String, dynamic>? initialAuthSchema;
-  if (IncomingCallService.instance.pendingAnswer == null) {
+  if (IncomingCallService.instance.pendingAnswer == null &&
+      GridChatMessageNotifications.instance.pendingOpen == null) {
     try {
       initialAuthSchema = await SchemaLoadQueue.instance.loadAuth();
     } catch (_) {}
@@ -77,7 +80,10 @@ class AnswerFirstShell extends StatefulWidget {
 
 class _AnswerFirstShellState extends State<AnswerFirstShell> {
   PendingCallAnswer? _latched;
+  PendingChatOpen? _latchedChat;
   final IncomingCallService _calls = IncomingCallService.instance;
+  final GridChatMessageNotifications _messages =
+      GridChatMessageNotifications.instance;
 
   @override
   void initState() {
@@ -85,6 +91,7 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
     _calls.answerHandoffOwnedByShell = true;
     _adoptPending();
     _calls.pendingAnswerListenable.addListener(_onPending);
+    _messages.pendingOpenListenable.addListener(_onPending);
   }
 
   @override
@@ -96,6 +103,7 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
   @override
   void dispose() {
     _calls.pendingAnswerListenable.removeListener(_onPending);
+    _messages.pendingOpenListenable.removeListener(_onPending);
     if (_calls.answerHandoffOwnedByShell) {
       _calls.answerHandoffOwnedByShell = false;
     }
@@ -104,25 +112,47 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
 
   void _onPending() {
     if (!mounted) return;
-    final before = _latched?.callId;
+    final beforeCall = _latched?.callId;
+    final beforeChat = _latchedChat?.conversationId;
+    final beforeCompose = _latchedChat?.compose;
     _adoptPending();
-    if (_latched?.callId != before) {
+    if (_latched?.callId != beforeCall ||
+        _latchedChat?.conversationId != beforeChat ||
+        _latchedChat?.compose != beforeCompose) {
       setState(() {});
     }
   }
 
   void _adoptPending() {
-    final pending = _calls.pendingAnswer;
-    if (pending == null) return;
-    if (_calls.navigatorCovered) return;
-    if (_latched?.callId == pending.callId) return;
-    _latched = pending;
-    _calls.logGridChatNavigation(pending.callId);
     final token = widget.authState.accessToken?.trim();
     if (token != null && token.isNotEmpty) {
       _calls.activeAccessToken = token;
     }
     _calls.activeUserId = _userId();
+
+    final pending = _calls.pendingAnswer;
+    if (pending != null && !_calls.navigatorCovered) {
+      if (_latched?.callId != pending.callId) {
+        _latched = pending;
+        _calls.logGridChatNavigation(pending.callId);
+      }
+      return;
+    }
+    if (_latched != null) return;
+
+    final chat = _messages.pendingOpen;
+    if (chat == null || chat.needsJs || _calls.navigatorCovered) return;
+    if (_latchedChat?.conversationId == chat.conversationId &&
+        _latchedChat?.compose == chat.compose) {
+      return;
+    }
+    _latchedChat = chat;
+    GridChatMessageNotifications.chatTrace(
+      'GRID Chat navigation started',
+      chat.conversationId,
+      '',
+    );
+    unawaited(_messages.clearPendingOpen(reason: 'navigated'));
   }
 
   int? _userId() {
@@ -146,6 +176,22 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
       return GridInAppWebViewPage(
         key: ValueKey<String>('answer-handoff-${latched.callId}'),
         uri: IncomingCallService.answerGridChatUri(latched),
+        title: 'Circle Connect',
+        showAppBar: false,
+        accessToken: widget.authState.accessToken,
+        userId: _userId(),
+      );
+    }
+    final chat = _latchedChat;
+    if (chat != null) {
+      return GridInAppWebViewPage(
+        key: ValueKey<String>(
+          'chat-handoff-${chat.conversationId}-${chat.compose}',
+        ),
+        uri: GridChatMessageNotifications.conversationUri(
+          chat.conversationId,
+          compose: chat.compose,
+        ),
         title: 'Circle Connect',
         showAppBar: false,
         accessToken: widget.authState.accessToken,

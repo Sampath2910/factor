@@ -634,8 +634,12 @@ class AuthRenderer {
                     constraints.maxWidth,
                   )
                 : null;
+            final keyboardInset =
+                MediaQuery.maybeViewInsetsOf(context)?.bottom ??
+                View.of(context).viewInsets.bottom;
+            final isKeyboardOpen = keyboardInset > 0 || _keyboardVisible;
             return Align(
-              alignment: Alignment.center,
+              alignment: isKeyboardOpen ? Alignment.topCenter : Alignment.center,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: declaredMaxWidth ?? constraints.maxWidth,

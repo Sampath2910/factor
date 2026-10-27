@@ -10,6 +10,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 
+import 'grid_chat_message_notification.dart';
 import 'incoming_call_service.dart';
 import 'json_http.dart';
 import '../auth_sdui/auth_secure_storage.dart';
@@ -150,6 +151,7 @@ void notificationTapBackground(NotificationResponse response) async {
 /// Top-level FCM background handler (must stay top-level for the isolate).
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp();
@@ -247,6 +249,15 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
       type == 'HANGUP') {
     final callId = (data['call_id'] ?? data['callId'] ?? '').toString();
     await plugin.cancel(callId.hashCode.abs());
+    return;
+  }
+
+  if (GridChatMessage.isGridChatMessage(data)) {
+    await GridChatMessageNotifications.instance.present(
+      plugin,
+      data,
+      appResumed: false,
+    );
     return;
   }
 
@@ -677,13 +688,27 @@ class PushNotificationBootstrap {
       if (launchDetails?.didNotificationLaunchApp != true || response == null) {
         return;
       }
-      if (response.actionId != 'answer') return;
       final payload = response.payload;
       if (payload == null || payload.isEmpty) return;
       final data = jsonDecode(payload) as Map<String, dynamic>;
-      final call = IncomingCallData.fromJson(data);
-      if (call.callId.isEmpty) return;
-      await IncomingCallService.instance.recordNotificationAnswer(call);
+      if (response.actionId == 'answer') {
+        final call = IncomingCallData.fromJson(data);
+        if (call.callId.isEmpty) return;
+        await IncomingCallService.instance.recordNotificationAnswer(call);
+        return;
+      }
+      if (GridChatMessage.isGridChatMessage(data)) {
+        final conversationId =
+            (data['conversation_id'] ?? data['conversationId'] ?? '')
+                .toString()
+                .trim();
+        if (conversationId.isEmpty) return;
+        await GridChatMessageNotifications.instance.storePendingOpen(
+          conversationId: conversationId,
+          compose: response.actionId == 'reply',
+          needsJs: false,
+        );
+      }
     } catch (e) {
       // ignore: avoid_print
       print('[CALL] cold-start answer capture failed error=$e');
@@ -992,17 +1017,17 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       return;
     }
 
-    final convId = (data['conversation_id'] ??
-            data['conversationId'] ??
-            data['chat_id'] ??
-            '')
-        .toString()
-        .trim();
-    if (_activeConversationId != null &&
-        convId.isNotEmpty &&
-        _activeConversationId == convId) {
-      debugPrint(
-          '[PushBootstrap] Suppressing foreground notification banner for currently active conversation: $convId');
+    if (GridChatMessage.isGridChatMessage(data)) {
+      final resumed = WidgetsBinding.instance.lifecycleState ==
+          AppLifecycleState.resumed;
+      unawaited(
+        GridChatMessageNotifications.instance.present(
+          _local,
+          data,
+          appResumed: resumed,
+          activeConversationId: _activeConversationId,
+        ),
+      );
       return;
     }
     unawaited(showMessageNotificationOnPlugin(_local, data, notification: message.notification));
@@ -1071,15 +1096,20 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         return;
       }
       if (actionId == 'reply') {
-        final input = response.input ?? '';
-        if (input.isNotEmpty) {
-          await handleSendReplyFromNotification(data, input);
-          final convId = (data['conversation_id'] ??
-                  data['conversationId'] ??
-                  '')
-              .toString();
-          final notifId = int.tryParse(convId) ?? convId.hashCode;
-          await _local.cancel(notifId);
+        final convId = (data['conversation_id'] ??
+                data['conversationId'] ??
+                '')
+            .toString();
+        if (convId.isNotEmpty) {
+          await IncomingCallService.instance.openChatFromNotification(
+            conversationId: convId,
+            url: '',
+            compose: true,
+          );
+          await GridChatMessageNotifications.instance.clearConversation(
+            convId,
+            _local,
+          );
         }
         return;
       }
@@ -1244,10 +1274,10 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
   }
 
   Future<void> clearChatNotifications(String conversationId) async {
-    try {
-      final notifId = (int.tryParse(conversationId) ?? conversationId.hashCode).abs();
-      await _local.cancel(notifId);
-    } catch (_) {}
+    await GridChatMessageNotifications.instance.clearConversation(
+      conversationId,
+      _local,
+    );
   }
 
   Future<void> dispose() async {

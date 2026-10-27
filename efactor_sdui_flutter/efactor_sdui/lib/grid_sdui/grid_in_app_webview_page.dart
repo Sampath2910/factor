@@ -13,6 +13,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import '../services/grid_chat_message_notification.dart';
 import '../services/incoming_call_service.dart';
 import '../services/ongoing_call_service.dart';
 import '../services/push_notification_bootstrap.dart';
@@ -186,6 +187,19 @@ class GridInAppWebViewPage extends StatefulWidget {
     return state._isCircleConnect;
   }
 
+  static Uri? get activeCircleConnectUri {
+    final state = _activeState;
+    if (state == null || !state.mounted || !state._isCircleConnect) return null;
+    return state._effectiveUri;
+  }
+
+  /// GRID Chat has called chatUiReady() on this page.
+  static bool get isChatUiReady {
+    final state = _activeState;
+    if (state == null || !state.mounted || !state._isCircleConnect) return false;
+    return state._chatUiReady;
+  }
+
   static bool _answerInjectInFlight = false;
 
   /// Runs gridChatCallAction once. Returns false when the function is not
@@ -302,32 +316,36 @@ class GridInAppWebViewPage extends StatefulWidget {
     }
   }
 
-  /// Dispatches open chat event to active web page via both:
-  /// 1. CustomEvent 'circleConnectOpenChat' with { conversationId }
-  /// 2. window.gridChatOpenChat({ conversation_id })
-  static Future<void> openChat({required String conversationId}) async {
-    if (!isPageOpen) return;
+  /// Opens the conversation once with gridChatOpenChat.
+  /// Returns false when that function is not on the page yet.
+  static Future<bool> openChat({
+    required String conversationId,
+    bool compose = false,
+  }) async {
+    if (!isActiveCircleConnect) return false;
+    final payload = jsonEncode(<String, dynamic>{
+      'conversation_id': conversationId,
+      'compose': compose,
+    });
     final js = '''
 (function() {
+  if (typeof window.gridChatOpenChat !== 'function') return false;
   try {
-    window.dispatchEvent(new CustomEvent('circleConnectOpenChat', {
-      detail: {
-        conversationId: '$conversationId',
-        conversation_id: '$conversationId'
-      }
-    }));
-  } catch(e) {}
-  if (typeof window.gridChatOpenChat === 'function') {
-    try {
-      window.gridChatOpenChat(${jsonEncode({'conversation_id': conversationId})});
-    } catch(e) {}
+    window.gridChatOpenChat($payload);
+    return true;
+  } catch (e) {
+    console.error('gridChatOpenChat error:', e);
+    return false;
   }
-})();
+})()
 ''';
     try {
-      await _activeState?._controller.runJavaScript(js);
+      final result = await _activeState?._controller.runJavaScriptReturningResult(js);
+      final text = result?.toString().trim().toLowerCase().replaceAll('"', '') ?? '';
+      return text == 'true' || text == '1';
     } catch (e) {
       debugPrint('[GridInAppWebView] openChat JS failed: $e');
+      return false;
     }
   }
 
@@ -379,6 +397,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   Timer? _connectingCallTimer;
   bool _routeIsCurrent = true;
   bool _webCallUiReady = false;
+  bool _chatUiReady = false;
 
   /// True when this GRID Chat page can show the in-app incoming-call banner.
   bool get circleConnectReady {
@@ -648,6 +667,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           onPageStarted: (_) {
             if (!mounted) return;
             _webCallUiReady = false;
+            _chatUiReady = false;
             setState(() {
               _loading = true;
               _error = null;
@@ -1220,6 +1240,26 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         callId: String(callId || '')
       });
     };
+    api.chatUiReady = function() {
+      post({ action: 'chatUiReady' });
+    };
+    api.activeConversationChanged = function(conversationId) {
+      post({
+        action: 'activeConversationChanged',
+        conversationId: String(conversationId || '')
+      });
+    };
+    api.setActiveConversation = api.activeConversationChanged;
+    api.conversationClosed = function() {
+      post({ action: 'conversationClosed' });
+    };
+    api.clearChatNotifications = function(conversationId) {
+      post({
+        action: 'clearChatNotifications',
+        conversationId: String(conversationId || '')
+      });
+    };
+    api.messageNotificationsManaged = true;
     api.__efactorNativeBridge = true;
   }
   bindNativeCallBridge();
@@ -1238,54 +1278,6 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
       }
     }, 500);
   }
-  window.CircleConnectPush.clearChatNotifications = function(conversationId) {
-    try {
-      if (window.CircleConnectPushBridge) {
-        window.CircleConnectPushBridge.postMessage(JSON.stringify({
-          action: 'clearChatNotifications',
-          conversationId: String(conversationId || '')
-        }));
-      }
-    } catch (e) {
-      console.error('clearChatNotifications error:', e);
-    }
-  };
-  window.CircleConnectPush.setActiveConversation = function(conversationId) {
-    try {
-      if (window.CircleConnectPushBridge) {
-        window.CircleConnectPushBridge.postMessage(JSON.stringify({
-          action: 'activeConversationChanged',
-          conversationId: String(conversationId || '')
-        }));
-      }
-    } catch (e) {
-      console.error('setActiveConversation error:', e);
-    }
-  };
-
-  function checkUrlForConversation() {
-    try {
-      var path = window.location.pathname + window.location.search + window.location.hash;
-      var match = path.match(/\\/chat\\/(\\d+)/) || path.match(/conversation\\/(\\d+)/) || path.match(/#\\/chat\\/(\\d+)/);
-      if (match && match[1]) {
-        if (window.CircleConnectPushBridge) {
-          window.CircleConnectPushBridge.postMessage(JSON.stringify({
-            action: 'activeConversationChanged',
-            conversationId: String(match[1])
-          }));
-        }
-      } else if (path.indexOf('/chat/') === -1 && path.indexOf('/conversation/') === -1) {
-        if (window.CircleConnectPushBridge) {
-          window.CircleConnectPushBridge.postMessage(JSON.stringify({
-            action: 'conversationClosed'
-          }));
-        }
-      }
-    } catch(_) {}
-  }
-  window.addEventListener('popstate', checkUrlForConversation);
-  window.addEventListener('hashchange', checkUrlForConversation);
-
   // Offline Media Cache Bridge
   window.CircleConnectMedia = {
     getMedia: function(url) {
@@ -1501,6 +1493,24 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           callType: callType,
           url: widget.uri.toString(),
         );
+      } else if (action == 'chatUiReady') {
+        _chatUiReady = true;
+        final pending = GridChatMessageNotifications.instance.pendingOpen;
+        if (pending != null && pending.needsJs) {
+          final conversationId = pending.conversationId;
+          final compose = pending.compose;
+          unawaited(() async {
+            final delivered = await GridInAppWebViewPage.openChat(
+              conversationId: conversationId,
+              compose: compose,
+            );
+            if (delivered) {
+              await GridChatMessageNotifications.instance.clearPendingOpen(
+                reason: 'delivered',
+              );
+            }
+          }());
+        }
       } else if (action == 'callUiReady') {
         _webCallUiReady = true;
         if (_isCircleConnect) {
