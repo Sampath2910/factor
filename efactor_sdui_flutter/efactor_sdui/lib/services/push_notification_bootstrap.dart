@@ -456,16 +456,22 @@ Future<void> showMessageNotificationOnPlugin(
           '')
       .toString()
       .trim();
+  final groupTitle =
+      (data['group_title'] ?? data['groupTitle'] ?? '').toString().trim();
   final rawTitle =
       (notification?.title ?? data['title'] ?? '').toString().trim();
 
+  // For group messages (is_group = 1), title is group_title or title ("Test group").
   // On a 1:1 message notification (is_group = 0), the title should be just the sender's name.
-  // "Name: message" is only for group chats.
-  final effectiveTitle = (!isGroup && senderName.isNotEmpty)
-      ? senderName
-      : (rawTitle.isNotEmpty
-          ? rawTitle
-          : (senderName.isNotEmpty ? senderName : 'Circle Connect'));
+  final effectiveTitle = isGroup
+      ? (groupTitle.isNotEmpty
+          ? groupTitle
+          : (rawTitle.isNotEmpty
+              ? rawTitle
+              : (senderName.isNotEmpty ? senderName : 'Group Chat')))
+      : (senderName.isNotEmpty
+          ? senderName
+          : (rawTitle.isNotEmpty ? rawTitle : 'Circle Connect'));
 
   final rawBody = notification?.body ??
       data['body'] ??
@@ -481,9 +487,16 @@ Future<void> showMessageNotificationOnPlugin(
       .trim()
       .toLowerCase();
 
-  final effectiveBody = (rawBody != null && rawBody.toString().trim().isNotEmpty)
+  final baseBody = (rawBody != null && rawBody.toString().trim().isNotEmpty)
       ? rawBody.toString().trim()
       : _defaultBodyForMessageType(msgType);
+
+  // For group messages, show line like WhatsApp: "Pavan Nagapuri: message".
+  final effectiveBody = (isGroup && senderName.isNotEmpty)
+      ? (baseBody.toLowerCase().startsWith('${senderName.toLowerCase()}:')
+          ? baseBody
+          : '$senderName: $baseBody')
+      : baseBody;
 
   if (isLocked) {
     await plugin.show(
@@ -538,7 +551,7 @@ Future<void> showMessageNotificationOnPlugin(
         styleInformation: BigTextStyleInformation(
           effectiveBody,
           contentTitle: effectiveTitle,
-          summaryText: 'Circle Connect Chat',
+          summaryText: isGroup ? effectiveTitle : 'Circle Connect Chat',
         ),
         actions: const <AndroidNotificationAction>[
           AndroidNotificationAction(

@@ -179,6 +179,93 @@ void main() {
           GridChatMessageNotifications.groupConversationTitle(message),
           'Flutter Developers',
         );
+        expect(
+          GridChatMessageNotifications.formatNotificationBody(message),
+          'Pavan Nagapuri: Standup in 5 mins',
+        );
+      },
+    );
+
+    test(
+      'WhatsApp style group message formatting: title "Test group", line "Pavan Nagapuri: message"',
+      () {
+        // Test with group_title
+        final messageWithGroupTitle = GridChatMessage.parse(<String, dynamic>{
+          'type': 'NEW_MESSAGE',
+          'conversation_id': '88',
+          'message_id': 'm88',
+          'msg_type': 'text',
+          'group_title': 'Test group',
+          'sender_name': 'Pavan Nagapuri',
+          'body': 'message',
+          'is_group': 1,
+        });
+
+        expect(messageWithGroupTitle, isNotNull);
+        expect(messageWithGroupTitle!.isGroup, isTrue);
+        expect(
+          GridChatMessageNotifications.notificationTitle(messageWithGroupTitle),
+          'Test group',
+        );
+        expect(
+          GridChatMessageNotifications.groupConversationTitle(messageWithGroupTitle),
+          'Test group',
+        );
+        expect(
+          GridChatMessageNotifications.formatNotificationBody(messageWithGroupTitle),
+          'Pavan Nagapuri: message',
+        );
+
+        // Test with photo media type
+        final photoMessage = GridChatMessage.parse(<String, dynamic>{
+          'type': 'NEW_MESSAGE',
+          'conversation_id': '88',
+          'message_id': 'm89',
+          'msg_type': 'photo',
+          'group_title': 'Test group',
+          'sender_name': 'Pavan Nagapuri',
+          'body': '',
+          'is_group': 1,
+        });
+        expect(
+          GridChatMessageNotifications.formatNotificationBody(photoMessage!),
+          'Pavan Nagapuri: 📷 Photo',
+        );
+
+        // Test body already containing sender prefix
+        final alreadyPrefixed = GridChatMessage.parse(<String, dynamic>{
+          'type': 'NEW_MESSAGE',
+          'conversation_id': '88',
+          'message_id': 'm90',
+          'msg_type': 'text',
+          'group_title': 'Test group',
+          'sender_name': 'Pavan Nagapuri',
+          'body': 'Pavan Nagapuri: hello guys',
+          'is_group': '1',
+        });
+        expect(
+          GridChatMessageNotifications.formatNotificationBody(alreadyPrefixed!),
+          'Pavan Nagapuri: hello guys',
+        );
+
+        // Test 1:1 message does not prefix sender name to body
+        final oneToOneMessage = GridChatMessage.parse(<String, dynamic>{
+          'type': 'NEW_MESSAGE',
+          'conversation_id': '99',
+          'message_id': 'm91',
+          'msg_type': 'text',
+          'sender_name': 'Pavan Nagapuri',
+          'body': 'message',
+          'is_group': 0,
+        });
+        expect(
+          GridChatMessageNotifications.notificationTitle(oneToOneMessage!),
+          'Pavan Nagapuri',
+        );
+        expect(
+          GridChatMessageNotifications.formatNotificationBody(oneToOneMessage),
+          'message',
+        );
       },
     );
   });

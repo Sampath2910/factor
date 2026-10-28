@@ -55,6 +55,7 @@ class GridChatMessage {
     required this.messageId,
     required this.messageType,
     required this.title,
+    this.groupTitle = '',
     required this.body,
     required this.senderId,
     required this.senderName,
@@ -74,6 +75,7 @@ class GridChatMessage {
   final String messageId;
   final String messageType;
   final String title;
+  final String groupTitle;
   final String body;
   final String senderId;
   final String senderName;
@@ -146,6 +148,11 @@ class GridChatMessage {
             .trim();
     if (conversationId.isEmpty) return null;
     final now = DateTime.now().millisecondsSinceEpoch;
+    final rawGroupTitle =
+        (data['group_title'] ?? data['groupTitle'] ?? '').toString().trim();
+    final rawTitle = (data['title'] ?? '').toString().trim();
+    final effectiveTitle = rawGroupTitle.isNotEmpty ? rawGroupTitle : rawTitle;
+
     return GridChatMessage(
       conversationId: conversationId,
       messageId: (data['message_id'] ?? data['messageId'] ?? '').toString().trim(),
@@ -157,11 +164,17 @@ class GridChatMessage {
           .toString()
           .trim()
           .toLowerCase(),
-      title: (data['title'] ?? '').toString().trim(),
-      body: (data['body'] ?? '').toString(),
+      title: effectiveTitle,
+      groupTitle: rawGroupTitle,
+      body: (data['body'] ?? data['message'] ?? data['text'] ?? '').toString(),
       senderId: (data['sender_id'] ?? data['senderId'] ?? '').toString().trim(),
-      senderName:
-          (data['sender_name'] ?? data['senderName'] ?? '').toString().trim(),
+      senderName: (data['sender_name'] ??
+              data['senderName'] ??
+              data['name'] ??
+              data['user_name'] ??
+              '')
+          .toString()
+          .trim(),
       isGroup: isTruthyFlag(data['is_group'] ?? data['isGroup']),
       locked: isTruthyFlag(data['locked']),
       expiresAt: parseExpiresAt(data['expires_at'] ?? data['expiresAt']),
@@ -330,6 +343,7 @@ class GridChatMessageNotifications {
       stacks[message.conversationId] = <String, dynamic>{
         'locked': locked,
         'title': message.title,
+        'group_title': message.groupTitle,
         'is_group': message.isGroup,
         'tag': message.notificationTag,
         'lines': lines.map((line) => line.toJson()).toList(),
@@ -557,9 +571,7 @@ class GridChatMessageNotifications {
         : notificationTitle(message);
     final body = locked
         ? GridChatMessage.lockedLabel
-        : (message.body.isNotEmpty
-            ? message.body
-            : defaultBodyForMessageType(message.messageType));
+        : formatNotificationBody(message);
     await plugin.show(
       message.notificationId,
       title,
@@ -577,6 +589,7 @@ class GridChatMessageNotifications {
 
   static String? groupConversationTitle(GridChatMessage message) {
     if (!message.isGroup) return null;
+    if (message.groupTitle.isNotEmpty) return message.groupTitle;
     if (message.title.isNotEmpty) return message.title;
     return 'Group Chat';
   }
@@ -589,6 +602,7 @@ class GridChatMessageNotifications {
       return 'Circle Connect';
     }
     // For group chats, title should be the group title.
+    if (message.groupTitle.isNotEmpty) return message.groupTitle;
     if (message.title.isNotEmpty) return message.title;
     if (message.senderName.isNotEmpty) return message.senderName;
     return 'Group Chat';
@@ -596,6 +610,23 @@ class GridChatMessageNotifications {
 
   static String conversationTitle(GridChatMessage message) =>
       notificationTitle(message);
+
+  /// Formats the notification line like WhatsApp:
+  /// For 1:1 (is_group = 0): "message" (or media placeholder)
+  /// For group (is_group = 1): "SenderName: message" (e.g. "Pavan Nagapuri: message")
+  static String formatNotificationBody(GridChatMessage message) {
+    final raw = message.body.trim();
+    final content =
+        raw.isNotEmpty ? raw : defaultBodyForMessageType(message.messageType);
+    if (message.isGroup && message.senderName.isNotEmpty) {
+      final prefix = '${message.senderName}:';
+      if (content.toLowerCase().startsWith(prefix.toLowerCase())) {
+        return content;
+      }
+      return '${message.senderName}: $content';
+    }
+    return content;
+  }
 
   static String defaultBodyForMessageType(String type) {
     switch (type.toLowerCase().trim()) {
