@@ -300,6 +300,53 @@ class GridSduiRenderer {
       }
     }
 
+    final selectedFilter = state.selectedFilter('grid-explore-section');
+    if (c['id'] == 'grid-explore-row' && selectedFilter != 'all') {
+      ids.removeWhere((id) {
+        final comp = state.component(id);
+        if (comp == null) return false;
+        final space = (comp['space'] ?? '').toString().toLowerCase();
+        final badge = (comp['badge'] ?? '').toString().toLowerCase();
+        final title = (comp['title'] ?? '').toString().toLowerCase();
+        final subtitle = (comp['subtitle'] ?? '').toString().toLowerCase();
+        final idLower = id.toLowerCase();
+
+        if (selectedFilter == 'professional') {
+          final isProf = space.contains('prof') ||
+              badge.contains('prof') ||
+              idLower.contains('prof') ||
+              title.contains('prof') ||
+              subtitle.contains('prof') ||
+              idLower.contains('message');
+          return !isProf;
+        } else if (selectedFilter == 'circle') {
+          final isCircle = space.contains('circle') ||
+              badge.contains('circle') ||
+              idLower.contains('circle') ||
+              title.contains('circle') ||
+              subtitle.contains('circle');
+          return !isCircle;
+        }
+        return false;
+      });
+    }
+
+    if (ids.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: Text(
+            'No activity found for this category.',
+            style: TextStyle(
+              color: state.tokenColor('colors.textSecondary') ?? const Color(0xFF64748B),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -488,43 +535,22 @@ class GridSduiRenderer {
     final layout = _map(c['layout']) ?? const <String, dynamic>{};
     final bp = _breakpoint(context);
     final gap =
-        _d(_map(_map(layout['responsive'])?[bp])?['gap'] ?? layout['gap']);
+        _d(_map(_map(layout['responsive'])?[bp])?['gap'] ?? layout['gap']) ?? 8.0;
 
     final appearance = _map(c['appearance']) ?? const <String, dynamic>{};
     final background = state.parseColor(appearance['backgroundColor']) ??
-        state.tokenColor('colors.surface');
+        state.tokenColor('colors.surface') ??
+        Colors.white;
     final radius = _d(appearance['borderRadius']) ??
-        _d(_map(state.designTokens['radius'])?['card']);
-    final valueSize = _d(appearance['valueFontSize']);
-    final labelSize = _d(appearance['labelFontSize']);
-    final paddingVertical = _d(appearance['paddingVertical']);
-    final paddingHorizontal = _d(appearance['paddingHorizontal']);
-    final borderColor = state.tokenColor('colors.border');
-    final textPrimary = state.tokenColor('colors.textPrimary');
-    final textSecondary = state.tokenColor('colors.textSecondary');
-
-    if (gap == null ||
-        background == null ||
-        radius == null ||
-        valueSize == null ||
-        labelSize == null ||
-        paddingVertical == null ||
-        paddingHorizontal == null ||
-        borderColor == null ||
-        textPrimary == null ||
-        textSecondary == null) {
-      return SchemaIssueWidget(
-        title: 'Schema tokens missing',
-        details: const [
-          'Provide layout.gap, appearance.backgroundColor or colors.surface,',
-          'appearance.borderRadius or designTokens.radius.card,',
-          'appearance.valueFontSize/labelFontSize/paddingVertical/paddingHorizontal,',
-          'designTokens.colors.border, colors.textPrimary, colors.textSecondary',
-        ],
-        componentType: c['type']?.toString(),
-        controlId: c['id']?.toString(),
-      );
-    }
+        _d(_map(state.designTokens['radius'])?['card']) ??
+        16.0;
+    final valueSize = _d(appearance['valueFontSize']) ?? 20.0;
+    final labelSize = _d(appearance['labelFontSize']) ?? 12.0;
+    final paddingVertical = _d(appearance['paddingVertical']) ?? 14.0;
+    final paddingHorizontal = _d(appearance['paddingHorizontal']) ?? 16.0;
+    final borderColor = state.tokenColor('colors.border') ?? const Color(0xFFE2E8F0);
+    final textPrimary = state.tokenColor('colors.textPrimary') ?? const Color(0xFF1E293B);
+    final textSecondary = state.tokenColor('colors.textSecondary') ?? const Color(0xFF64748B);
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -832,6 +858,7 @@ class GridSduiRenderer {
   Widget _section(BuildContext context, Map<String, dynamic> c) {
     final trailing = _map(c['trailing']);
     final children = c['children'];
+    final sectionId = c['id']?.toString() ?? 'section';
     final titleColor = state.tokenColor('colors.textPrimary');
     final accent = state.tokenColor('colors.accent');
     if (titleColor == null || (trailing != null && accent == null)) {
@@ -844,21 +871,51 @@ class GridSduiRenderer {
         controlId: c['id']?.toString(),
       );
     }
+
+    final rawFilters = c['filters'] ?? c['modes'];
+    final filtersList = rawFilters is List
+        ? rawFilters.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList()
+        : <Map<String, dynamic>>[];
+
+    final activeFilterId = state.selectedFilter(sectionId);
+
+    final headerBadge = _map(c['headerBadge']);
+    final badgeLabel = headerBadge?['label']?.toString().trim() ?? c['badge']?.toString().trim() ?? '';
+    final badgeBg = state.parseColor(headerBadge?['backgroundColor']) ?? const Color(0xFFDCFCE7);
+    final badgeFg = state.parseColor(headerBadge?['color']) ?? const Color(0xFF16A34A);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Row(
           children: <Widget>[
-            Expanded(
-              child: Text(
-                c['title']?.toString() ?? '',
-                style: TextStyle(
-                  color: titleColor,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                ),
+            Text(
+              c['title']?.toString() ?? '',
+              style: TextStyle(
+                color: titleColor,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
               ),
             ),
+            if (badgeLabel.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  badgeLabel,
+                  style: TextStyle(
+                    color: badgeFg,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+            const Spacer(),
             if (trailing != null)
               TextButton(
                 onPressed: () =>
@@ -873,6 +930,56 @@ class GridSduiRenderer {
               ),
           ],
         ),
+        if (filtersList.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: <Widget>[
+                for (final filter in filtersList) ...[
+                  Builder(
+                    builder: (context) {
+                      final fId = filter['id']?.toString() ?? '';
+                      final isSelected = fId == activeFilterId;
+                      final label = filter['label']?.toString() ?? '';
+                      final count = filter['count'];
+                      final countStr = (count != null && count is num && count > 0) ? ' $count' : '';
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Material(
+                          color: isSelected ? (accent ?? const Color(0xFF5B6CFF)) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () => state.setSelectedFilter(sectionId, fId),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected ? (accent ?? const Color(0xFF5B6CFF)) : (state.tokenColor('colors.border') ?? const Color(0xFFE2E8F0)),
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: Text(
+                                '$label$countStr',
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : (state.tokenColor('colors.textSecondary') ?? const Color(0xFF64748B)),
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         if (children is List)
           for (final child in children)

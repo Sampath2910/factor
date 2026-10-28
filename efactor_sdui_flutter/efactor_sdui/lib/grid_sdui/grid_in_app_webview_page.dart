@@ -108,8 +108,12 @@ class GridInAppWebViewPage extends StatefulWidget {
     if (ssoToken == null || ssoToken.isEmpty) return uri;
     final updated = Map<String, String>.from(uri.queryParameters);
     updated['grid_sso'] = ssoToken;
+    final existingRedirect = uri.queryParameters['redirect'] ?? uri.queryParameters['redirect_url'];
     final initialRedirect = initialUri.queryParameters['redirect_url'];
-    if (initialRedirect != null && initialRedirect.isNotEmpty) {
+    if (existingRedirect != null && existingRedirect.isNotEmpty) {
+      updated['redirect_url'] = existingRedirect;
+      updated['redirect'] = existingRedirect;
+    } else if (initialRedirect != null && initialRedirect.isNotEmpty) {
       updated['redirect_url'] = initialRedirect;
     } else if (includeRedirectUrl && initialUri.path.isNotEmpty) {
       updated['redirect_url'] = initialUri.path;
@@ -122,10 +126,18 @@ class GridInAppWebViewPage extends StatefulWidget {
     required Uri initialUri,
     bool pageFinished = true,
   }) {
+    // Dedicated exit URL from GRID menu:
+    // "Switch to Circle Connect" -> https://efactor.tech/index.php/grid?app=exit
+    if (targetUri.queryParameters['app'] == 'exit' ||
+        targetUri.toString().contains('app=exit')) {
+      return true;
+    }
+
     final targetPath = targetUri.path.toLowerCase();
     final initialPath = initialUri.path.toLowerCase();
+    final initialIsScanner = initialPath.contains('scanner') || initialPath.contains('scan');
     final initialIsChat = initialPath.contains('/grid-chat') || initialPath.contains('chat');
-    final initialIsGrid = !initialIsChat && initialPath.contains('/grid');
+    final initialIsGrid = !initialIsChat && !initialIsScanner && initialPath.contains('/grid');
 
     // Inside Professional Space (GRID), no navigation should exit to native Grid.
     // The GRID logo goes to GRID home and stays inside the WebView. Team, saved
@@ -382,14 +394,27 @@ class GridInAppWebViewPage extends StatefulWidget {
     });
     final js = '''
 (function() {
-  if (typeof window.gridChatOpenChat !== 'function') return false;
+  var dispatched = false;
   try {
-    window.gridChatOpenChat($payload);
-    return true;
-  } catch (e) {
-    console.error('gridChatOpenChat error:', e);
-    return false;
+    window.dispatchEvent(new CustomEvent('circleConnectOpenChat', {
+      detail: {
+        conversationId: '$conversationId',
+        conversation_id: '$conversationId',
+        compose: $compose
+      }
+    }));
+    dispatched = true;
+  } catch(e) {}
+  if (typeof window.gridChatOpenChat === 'function') {
+    try {
+      window.gridChatOpenChat($payload);
+      return true;
+    } catch (e) {
+      console.error('gridChatOpenChat error:', e);
+      return dispatched;
+    }
   }
+  return dispatched;
 })()
 ''';
     try {
@@ -711,8 +736,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             // Defensively intercept redirects between modules or to generic dashboard/home
             final targetPath = targetUri.path.toLowerCase();
             final initialPath = widget.uri.path.toLowerCase();
+            final initialIsScanner = initialPath.contains('scanner') || initialPath.contains('scan');
             final initialIsChat = initialPath.contains('/grid-chat') || initialPath.contains('chat');
-            final initialIsGrid = !initialIsChat && initialPath.contains('/grid');
+            final initialIsGrid = !initialIsChat && !initialIsScanner && initialPath.contains('/grid');
 
             // If user opened Professional Space (/grid), do not allow server to redirect to Circle Connect (/grid-chat)
             if (initialIsGrid && targetPath.contains('/grid-chat')) {
@@ -765,6 +791,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             unawaited(_injectCircleConnectPushBridge());
             unawaited(_injectGridBackButton());
             unawaited(_injectChatSwipeBridge());
+            unawaited(_injectScannerBridge());
           },
           onPageFinished: (url) {
             if (!mounted) return;
@@ -777,6 +804,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             unawaited(_injectCircleConnectPushBridge());
             unawaited(_injectGridBackButton());
             unawaited(_injectChatSwipeBridge());
+            unawaited(_injectScannerBridge());
             _dispatchPendingCallActionIfPresent();
             if (_isConnectingCall) {
               Future.delayed(const Duration(milliseconds: 1000), () {
@@ -1036,6 +1064,27 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
                 conversationId: String(convId),
                 callType: String(cType)
               };
+            }
+            // If callee_user_id is available, dispatch working call/notify immediately
+            if (calleeUid && cId) {
+              var fallbackFd = new FormData();
+              fallbackFd.append('call_id', String(cId));
+              fallbackFd.append('callee_user_id', String(calleeUid));
+              fallbackFd.append('user_id', String(calleeUid));
+              fallbackFd.append('callee_id', String(calleeUid));
+              fallbackFd.append('chat_user_id', String(calleeUid));
+              if (portalUid) fallbackFd.append('portal_user_id', String(portalUid));
+              if (convId) fallbackFd.append('conversation_id', String(convId));
+              fallbackFd.append('call_type', String(cType));
+              fallbackFd.append('status', 'ringing');
+
+              origFetch('/index.php/grid-chat/api/call/notify', {
+                method: 'POST',
+                body: fallbackFd,
+                headers: bearerToken ? { 'Authorization': 'Bearer ' + bearerToken } : {}
+              }).then(function(r) { return r.json(); }).then(function(d) {
+                console.log('[PUSH_DISPATCH] Auto-dispatched call/notify from inviteCall:', d);
+              }).catch(function(_) {});
             }
           }
         } catch(e) {}
@@ -1666,9 +1715,15 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             .trim();
         PushNotificationBootstrap.instance
             .setActiveConversationId(convId.isNotEmpty ? convId : null);
+        if (convId.isNotEmpty) {
+          _onChatConversationOpened();
+        } else {
+          _onChatConversationClosed();
+        }
       } else if (action == 'conversationClosed' ||
           action == 'clearActiveConversation') {
         PushNotificationBootstrap.instance.setActiveConversationId(null);
+        _onChatConversationClosed();
       } else if (action == 'callSignalLog') {
         final name = data['name']?.toString() ?? '';
         final callId = data['callId']?.toString() ?? '';
@@ -3342,6 +3397,33 @@ Error: $error
       await _controller.runJavaScript(js);
     } catch (_) {}
   }
+
+  /// Injects compatibility bridge for the scanner web page back button.
+  /// When user taps the top-left back button, the web page calls
+  /// window.flutter_inappwebview.callHandler('closeWebView') which this bridge
+  /// forwards to CircleConnectNavBridge ('go_back_to_grid') to pop back to Grid SDUI.
+  Future<void> _injectScannerBridge() async {
+    const js = '''
+(function() {
+  if (!window.flutter_inappwebview) {
+    window.flutter_inappwebview = {
+      callHandler: function(handlerName) {
+        var name = String(handlerName || '').toLowerCase();
+        if (name === 'closewebview' || name === 'goback' || name === 'close' || name === 'back') {
+          if (window.CircleConnectNavBridge) {
+            window.CircleConnectNavBridge.postMessage('go_back_to_grid');
+          }
+        }
+      }
+    };
+  }
+})();
+''';
+    try {
+      await _controller.runJavaScript(js);
+    } catch (_) {}
+  }
+
   bool get _isCircleConnect {
     final path = widget.uri.path.toLowerCase();
     final title = (widget.title ?? '').toLowerCase();

@@ -9,10 +9,101 @@ class GridSduiState extends ChangeNotifier {
                 (source['schema'] as Map).cast<dynamic, dynamic>(),
               )
             : Map<String, dynamic>.from(source) {
-    if (source['content'] is Map && schema['content'] is! Map) {
-      schema['content'] = Map<String, dynamic>.from(
-        (source['content'] as Map).cast<dynamic, dynamic>(),
+    // Deep-merge dynamic content if passed via root envelope
+    final sourceContent = source['content'];
+    if (sourceContent is Map) {
+      final schemaContent = schema['content'];
+      if (schemaContent is Map) {
+        schema['content'] = <String, dynamic>{
+          ...Map<String, dynamic>.from(schemaContent.cast<dynamic, dynamic>()),
+          ...Map<String, dynamic>.from(
+            sourceContent.cast<dynamic, dynamic>(),
+          ),
+        };
+      } else {
+        schema['content'] = Map<String, dynamic>.from(
+          sourceContent.cast<dynamic, dynamic>(),
+        );
+      }
+    }
+
+    // Deep-merge dynamic components if passed via root envelope
+    final sourceComponents = source['components'];
+    final schemaComponents = schema['components'];
+    if (sourceComponents is Map &&
+        schemaComponents is Map &&
+        !identical(sourceComponents, schemaComponents)) {
+      final merged = Map<String, dynamic>.from(
+        schemaComponents.cast<dynamic, dynamic>(),
       );
+      for (final entry in sourceComponents.entries) {
+        final key = entry.key?.toString();
+        if (key == null) continue;
+        final value = entry.value;
+        if (value is Map) {
+          final existing = merged[key];
+          if (existing is Map) {
+            merged[key] = <String, dynamic>{
+              ...Map<String, dynamic>.from(existing.cast<dynamic, dynamic>()),
+              ...Map<String, dynamic>.from(value.cast<dynamic, dynamic>()),
+            };
+          } else {
+            merged[key] = Map<String, dynamic>.from(value.cast<dynamic, dynamic>());
+          }
+        }
+      }
+      schema['components'] = merged;
+    }
+
+    _synthesizeStatsRowIfMissing();
+  }
+
+  void _synthesizeStatsRowIfMissing() {
+    final stats = content['stats'];
+    if (stats is List && stats.isNotEmpty) {
+      final compMap = Map<String, dynamic>.from(components);
+      if (!compMap.containsKey('grid-stats-row')) {
+        compMap['grid-stats-row'] = <String, dynamic>{
+          'id': 'grid-stats-row',
+          'type': 'statusSummary',
+          'items': stats,
+          'layout': <String, dynamic>{'gap': 8.0},
+          'appearance': <String, dynamic>{
+            'backgroundColor': '#ffffff',
+            'borderRadius': 16.0,
+            'valueFontSize': 20.0,
+            'labelFontSize': 12.0,
+            'paddingVertical': 14.0,
+            'paddingHorizontal': 16.0,
+          },
+        };
+        schema['components'] = compMap;
+        final page = compMap['grid-page'];
+        if (page is Map && page['children'] is List) {
+          final pageChildren = List<dynamic>.from(page['children'] as List);
+          if (!pageChildren.contains('grid-stats-row')) {
+            final idx = pageChildren.indexOf('grid-share-qr');
+            if (idx != -1) {
+              pageChildren.insert(idx, 'grid-stats-row');
+            } else {
+              pageChildren.add('grid-stats-row');
+            }
+            final updatedPage = Map<String, dynamic>.from(page);
+            updatedPage['children'] = pageChildren;
+            compMap['grid-page'] = updatedPage;
+            schema['components'] = compMap;
+          }
+        }
+      } else {
+        // Keep existing grid-stats-row items synchronized with latest live stats
+        final existingRow = compMap['grid-stats-row'];
+        if (existingRow is Map) {
+          final updated = Map<String, dynamic>.from(existingRow.cast<dynamic, dynamic>());
+          updated['items'] = stats;
+          compMap['grid-stats-row'] = updated;
+          schema['components'] = compMap;
+        }
+      }
     }
   }
 
@@ -65,6 +156,28 @@ class GridSduiState extends ChangeNotifier {
     if (fromState != null && fromState.isNotEmpty) return fromState;
     final share = _map(content['shareQr']) ?? _map(components['grid-share-qr']);
     return share?['selectedMode']?.toString().trim() ?? 'professional';
+  }
+
+  String selectedFilter(String sectionId) {
+    final key = '_clientSelectedFilter_$sectionId';
+    final fromState = schema[key]?.toString().trim();
+    if (fromState != null && fromState.isNotEmpty) return fromState;
+    final sec = component(sectionId);
+    final filters = sec?['filters'] ?? sec?['modes'];
+    if (filters is List) {
+      for (final f in filters) {
+        if (f is Map && f['selected'] == true) {
+          return f['id']?.toString() ?? 'all';
+        }
+      }
+    }
+    return 'all';
+  }
+
+  void setSelectedFilter(String sectionId, String filterId) {
+    final key = '_clientSelectedFilter_$sectionId';
+    schema[key] = filterId;
+    notifyListeners();
   }
 
   Map<String, dynamic>? component(String id) {
@@ -248,6 +361,13 @@ class GridSduiState extends ChangeNotifier {
         if (mode.isEmpty) return;
         schema['_clientSelectedQrMode'] = mode;
         notifyListeners();
+        return;
+      case 'select-grid-filter':
+        final sectionId = extra?['sectionId']?.toString().trim() ?? 'grid-explore-section';
+        final filterId = extra?['filterId']?.toString().trim() ??
+            extra?['id']?.toString().trim() ??
+            'all';
+        setSelectedFilter(sectionId, filterId);
         return;
       case 'share-grid-qr':
         final payload = qrPayloadForMode(selectedQrMode);

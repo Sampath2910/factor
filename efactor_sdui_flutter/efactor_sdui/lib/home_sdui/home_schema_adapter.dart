@@ -490,31 +490,42 @@ class HomeSchemaAdapter {
     }
 
     final baseGap = _number(raw['gap']);
+    final baseRowHeight = _number(raw['rowHeight']) ??
+        _number(raw['rowHeightDp']) ??
+        _number(raw['minRowHeight']) ??
+        _number(raw['minCardRowHeightDp']);
     final baseLayout = <String, dynamic>{
       if (_number(raw['columns']) != null) 'columns': _number(raw['columns']),
       if (baseGap != null) 'columnGap': baseGap,
       if (baseGap != null) 'rowGap': baseGap,
-      if (_number(raw['rowHeight']) != null)
-        'rowHeight': _number(raw['rowHeight']),
+      if (baseRowHeight != null) 'rowHeight': baseRowHeight,
+      if (_number(raw['minRowHeight']) != null)
+        'minRowHeight': _number(raw['minRowHeight']),
       if (_number(raw['maxContentWidth']) != null)
         'maximumContentWidth': _number(raw['maxContentWidth']),
     };
 
     final layouts = <String, dynamic>{};
-    final responsive = _map(raw['responsiveLayout']);
+    final responsive = _map(raw['responsiveLayout']) ?? _map(raw['responsiveLayouts']);
     if (responsive != null) {
       for (final entry in responsive.entries) {
         final value = _map(entry.value);
         if (value == null) continue;
         final gap = _number(value['gap']) ?? baseGap;
+        final rHeight = _number(value['rowHeight']) ??
+            _number(value['rowHeightDp']) ??
+            _number(value['minRowHeight']) ??
+            _number(value['minCardRowHeightDp']) ??
+            baseRowHeight;
         layouts[entry.key] = <String, dynamic>{
           ...baseLayout,
           if (_number(value['columns']) != null)
             'columns': _number(value['columns']),
           if (gap != null) 'columnGap': gap,
           if (gap != null) 'rowGap': gap,
-          if (_number(value['rowHeight']) != null)
-            'rowHeight': _number(value['rowHeight']),
+          if (rHeight != null) 'rowHeight': rHeight,
+          if (_number(value['minRowHeight']) != null)
+            'minRowHeight': _number(value['minRowHeight']),
           if (_number(value['maxContentWidth']) != null)
             'maximumContentWidth': _number(value['maxContentWidth']),
         };
@@ -1158,8 +1169,15 @@ class HomeSchemaAdapter {
 
     final grid = _firstGrid(source);
     final rowHeight =
-        _number(grid?['rowHeight']) ??
+        _number(source['grid']?['rowHeightDp']) ??
+        _number(source['grid']?['minCardRowHeightDp']) ??
+        _number(source['grid']?['responsiveLayouts']?['compact']?['rowHeight']) ??
+        _number(source['uiRenderContract']?['grid']?['rowHeightDp']) ??
+        _number(source['meta']?['layoutSnapshot']?['grid']?['rowHeightDp']) ??
         _number(theme['gridRowHeight']) ??
+        _number(grid?['rowHeightDp']) ??
+        _number(grid?['minCardRowHeightDp']) ??
+        _number(grid?['rowHeight']) ??
         _firstCardRowHeight(normalizedComponents) ??
         1;
     final gridGap =

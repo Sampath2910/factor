@@ -114,6 +114,7 @@ void assignClientHash(
 
 String schemaFingerprint(Map<String, dynamic> schema) {
   for (final key in const [
+    '_clientGridSchemaHash',
     '_clientHomeSchemaHash',
     '_clientSchemaHash',
     '_clientIotSchemaHash',

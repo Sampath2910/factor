@@ -241,6 +241,9 @@ class MainActivity : FlutterActivity() {
                     startService(serviceIntent)
                     result.success(true)
                 }
+                "isOngoingCallActive" -> {
+                    result.success(OngoingCallService.isCallActive)
+                }
                 "startIncomingRing" -> {
                     startIncomingRing()
                     result.success(true)

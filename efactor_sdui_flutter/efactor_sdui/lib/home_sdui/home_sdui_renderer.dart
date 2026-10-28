@@ -144,9 +144,14 @@ class HomeSduiRenderer {
       }
     }
 
+    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
     final list = ListView.separated(
       padding: padding,
-      physics: const AlwaysScrollableScrollPhysics(),
+      physics: AlwaysScrollableScrollPhysics(
+        parent: isIos
+            ? const BouncingScrollPhysics()
+            : const ClampingScrollPhysics(),
+      ),
       itemCount: widgets.length,
       separatorBuilder: (_, __) => SizedBox(height: gap),
       itemBuilder: (_, index) => widgets[index],
@@ -2368,14 +2373,46 @@ class HomeSduiRenderer {
   ) {
     final componentLayouts = _map(c['layouts']);
     final schemaLayouts = _map(state.schema['responsive']?['grid']?['layouts']);
+    final gridSection = _map(state.schema['grid']) ??
+        _map(state.schema['uiRenderContract']?['grid']) ??
+        _map(state.schema['meta']?['layoutSnapshot']?['grid']);
+    final gridResponsive = _map(gridSection?['responsiveLayouts']);
+    final globalRowHeight = _d(gridSection?['rowHeightDp']) ??
+        _d(gridSection?['minCardRowHeightDp']) ??
+        _d(state.schema['theme']?['gridRowHeight']);
     final base = _map(c['layout']) ?? const <String, dynamic>{};
 
     Map<String, dynamic> pick(String key) {
-      return <String, dynamic>{
+      final compLayout = _map(componentLayouts?[key]);
+      final schemaLayout = _map(schemaLayouts?[key]);
+      final gridResp = _map(gridResponsive?[key]);
+
+      final explicitGridRowHeight = _d(gridResp?['rowHeight']) ??
+          _d(gridResp?['minRowHeight']) ??
+          _d(schemaLayout?['rowHeight']) ??
+          _d(schemaLayout?['minRowHeight']) ??
+          globalRowHeight;
+
+      final res = <String, dynamic>{
+        if (globalRowHeight != null) 'rowHeight': globalRowHeight,
         ...base,
-        ...?_map(schemaLayouts?[key]),
-        ...?_map(componentLayouts?[key]),
+        ...?schemaLayout,
+        ...?gridResp,
+        ...?compLayout,
       };
+
+      // If the backend declared rowHeight via schema.grid.rowHeightDp,
+      // responsiveLayouts, or theme.gridRowHeight, prioritize it over
+      // stale componentLayouts (e.g. legacy 96dp templates).
+      if (explicitGridRowHeight != null && explicitGridRowHeight > 0) {
+        final compHeight = _d(compLayout?['rowHeight']) ?? _d(base['rowHeight']);
+        if (compHeight == null || compHeight == 96.0 || compHeight != explicitGridRowHeight) {
+          res['rowHeight'] = explicitGridRowHeight;
+        }
+      } else if (res['rowHeight'] == null && globalRowHeight != null) {
+        res['rowHeight'] = globalRowHeight;
+      }
+      return res;
     }
 
     bool hasMetrics(Map<String, dynamic> layout) {
@@ -2403,6 +2440,8 @@ class HomeSduiRenderer {
         ...componentLayouts.keys.map((key) => key.toString()),
       if (schemaLayouts != null)
         ...schemaLayouts.keys.map((key) => key.toString()),
+      if (gridResponsive != null)
+        ...gridResponsive.keys.map((key) => key.toString()),
     ];
 
     for (final key in fallbacks) {

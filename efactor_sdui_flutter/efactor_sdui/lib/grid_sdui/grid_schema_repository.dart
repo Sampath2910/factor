@@ -144,12 +144,14 @@ class GridSchemaRepository {
       if (!isTransientNetworkFailure(error)) rethrow;
       final stale = await _readDiskCache();
       if (stale != null) {
+        stale['_clientGridSchemaOfflineFallback'] = true;
         _memoryCache[_cacheKey] = stale;
         logDebug('[GRID_SDUI][FETCH_SCHEMA] OFFLINE FALLBACK TO DISK CACHE');
         return stale;
       }
       final fallback = await _readAssetFallback();
       if (fallback != null) {
+        fallback['_clientGridSchemaOfflineFallback'] = true;
         _memoryCache[_cacheKey] = fallback;
         logDebug('[GRID_SDUI][FETCH_SCHEMA] OFFLINE FALLBACK TO ASSET BUNDLE');
         return fallback;
@@ -257,9 +259,10 @@ class GridSchemaRepository {
 
     try {
       if (effectiveForceFull || !hasDeltaEndpoints) {
+        final cachedFingerprint = schemaFingerprint(cached);
         final full = await _loadLive(forceRefresh: true);
-        final changed =
-            schemaFingerprint(cached) != schemaFingerprint(full);
+        final fullFingerprint = schemaFingerprint(full);
+        final changed = cachedFingerprint != fullFingerprint;
         return SchemaSyncResult(
           schema: changed ? full : cached,
           changed: changed,
@@ -388,6 +391,7 @@ class GridSchemaRepository {
 
     schema['_clientGridSchemaSource'] = _redactUri(uri).toString();
     schema['_clientGridSchemaCacheHit'] = false;
+    schema['_clientGridSchemaOfflineFallback'] = false;
     schema['_clientGridSchemaCachedAtMs'] =
         DateTime.now().millisecondsSinceEpoch;
     assignClientHash(schema, '_clientGridSchemaHash', rawSource: response.body);
@@ -428,11 +432,70 @@ class GridSchemaRepository {
       );
     }
 
-    final content = root['content'] ?? schema['content'];
-    if (content is Map && schema['content'] is! Map) {
+    // Deep-merge dynamic content from root envelope into schema.content
+    final rootContent = root['content'];
+    final schemaContent = schema['content'];
+    if (rootContent is Map) {
+      if (schemaContent is Map) {
+        schema['content'] = <String, dynamic>{
+          ...Map<String, dynamic>.from(schemaContent.cast<dynamic, dynamic>()),
+          ...Map<String, dynamic>.from(rootContent.cast<dynamic, dynamic>()),
+        };
+      } else {
+        schema['content'] = Map<String, dynamic>.from(
+          rootContent.cast<dynamic, dynamic>(),
+        );
+      }
+    } else if (schemaContent is Map) {
       schema['content'] = Map<String, dynamic>.from(
-        content.cast<dynamic, dynamic>(),
+        schemaContent.cast<dynamic, dynamic>(),
       );
+    }
+
+    // Merge dynamic components from root envelope into schema.components
+    final rootComponents = root['components'];
+    final schemaComponents = schema['components'];
+    if (rootComponents is Map &&
+        schemaComponents is Map &&
+        !identical(rootComponents, schemaComponents)) {
+      final merged = Map<String, dynamic>.from(
+        schemaComponents.cast<dynamic, dynamic>(),
+      );
+      for (final entry in rootComponents.entries) {
+        final key = entry.key?.toString();
+        if (key == null) continue;
+        final value = entry.value;
+        if (value is Map) {
+          final existing = merged[key];
+          if (existing is Map) {
+            merged[key] = <String, dynamic>{
+              ...Map<String, dynamic>.from(existing.cast<dynamic, dynamic>()),
+              ...Map<String, dynamic>.from(value.cast<dynamic, dynamic>()),
+            };
+          } else {
+            merged[key] = Map<String, dynamic>.from(
+              value.cast<dynamic, dynamic>(),
+            );
+          }
+        }
+      }
+      schema['components'] = merged;
+    }
+
+    // Preserve top-level metadata from root envelope if missing on schema
+    for (final metaKey in const [
+      'user_id',
+      'updated_at',
+      'contentHash',
+      'grid_sso',
+      'gridApiUrl',
+      'schema_version',
+      'pageId',
+      'routeId',
+    ]) {
+      if (root.containsKey(metaKey) && !schema.containsKey(metaKey)) {
+        schema[metaKey] = root[metaKey];
+      }
     }
 
     return schema;

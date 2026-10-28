@@ -10,9 +10,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 
+import 'call_lifecycle_tracker.dart';
 import 'grid_chat_message_notification.dart';
 import 'incoming_call_service.dart';
 import 'json_http.dart';
+import 'ongoing_call_service.dart';
 import '../auth_sdui/auth_secure_storage.dart';
 import '../grid_sdui/grid_live_location_service.dart';
 
@@ -134,7 +136,15 @@ void notificationTapBackground(NotificationResponse response) async {
 
     if (actionId == 'decline') {
       final call = IncomingCallData.fromJson(data);
+      if (call.callId.isNotEmpty) {
+        await CallLifecycleTracker.markCallFinished(call.callId);
+      }
       await IncomingCallService.instance.declineCall(call);
+    } else if (actionId == 'answer') {
+      final call = IncomingCallData.fromJson(data);
+      if (call.callId.isNotEmpty) {
+        await CallLifecycleTracker.markCallFinished(call.callId);
+      }
     } else if (actionId == 'mark_as_read') {
       await handleMarkAsReadFromNotification(data);
     } else if (actionId == 'reply') {
@@ -207,20 +217,48 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   await android?.createNotificationChannel(kMessagesChannel);
   await android?.createNotificationChannel(kCallsChannel);
 
+  final callId =
+      (data['call_id'] ?? data['callId'] ?? data['id'] ?? '').toString().trim();
+
+  // A1. Check the type before treating a push as a call.
+  // If endTypes contains type: stop the ring, cancel notification for this call_id,
+  // and show "Missed call" only for MISSED_CALL.
+  if (CallLifecycleTracker.kEndCallTypes.contains(type)) {
+    // ignore: avoid_print
+    print('[FCM_DEBUG] End call event ($type) received in background for callId: $callId');
+    if (callId.isNotEmpty) {
+      await CallLifecycleTracker.markCallFinished(callId);
+      await plugin.cancel(callId.hashCode.abs());
+    }
+    if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
+      final call = IncomingCallData.fromJson(data);
+      await showMissedCallNotificationOnPlugin(plugin, call, rawData: data);
+    }
+    return;
+  }
+
   final isChatMessage = type == 'CHAT_MESSAGE' ||
       type == 'MESSAGE' ||
       type == 'NEW_MESSAGE';
 
-  final isCall = !isChatMessage &&
-      (type == 'INCOMING_CALL' ||
-          type == 'CALL' ||
-          type == 'CALL_REQUEST' ||
-          type == 'RINGING' ||
-          type == 'VOIP_CALL' ||
-          data.containsKey('call_id') ||
-          data.containsKey('callId'));
+  // A1. Only ringTypes. Never treat as call merely because of call_id in payload!
+  final isCall = !isChatMessage && CallLifecycleTracker.kRingCallTypes.contains(type);
 
   if (isCall) {
+    // A2. Never ring again for a call that's already over.
+    if (callId.isNotEmpty && await CallLifecycleTracker.isCallFinished(callId)) {
+      // ignore: avoid_print
+      print('[FCM_DEBUG] Suppressing background incoming call: callId $callId is already finished.');
+      return;
+    }
+
+    // A2. While OngoingCallService has an active call, don't start the ring and don't post a ringing notification.
+    if (await CallLifecycleTracker.isOngoingCallActive()) {
+      // ignore: avoid_print
+      print('[FCM_DEBUG] Suppressing background incoming call: an ongoing call is currently active.');
+      return;
+    }
+
     final call = IncomingCallData.fromJson(data);
     // ignore: avoid_print
     print('[FCM_DEBUG] Rendering background incoming call notification for caller: ${call.callerName} (callId: ${call.callId})');
@@ -232,23 +270,6 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
       ));
     }
     await showIncomingCallNotificationOnPlugin(plugin, call, rawData: data);
-    return;
-  }
-
-  if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
-    final call = IncomingCallData.fromJson(data);
-    await plugin.cancel(call.callId.hashCode.abs());
-    await showMissedCallNotificationOnPlugin(plugin, call, rawData: data);
-    return;
-  }
-
-  if (type == 'CALL_HANDLED' ||
-      type == 'CALL_CANCELLED' ||
-      type == 'CANCEL_CALL' ||
-      type == 'REJECTED' ||
-      type == 'HANGUP') {
-    final callId = (data['call_id'] ?? data['callId'] ?? '').toString();
-    await plugin.cancel(callId.hashCode.abs());
     return;
   }
 
@@ -426,25 +447,43 @@ Future<void> showMessageNotificationOnPlugin(
   final notifId = rawNotifId.abs();
 
   final isLocked = data['locked'] == true || data['locked'] == 'true';
-  final title = notification?.title ??
-      (data['title'] ??
-       data['caller_name'] ??
-       data['sender_name'] ??
-       data['name'] ??
-       data['user_name'] ??
-       data['sender'] ??
-       'Circle Connect')
-          .toString();
-  final body = notification?.body ??
-      (data['body'] ??
-       data['message'] ??
-       data['text'] ??
-       data['content'] ??
-       'New message')
-          .toString();
+  final isGroup = GridChatMessage.isTruthyFlag(data['is_group'] ?? data['isGroup']);
+  final senderName = (data['sender_name'] ??
+          data['senderName'] ??
+          data['name'] ??
+          data['user_name'] ??
+          data['sender'] ??
+          '')
+      .toString()
+      .trim();
+  final rawTitle =
+      (notification?.title ?? data['title'] ?? '').toString().trim();
 
-  final effectiveTitle = title.isNotEmpty ? title : 'Circle Connect';
-  final effectiveBody = body.isNotEmpty ? body : 'New message';
+  // On a 1:1 message notification (is_group = 0), the title should be just the sender's name.
+  // "Name: message" is only for group chats.
+  final effectiveTitle = (!isGroup && senderName.isNotEmpty)
+      ? senderName
+      : (rawTitle.isNotEmpty
+          ? rawTitle
+          : (senderName.isNotEmpty ? senderName : 'Circle Connect'));
+
+  final rawBody = notification?.body ??
+      data['body'] ??
+      data['message'] ??
+      data['text'] ??
+      data['content'];
+  final msgType = (data['msg_type'] ??
+          data['msgType'] ??
+          data['message_type'] ??
+          data['messageType'] ??
+          'text')
+      .toString()
+      .trim()
+      .toLowerCase();
+
+  final effectiveBody = (rawBody != null && rawBody.toString().trim().isNotEmpty)
+      ? rawBody.toString().trim()
+      : _defaultBodyForMessageType(msgType);
 
   if (isLocked) {
     await plugin.show(
@@ -529,6 +568,25 @@ Future<void> showMessageNotificationOnPlugin(
     ),
     payload: jsonEncode(data),
   );
+}
+
+String _defaultBodyForMessageType(String type) {
+  switch (type.toLowerCase().trim()) {
+    case 'image':
+    case 'photo':
+      return '📷 Photo';
+    case 'video':
+      return '🎥 Video';
+    case 'audio':
+    case 'voice':
+      return '🎤 Voice message';
+    case 'file':
+    case 'document':
+    case 'pdf':
+      return '📄 Document';
+    default:
+      return 'New message';
+  }
 }
 
 /// Sends Mark as read request to server with WebView cookies.
@@ -621,6 +679,7 @@ Future<void> handleSendReplyFromNotification(
 
   final bodyFields = <String, String>{
     'conversation_id': convId,
+    'msg_type': 'text',
     'message_type': 'text',
     'body': replyText,
     'client_id': clientId,
@@ -959,7 +1018,7 @@ curl -X POST "https://fcm.googleapis.com/fcm/send" \\
     _localNotificationsReady = true;
   }
 
-  void _onForegroundMessage(RemoteMessage message) {
+  Future<void> _onForegroundMessage(RemoteMessage message) async {
     final data = Map<String, dynamic>.from(message.data);
     final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
 
@@ -974,20 +1033,44 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
 ========================================================================
 ''');
 
+    final callId =
+        (data['call_id'] ?? data['callId'] ?? data['id'] ?? '').toString().trim();
+
+    // A1. Check endTypes before treating a push as a call
+    if (CallLifecycleTracker.kEndCallTypes.contains(type)) {
+      if (callId.isNotEmpty) {
+        unawaited(CallLifecycleTracker.markCallFinished(callId));
+        unawaited(cancelCallNotification(callId));
+      }
+      IncomingCallService.instance.handleIncomingPayload(data);
+      return;
+    }
+
     final isChatMessage = type == 'CHAT_MESSAGE' ||
         type == 'MESSAGE' ||
         type == 'NEW_MESSAGE';
 
-    final isCall = !isChatMessage &&
-        (type == 'INCOMING_CALL' ||
-            type == 'CALL' ||
-            type == 'CALL_REQUEST' ||
-            type == 'RINGING' ||
-            type == 'VOIP_CALL' ||
-            data.containsKey('call_id') ||
-            data.containsKey('callId'));
+    // A1. Only ringTypes. Never treat as call merely because of call_id!
+    final isCall = !isChatMessage && CallLifecycleTracker.kRingCallTypes.contains(type);
 
     if (isCall) {
+      // A2. Never ring again for a call that's already over.
+      if (callId.isNotEmpty &&
+          (CallLifecycleTracker.isCallFinishedSync(callId) ||
+              await CallLifecycleTracker.isCallFinished(callId))) {
+        // ignore: avoid_print
+        print('[FCM_DEBUG] Suppressing foreground incoming call: callId $callId is already finished.');
+        return;
+      }
+
+      // A2. While OngoingCallService has an active call, don't start the ring and don't post a ringing notification.
+      if (OngoingCallService.instance.isCallActive ||
+          await CallLifecycleTracker.isOngoingCallActive()) {
+        // ignore: avoid_print
+        print('[FCM_DEBUG] Suppressing foreground incoming call: an ongoing call is currently active.');
+        return;
+      }
+
       final call = IncomingCallData.fromJson(data);
       if (call.actionToken.isNotEmpty) {
         unawaited(IncomingCallService.postNativeAction(
@@ -997,23 +1080,6 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         ));
       }
       IncomingCallService.instance.handleIncomingPayload(data);
-      return;
-    }
-    if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
-      final call = IncomingCallData.fromJson(data);
-      unawaited(cancelCallNotification(call.callId));
-      IncomingCallService.instance.handleIncomingPayload(data);
-      unawaited(showMissedCallNotification(call));
-      return;
-    }
-    if (type == 'CALL_HANDLED' ||
-        type == 'CALL_CANCELLED' ||
-        type == 'CANCEL_CALL' ||
-        type == 'REJECTED' ||
-        type == 'HANGUP') {
-      final callId = (data['call_id'] ?? data['callId'] ?? '').toString();
-      IncomingCallService.instance.handleIncomingPayload(data);
-      unawaited(handleCallHandled(callId));
       return;
     }
 
@@ -1055,11 +1121,17 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       }
       if (actionId == 'decline') {
         final call = IncomingCallData.fromJson(data);
+        if (call.callId.isNotEmpty) {
+          unawaited(CallLifecycleTracker.markCallFinished(call.callId));
+        }
         await IncomingCallService.instance.declineCall(call);
         return;
       }
       if (actionId == 'answer') {
         final call = IncomingCallData.fromJson(data);
+        if (call.callId.isNotEmpty) {
+          unawaited(CallLifecycleTracker.markCallFinished(call.callId));
+        }
         await IncomingCallService.instance.answerCall(call);
         return;
       }
@@ -1141,14 +1213,18 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
   void _handlePayloadMap(Map<String, dynamic> data) {
     final type =
         (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
-    if (type == 'INCOMING_CALL' || type == 'CALL') {
+    if (CallLifecycleTracker.kRingCallTypes.contains(type)) {
       final call = IncomingCallData.fromJson(data);
+      if (CallLifecycleTracker.isCallFinishedSync(call.callId)) {
+        debugPrint('[PushBootstrap] Suppressing showCallScreen: call is finished ${call.callId}');
+        return;
+      }
       unawaited(
         IncomingCallService.instance.showCallScreen(call),
       );
       return;
     }
-    if (type == 'MISSED_CALL') {
+    if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
       final call = IncomingCallData.fromJson(data);
       unawaited(
         IncomingCallService.instance.openCallScreenWithoutAction(call),
@@ -1173,6 +1249,12 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
   Future<void> showIncomingCallNotification(IncomingCallData call) async {
     final id = call.callId.trim();
     if (id.isNotEmpty && _postedIncomingCallIds.contains(id)) {
+      return;
+    }
+    if (OngoingCallService.instance.isCallActive ||
+        await CallLifecycleTracker.isOngoingCallActive() ||
+        (id.isNotEmpty && await CallLifecycleTracker.isCallFinished(id))) {
+      debugPrint('[PushBootstrap] Suppressing showIncomingCallNotification: call is finished or ongoing active: $id');
       return;
     }
     try {
@@ -1216,7 +1298,11 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
   }
 
   Future<void> handleCallHandled(String callId) async {
-    _postedIncomingCallIds.remove(callId.trim());
+    final id = callId.trim();
+    if (id.isNotEmpty) {
+      unawaited(CallLifecycleTracker.markCallFinished(id));
+    }
+    _postedIncomingCallIds.remove(id);
     try {
       await _local.cancel(callId.hashCode.abs());
     } catch (_) {}
@@ -1224,6 +1310,9 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
 
   Future<void> cancelCallNotification(String callId) async {
     final id = callId.trim();
+    if (id.isNotEmpty) {
+      unawaited(CallLifecycleTracker.markCallFinished(id));
+    }
     IncomingCallService.instance.markNotificationCleared(id);
     if (id.isEmpty) {
       _postedIncomingCallIds.clear();

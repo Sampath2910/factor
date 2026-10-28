@@ -310,6 +310,18 @@ class HomeSchemaRepository {
     return cached;
   }
 
+  /// Clears in-memory cache for the specified user or all users.
+  static void clearMemoryCache({int? userId}) {
+    if (userId != null) {
+      _memoryCache.remove('efactor.home.server_schema.v4.user_$userId');
+      _inFlight.remove('$userId|live');
+      _inFlight.remove('$userId|any');
+    } else {
+      _memoryCache.clear();
+      _inFlight.clear();
+    }
+  }
+
   /// Clears in-memory and persisted cache for this user on logout.
   static Future<void> clearUserCache({required int? userId}) async {
     _memoryCache.clear();

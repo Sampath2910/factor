@@ -265,9 +265,10 @@ void main() {
       );
     });
 
-    test('isGridRedirectUrl keeps Professional Space inside the WebView and only exact Grid exits chat', () {
+    test('isGridRedirectUrl detects navigation back to Grid SDUI without blocking chat features', () {
       final chatUri = Uri.parse('https://efactor.tech/index.php/grid-chat');
 
+      // Grid routes should redirect
       expect(
         GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid'), initialUri: chatUri),
         isTrue,
@@ -284,6 +285,8 @@ void main() {
         GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/v8/grid_api_creation.php'), initialUri: chatUri),
         isTrue,
       );
+
+      // Normal chat API calls and conversation routes must NOT be intercepted
       expect(
         GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat/api/chat/send'), initialUri: chatUri),
         isFalse,
@@ -292,8 +295,30 @@ void main() {
         GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat?conversation_id=42'), initialUri: chatUri),
         isFalse,
       );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat?tab=calls'), initialUri: chatUri),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat?tab=reels'), initialUri: chatUri),
+        isFalse,
+      );
 
+      // Professional Space tests
       final profUri = Uri.parse('https://efactor.tech/index.php/grid');
+
+      // During initial page load, the page's own URL must NOT be intercepted
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid'),
+          initialUri: profUri,
+          pageFinished: false,
+        ),
+        isFalse,
+      );
+
+      // In Professional Space, the GRID logo goes to GRID home inside the WebView and has NO exit button.
+      // Pages like /grid, /grid/team, /grid?saved=1, /grid/profile stay inside the WebView.
       expect(
         GridInAppWebViewPage.isGridRedirectUrl(
           Uri.parse('https://efactor.tech/index.php/grid'),
@@ -326,27 +351,70 @@ void main() {
         ),
         isFalse,
       );
+
+      // Browsing profiles and jobs within Professional Space must NOT be intercepted
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/profile/99'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/talent/search'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isFalse,
+      );
+
+      // Dedicated exit URL from GRID menu ("Switch to Circle Connect") triggers exit to space selector
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid?app=exit'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/grid?app=exit'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isTrue,
+      );
     });
 
-    test('isFileDownloadUrl detects resumes, attachments, and document files', () {
+    test('isFileDownloadUrl detects résumés, message attachments, and document files', () {
+      // 1. Résumé download endpoint (PDF)
       expect(
         GridInAppWebViewPage.isFileDownloadUrl(
           Uri.parse('https://efactor.tech/index.php/grid/api/jobs/applications/102/resume'),
         ),
         isTrue,
       );
+
+      // 2. Message attachment endpoint
       expect(
         GridInAppWebViewPage.isFileDownloadUrl(
           Uri.parse('https://efactor.tech/index.php/grid/api/messages/attachment/45'),
         ),
         isTrue,
       );
+
+      // 3. Team attachment endpoint
       expect(
         GridInAppWebViewPage.isFileDownloadUrl(
           Uri.parse('https://efactor.tech/index.php/grid/api/attachments/88'),
         ),
         isTrue,
       );
+
+      // 4. Direct document files
       expect(
         GridInAppWebViewPage.isFileDownloadUrl(
           Uri.parse('https://efactor.tech/uploads/candidate_cv.pdf'),
@@ -355,24 +423,32 @@ void main() {
       );
       expect(
         GridInAppWebViewPage.isFileDownloadUrl(
+          Uri.parse('https://efactor.tech/uploads/specs.docx'),
+        ),
+        isTrue,
+      );
+
+      // 5. Exclude public post media photos/videos (they render inline)
+      expect(
+        GridInAppWebViewPage.isFileDownloadUrl(
           Uri.parse('https://efactor.tech/files/grid/posts/sample.jpg'),
         ),
         isFalse,
       );
+
+      // 6. Normal web routes are NOT file downloads
       expect(
         GridInAppWebViewPage.isFileDownloadUrl(
           Uri.parse('https://efactor.tech/index.php/grid/team'),
         ),
         isFalse,
       );
-    });
-
-    test('resolveChatSwipeTarget maps left-to-right to Moments and right-to-left to Channels', () {
-      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: 60), 'moments');
-      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: -60), 'channels');
-      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: 30), isNull);
-      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: -30), isNull);
-      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: 0), isNull);
+      expect(
+        GridInAppWebViewPage.isFileDownloadUrl(
+          Uri.parse('https://efactor.tech/index.php/grid/profile'),
+        ),
+        isFalse,
+      );
     });
   });
 
@@ -559,6 +635,32 @@ void main() {
       expect(result.changed, isFalse);
       expect(result.source, 'offline-cache-retained');
       expect(result.schema['page']['title'], 'Existing Offline Grid');
+    });
+
+    test('resolveChatSwipeTarget maps left-to-right to Moments and right-to-left to Channels', () {
+      // Swiping left-to-right (dx > 50) -> Moments
+      expect(
+        GridInAppWebViewPage.resolveChatSwipeTarget(dx: 60),
+        'moments',
+      );
+      // Swiping right-to-left (dx < -50) -> Channels
+      expect(
+        GridInAppWebViewPage.resolveChatSwipeTarget(dx: -60),
+        'channels',
+      );
+      // Sub-threshold drags do not trigger
+      expect(
+        GridInAppWebViewPage.resolveChatSwipeTarget(dx: 30),
+        isNull,
+      );
+      expect(
+        GridInAppWebViewPage.resolveChatSwipeTarget(dx: -30),
+        isNull,
+      );
+      expect(
+        GridInAppWebViewPage.resolveChatSwipeTarget(dx: 0),
+        isNull,
+      );
     });
   });
 }

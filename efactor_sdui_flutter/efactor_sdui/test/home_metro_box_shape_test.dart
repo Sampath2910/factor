@@ -432,6 +432,148 @@ void main() {
     expect(at(2, 2), lessThan(40), reason: 'top-left corner is not clipped');
     expect(at(80, 80), greaterThan(80), reason: 'tile center should be painted');
   });
+
+  testWidgets(
+    'backend grid.rowHeightDp and responsiveLayouts override legacy 96dp component layout',
+    (tester) async {
+      final schema = <String, dynamic>{
+        'designTokens': <String, dynamic>{
+          'colors': <String, dynamic>{
+            'surface': '#151b2e',
+            'textPrimary': '#ffffff',
+            'textSecondary': '#94a3b8',
+            'welcomeText': '#ffffff',
+          },
+          'radius': <String, dynamic>{'card': 16.0},
+          'spacing': <String, dynamic>{'sm': 8.0, 'xs': 4.0, 'xxs': 2.0},
+          'typography': <String, dynamic>{
+            'cardTitle': <String, dynamic>{
+              'fontSize': 12.0,
+              'fontWeight': 800,
+              'maxLines': 1,
+              'overflow': 'clip',
+            },
+            'cardSubtitle': <String, dynamic>{
+              'fontSize': 9.0,
+              'fontWeight': 700,
+              'maxLines': 1,
+              'overflow': 'clip',
+            },
+            'pageTitle': <String, dynamic>{'fontSize': 18.0},
+            'statValue': <String, dynamic>{
+              'fontSize': 14.0,
+              'fontWeight': 700,
+            },
+          },
+        },
+        'grid': <String, dynamic>{
+          'rowHeightDp': 117.0,
+          'responsiveLayouts': <String, dynamic>{
+            'compact': <String, dynamic>{
+              'columns': 3,
+              'rowHeight': 117.0,
+              'minRowHeight': 117.0,
+            },
+          },
+        },
+        'components': <String, dynamic>{
+          'home-grid': <String, dynamic>{
+            'id': 'home-grid',
+            'type': 'responsiveGrid',
+            'style': 'metroMosaic',
+            // Stale component template has legacy 96dp:
+            'layout': <String, dynamic>{
+              'type': 'metroGrid',
+              'columns': 3,
+              'columnGap': 4.0,
+              'rowGap': 4.0,
+              'rowHeight': 96.0,
+              'minRowHeight': 96.0,
+            },
+            'layouts': <String, dynamic>{
+              'compact': <String, dynamic>{
+                'columns': 3,
+                'columnGap': 4.0,
+                'rowGap': 4.0,
+                'rowHeight': 96.0,
+                'minRowHeight': 96.0,
+              },
+            },
+            'children': <dynamic>['tile-1x1'],
+          },
+          'tile-1x1': <String, dynamic>{
+            'id': 'tile-1x1',
+            'type': 'rotatingFaceCard',
+            'layout': <String, dynamic>{'columnSpan': 1, 'rowSpan': 1},
+            'faces': <dynamic>[
+              <String, dynamic>{
+                'id': 'face-0',
+                'title': 'Connect',
+                'appearance': <String, dynamic>{'backgroundColor': '#f97316'},
+              },
+            ],
+          },
+        },
+      };
+
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final renderer = HomeSduiRenderer(
+        HomeSduiState(schema: schema, accessToken: 'test-token'),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 375,
+              child: Builder(
+                builder: (context) =>
+                    renderer.buildComponent(context, 'home-grid'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // tile height must match the updated schema.grid rowHeight (117.0), NOT legacy 96.0!
+      final tile = find.byWidgetPredicate((widget) {
+        return widget is Positioned &&
+            widget.height != null &&
+            (widget.height! - 117.0).abs() < 0.1;
+      });
+      expect(tile, findsOneWidget, reason: 'tile should be sized with schema rowHeight 117.0');
+    },
+  );
+
+  testWidgets(
+    'profile with component and face borderRadius 0 uses theme cardBorderRadius 16',
+    (tester) async {
+      final schema = _radiusSchema(borderRadius: 0, tokenRadius: 16);
+      final renderer = HomeSduiRenderer(
+        HomeSduiState(schema: schema, accessToken: 'test-token'),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => renderer.buildComponent(context, 'tile'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final radii = _clipRadii(tester);
+      expect(radii, isNotEmpty);
+      expect(radii, everyElement(equals(16.0)));
+    },
+  );
 }
 
 Map<String, dynamic> _radiusSchema({

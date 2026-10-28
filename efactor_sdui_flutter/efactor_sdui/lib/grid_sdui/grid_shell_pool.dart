@@ -18,6 +18,9 @@ class GridShellPool {
   String _poolKey(Uri uri, {int? userId}) {
     final prefix = userId != null ? 'user_${userId}_' : '';
     final path = uri.path.toLowerCase();
+    if (path.contains('scanner') || path.contains('scan')) {
+      return '${prefix}grid_scanner';
+    }
     if (path.contains('circle') || path.contains('chat')) {
       return '${prefix}circle_connect';
     }

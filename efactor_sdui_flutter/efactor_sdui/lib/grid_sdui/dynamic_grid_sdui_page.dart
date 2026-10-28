@@ -24,6 +24,8 @@ class DynamicGridSduiPage extends StatefulWidget {
     this.userId,
     this.embedInHostShell = false,
     this.schemaRefreshEpoch = 0,
+    this.repository,
+    this.enableAutoRefresh = true,
   });
 
   final String accessToken;
@@ -36,6 +38,12 @@ class DynamicGridSduiPage extends StatefulWidget {
   /// Bumped by the Home host when this tab is shown again so the live schema
   /// is refetched instead of the IndexedStack keeping a stale first paint.
   final int schemaRefreshEpoch;
+
+  /// Optional repository instance (useful for test injection and isolation).
+  final GridSchemaRepository? repository;
+
+  /// Controls the 10-second background polling timer (disabled in widget tests).
+  final bool enableAutoRefresh;
 
   @override
   State<DynamicGridSduiPage> createState() => _DynamicGridSduiPageState();
@@ -66,12 +74,15 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _repository = GridSchemaRepository(
-      accessToken: widget.accessToken,
-      userId: widget.userId,
-    );
+    _repository = widget.repository ??
+        GridSchemaRepository(
+          accessToken: widget.accessToken,
+          userId: widget.userId,
+        );
     _subscribeToSchemaInvalidations();
-    _startAutoRefreshTimer();
+    if (widget.enableAutoRefresh) {
+      _startAutoRefreshTimer();
+    }
     // Cache-first: show disk/memory immediately, then revalidate in background.
     _load(forceRefresh: false);
   }
@@ -147,10 +158,17 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   }
 
   int? _schemaRevision(Map<String, dynamic> schema) {
-    final value = schema['revision'] ?? schema['schemaRevision'];
+    final value = schema['revision'] ??
+        schema['schemaRevision'] ??
+        schema['schema_version'] ??
+        schema['schemaVersion'];
     if (value is int) return value;
     if (value is num) return value.toInt();
-    return int.tryParse(value?.toString().trim() ?? '');
+    final str = value?.toString().trim() ?? '';
+    final parsed = int.tryParse(str);
+    if (parsed != null) return parsed;
+    final firstNum = RegExp(r'^\d+').firstMatch(str)?.group(0);
+    return firstNum != null ? int.tryParse(firstNum) : null;
   }
 
   @override
@@ -185,7 +203,9 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     _schemaEventDebounceTimer?.cancel();
     _autoRefreshTimer?.cancel();
     _state?.dispose();
-    _repository.dispose();
+    if (widget.repository == null) {
+      _repository.dispose();
+    }
     super.dispose();
   }
 
@@ -202,31 +222,49 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       _error = null;
     });
 
+    final previousFingerprint = _activeSchemaFingerprint;
+
     try {
-      schema ??= await SchemaLoadQueue.instance.loadGrid(
-        accessToken: widget.accessToken,
-        userId: widget.userId,
-        forceRefresh: forceRefresh,
-      );
+      schema ??= widget.repository != null
+          ? await _repository.load(forceRefresh: forceRefresh)
+          : await SchemaLoadQueue.instance.loadGrid(
+              accessToken: widget.accessToken,
+              userId: widget.userId,
+              forceRefresh: forceRefresh,
+            );
       if (!mounted || !generationOk) return;
       _lastSchemaLoadAt = DateTime.now();
-      _applySchema(schema);
+
+      final isOfflineFallback =
+          schema['_clientGridSchemaOfflineFallback'] == true;
+      final newFingerprint = schemaFingerprint(schema);
+      final hasChanged = previousFingerprint == null ||
+          newFingerprint != previousFingerprint;
+
+      _applySchema(schema, forceRebuild: forceRefresh);
 
       if (showFeedback && mounted) {
+        final String message;
+        if (isOfflineFallback) {
+          message = 'Could not reach server. Showing cached Grid.';
+        } else if (hasChanged) {
+          message = 'Grid live schema updated successfully.';
+        } else {
+          message = 'Grid schema is already up to date.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Grid live schema updated successfully.'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
 
-      if (!forceRefresh && schema['_clientGridSchemaCacheHit'] == true) {
-        final isAsset = schema['_clientGridSchemaSource']?.toString().startsWith('asset://') ?? false;
-        final isStale = !GridSchemaRepository.isFreshCache(schema);
-        if (isAsset || isStale) {
-          unawaited(_revalidateInBackground(forceFull: isAsset));
-        }
+      if (!forceRefresh) {
+        // Eager revalidation: whenever the page is loaded (even from cache),
+        // immediately fetch the live schema from the server in the background
+        // so any schema update on the server is displayed without requiring a manual pull-to-refresh.
+        unawaited(_revalidateInBackground(forceFull: true));
       }
     } catch (error, stack) {
       logDebug('[GRID_SDUI][LOAD_ERROR] $error');
@@ -276,9 +314,11 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     }
   }
 
-  void _applySchema(Map<String, dynamic> schema) {
+  void _applySchema(Map<String, dynamic> schema, {bool forceRebuild = false}) {
     final fingerprint = schemaFingerprint(schema);
-    if (_state != null && fingerprint == _activeSchemaFingerprint) {
+    if (!forceRebuild &&
+        _state != null &&
+        fingerprint == _activeSchemaFingerprint) {
       setState(() {
         _loading = false;
         _error = null;

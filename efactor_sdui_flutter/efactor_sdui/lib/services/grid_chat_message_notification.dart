@@ -27,6 +27,7 @@ class GridChatMessageLine {
         'sender_id': senderId,
         'sender_name': senderName,
         'body': body,
+        'msg_type': messageType,
         'message_type': messageType,
         'at_ms': atMs,
       };
@@ -39,7 +40,9 @@ class GridChatMessageLine {
       senderId: (raw['sender_id'] ?? '').toString(),
       senderName: (raw['sender_name'] ?? '').toString(),
       body: (raw['body'] ?? '').toString(),
-      messageType: (raw['message_type'] ?? 'text').toString(),
+      messageType:
+          (raw['msg_type'] ?? raw['msgType'] ?? raw['message_type'] ?? 'text')
+              .toString(),
       atMs: at is int ? at : int.tryParse(at?.toString() ?? '') ?? 0,
     );
   }
@@ -146,8 +149,14 @@ class GridChatMessage {
     return GridChatMessage(
       conversationId: conversationId,
       messageId: (data['message_id'] ?? data['messageId'] ?? '').toString().trim(),
-      messageType:
-          (data['message_type'] ?? data['messageType'] ?? 'text').toString(),
+      messageType: (data['msg_type'] ??
+              data['msgType'] ??
+              data['message_type'] ??
+              data['messageType'] ??
+              'text')
+          .toString()
+          .trim()
+          .toLowerCase(),
       title: (data['title'] ?? '').toString().trim(),
       body: (data['body'] ?? '').toString(),
       senderId: (data['sender_id'] ?? data['senderId'] ?? '').toString().trim(),
@@ -503,12 +512,17 @@ class GridChatMessageNotifications {
               color: const Color(0xFF0284C7),
               styleInformation: MessagingStyleInformation(
                 const Person(name: 'You', key: 'self'),
-                conversationTitle: _conversationTitle(message),
+                // For 1:1 chat (is_group = 0), conversationTitle must be null to avoid duplicate "Name: Name".
+                // "Name: message" is only for group chats.
+                conversationTitle:
+                    message.isGroup ? groupConversationTitle(message) : null,
                 groupConversation: message.isGroup,
                 messages: lines
                     .map(
                       (line) => Message(
-                        line.body,
+                        line.body.isNotEmpty
+                            ? line.body
+                            : defaultBodyForMessageType(line.messageType),
                         DateTime.fromMillisecondsSinceEpoch(line.atMs),
                         Person(
                           name: line.senderName.isNotEmpty
@@ -540,10 +554,12 @@ class GridChatMessageNotifications {
           );
     final title = locked
         ? GridChatMessage.lockedLabel
-        : _conversationTitle(message);
+        : notificationTitle(message);
     final body = locked
         ? GridChatMessage.lockedLabel
-        : (message.body.isNotEmpty ? message.body : 'New message');
+        : (message.body.isNotEmpty
+            ? message.body
+            : defaultBodyForMessageType(message.messageType));
     await plugin.show(
       message.notificationId,
       title,
@@ -559,10 +575,45 @@ class GridChatMessageNotifications {
     );
   }
 
-  static String _conversationTitle(GridChatMessage message) {
+  static String? groupConversationTitle(GridChatMessage message) {
+    if (!message.isGroup) return null;
+    if (message.title.isNotEmpty) return message.title;
+    return 'Group Chat';
+  }
+
+  static String notificationTitle(GridChatMessage message) {
+    if (!message.isGroup) {
+      // On a 1:1 message notification, the title should be just the sender's name.
+      if (message.senderName.isNotEmpty) return message.senderName;
+      if (message.title.isNotEmpty) return message.title;
+      return 'Circle Connect';
+    }
+    // For group chats, title should be the group title.
     if (message.title.isNotEmpty) return message.title;
     if (message.senderName.isNotEmpty) return message.senderName;
-    return 'GRID Chat';
+    return 'Group Chat';
+  }
+
+  static String conversationTitle(GridChatMessage message) =>
+      notificationTitle(message);
+
+  static String defaultBodyForMessageType(String type) {
+    switch (type.toLowerCase().trim()) {
+      case 'image':
+      case 'photo':
+        return '📷 Photo';
+      case 'video':
+        return '🎥 Video';
+      case 'audio':
+      case 'voice':
+        return '🎤 Voice message';
+      case 'file':
+      case 'document':
+      case 'pdf':
+        return '📄 Document';
+      default:
+        return 'New message';
+    }
   }
 
   static int? _timeoutAfter(DateTime? expiresAt) {

@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'call_lifecycle_tracker.dart';
 
 /// Service managing the active, connected call state.
 /// Runs an Android Foreground Service (microphone, plus camera for video)
 /// with an "Ongoing call · tap to return" notification, keeping WebRTC
 /// audio/video alive in the background.
 class OngoingCallService {
-  OngoingCallService._();
+  OngoingCallService._() {
+    CallLifecycleTracker.isForegroundCallActive = () => _isCallActive;
+  }
   static final OngoingCallService instance = OngoingCallService._();
 
   static const MethodChannel _channel =
@@ -38,6 +41,8 @@ class OngoingCallService {
     _activeCallType = callType.trim().toLowerCase();
     _activeCallerName = name.trim();
     _isGroup = isGroup;
+
+    unawaited(CallLifecycleTracker.setOngoingCallActive(true, callId: _activeCallId));
 
     debugPrint(
       '[OngoingCallService] >>> startCall: callId=$_activeCallId, type=$_activeCallType, name=$_activeCallerName, isGroup=$_isGroup',
@@ -70,6 +75,8 @@ class OngoingCallService {
       return;
     }
 
+    final stoppedId = _activeCallId;
+
     debugPrint(
       '[OngoingCallService] <<< stopCall for callId=$_activeCallId',
     );
@@ -79,6 +86,8 @@ class OngoingCallService {
     _activeCallType = null;
     _activeCallerName = null;
     _isGroup = false;
+
+    unawaited(CallLifecycleTracker.setOngoingCallActive(false, callId: callId ?? stoppedId));
 
     if (defaultTargetPlatform == TargetPlatform.android) {
       try {

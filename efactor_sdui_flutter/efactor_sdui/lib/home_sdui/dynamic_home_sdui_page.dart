@@ -223,7 +223,8 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         !listEquals(oldWidget.roles, widget.roles);
 
     if (sessionChanged) {
-      _load(forceRefresh: false);
+      HomeSchemaRepository.clearMemoryCache(userId: oldWidget.userId);
+      _load(forceRefresh: true);
     }
   }
 
@@ -897,15 +898,32 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
       key: ValueKey<String>('home-shell-epoch-$_homeRenderEpoch'),
       child: renderer.buildComponent(context, rootId),
     );
+    final rootComponent = state.component(rootId);
+    String? rootType = rootComponent?['type']?.toString();
+    if (rootType == null || rootType.isEmpty) {
+      final presetId = rootComponent?['presetId']?.toString();
+      final presets = state.schema['componentPresets'];
+      if (presetId != null && presets is Map) {
+        final preset = presets[presetId];
+        if (preset is Map) {
+          rootType = preset['type']?.toString();
+        }
+      }
+    }
+    final isScrollableRoot = rootType == 'scrollPage';
     final showingHome = !embedIot && !embedGrid;
     final homeBody = showingHome
         ? SchemaPullToRefresh(
+            fillViewport: !isScrollableRoot,
             // Pull-to-refresh reloads the LIVE Home schema itself,
             // and refreshes the current route's dynamic data sources.
-            onRefresh: () => _refreshLiveSchema(
-              showFeedback: false,
-              forceFull: true,
-            ),
+            onRefresh: () async {
+              HomeSchemaRepository.clearMemoryCache(userId: widget.userId);
+              await _refreshLiveSchema(
+                showFeedback: true,
+                forceFull: true,
+              );
+            },
             child: homeContent,
           )
         : homeContent;

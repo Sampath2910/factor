@@ -108,5 +108,78 @@ void main() {
         isFalse,
       );
     });
+
+    test('parses msg_type contract and prioritizes it over message_type', () {
+      final msgPayload = GridChatMessage.parse(<String, dynamic>{
+        'type': 'NEW_MESSAGE',
+        'conversation_id': '101',
+        'message_id': 'img1',
+        'msg_type': 'image',
+        'sender_name': 'Pavan Nagapuri',
+        'is_group': '0',
+      });
+      expect(msgPayload, isNotNull);
+      expect(msgPayload!.messageType, 'image');
+      expect(
+        GridChatMessageNotifications.defaultBodyForMessageType(
+          msgPayload.messageType,
+        ),
+        '📷 Photo',
+      );
+    });
+
+    test(
+      '1:1 chat (is_group = 0) uses strictly sender name as title and omits conversationTitle',
+      () {
+        final message = GridChatMessage.parse(<String, dynamic>{
+          'type': 'NEW_MESSAGE',
+          'conversation_id': '50',
+          'message_id': 'm50',
+          'msg_type': 'text',
+          'title': 'Pavan Nagapuri: Pavan Nagapuri',
+          'body': 'Hello there',
+          'sender_id': '12',
+          'sender_name': 'Pavan Nagapuri',
+          'is_group': '0',
+        });
+        expect(message, isNotNull);
+        expect(message!.isGroup, isFalse);
+        expect(
+          GridChatMessageNotifications.notificationTitle(message),
+          'Pavan Nagapuri',
+        );
+        expect(
+          GridChatMessageNotifications.groupConversationTitle(message),
+          isNull,
+        );
+      },
+    );
+
+    test(
+      'group chat (is_group = 1) keeps group title as notification and conversationTitle',
+      () {
+        final message = GridChatMessage.parse(<String, dynamic>{
+          'type': 'NEW_MESSAGE',
+          'conversation_id': '77',
+          'message_id': 'm77',
+          'msg_type': 'text',
+          'title': 'Flutter Developers',
+          'body': 'Standup in 5 mins',
+          'sender_id': '12',
+          'sender_name': 'Pavan Nagapuri',
+          'is_group': '1',
+        });
+        expect(message, isNotNull);
+        expect(message!.isGroup, isTrue);
+        expect(
+          GridChatMessageNotifications.notificationTitle(message),
+          'Flutter Developers',
+        );
+        expect(
+          GridChatMessageNotifications.groupConversationTitle(message),
+          'Flutter Developers',
+        );
+      },
+    );
   });
 }

@@ -7,8 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../grid_sdui/grid_in_app_webview_page.dart';
+import 'call_lifecycle_tracker.dart';
 import 'call_permission_helper.dart';
 import 'grid_chat_message_notification.dart';
+import 'ongoing_call_service.dart';
 import 'push_notification_bootstrap.dart';
 
 /// Data structure representing an incoming call payload delivered via
@@ -615,8 +617,41 @@ class IncomingCallService {
   void handleIncomingPayload(Map<String, dynamic> payload) {
     final type =
         (payload['type'] ?? payload['event'] ?? '').toString().toUpperCase();
+    final callId =
+        (payload['call_id'] ?? payload['callId'] ?? payload['id'] ?? '').toString().trim();
 
-    if (type == 'INCOMING_CALL' || type == 'CALL') {
+    if (CallLifecycleTracker.kEndCallTypes.contains(type)) {
+      if (callId.isNotEmpty) {
+        unawaited(CallLifecycleTracker.markCallFinished(callId));
+      }
+      unawaited(clearPendingAnswer(reason: type, callId: callId));
+      if (activeWebCallId == callId) {
+        activeWebCallId = null;
+      }
+      // When CALL_CANCELLED / CALL_ENDED arrives, call dismissCall() right away. Don't wait for 60-second timer.
+      dismissCall();
+      PushNotificationBootstrap.instance.handleCallHandled(callId);
+      if (type == 'MISSED_CALL' || type == 'CALL_MISSED') {
+        final call = IncomingCallData.fromJson(payload);
+        PushNotificationBootstrap.instance.showMissedCallNotification(call);
+      }
+      return;
+    }
+
+    if (CallLifecycleTracker.kRingCallTypes.contains(type)) {
+      if (callId.isNotEmpty && CallLifecycleTracker.isCallFinishedSync(callId)) {
+        debugPrint(
+          '[IncomingCallService] Ignoring INCOMING_CALL for already finished callId=$callId',
+        );
+        return;
+      }
+      if (OngoingCallService.instance.isCallActive) {
+        debugPrint(
+          '[IncomingCallService] Ignoring INCOMING_CALL because OngoingCallService is active',
+        );
+        return;
+      }
+
       final call = IncomingCallData.fromJson(payload);
       currentCall.value = call;
 
@@ -627,6 +662,9 @@ class IncomingCallService {
           debugPrint(
             '[IncomingCallService] 60s timeout reached, auto-stopping ringing for callId=${call.callId}',
           );
+          if (call.callId.isNotEmpty) {
+            unawaited(CallLifecycleTracker.markCallFinished(call.callId));
+          }
           dismissCall();
           PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
         }
@@ -648,24 +686,6 @@ class IncomingCallService {
         unawaited(_displayIncomingCallModal(call));
       }
       unawaited(_syncIncomingCallPresentation());
-    } else if (type == 'MISSED_CALL' ||
-        type == 'CALL_MISSED') {
-      final call = IncomingCallData.fromJson(payload);
-      unawaited(clearPendingAnswer(reason: type, callId: call.callId));
-      dismissCall();
-      PushNotificationBootstrap.instance.showMissedCallNotification(call);
-    } else if (type == 'CALL_HANDLED' ||
-        type == 'CALL_CANCELLED' ||
-        type == 'CANCEL_CALL' ||
-        type == 'REJECTED' ||
-        type == 'HANGUP') {
-      final callId = (payload['call_id'] ?? payload['callId'] ?? '').toString();
-      unawaited(clearPendingAnswer(reason: type, callId: callId));
-      if (activeWebCallId == callId) {
-        activeWebCallId = null;
-      }
-      dismissCall();
-      PushNotificationBootstrap.instance.handleCallHandled(callId);
     }
   }
 
@@ -688,6 +708,12 @@ class IncomingCallService {
     required String url,
   }) async {
     final id = callId.trim();
+    if (OngoingCallService.instance.isCallActive ||
+        await CallLifecycleTracker.isOngoingCallActive() ||
+        await CallLifecycleTracker.isCallFinished(id)) {
+      debugPrint('[IncomingCallService] Ignoring startRingingFromWeb for finished or active call: $id');
+      return;
+    }
     activeWebCallId = id;
     final existing = currentCall.value;
     if (existing == null || existing.callId != id) {
@@ -706,6 +732,9 @@ class IncomingCallService {
   /// is answered, declined, or ended in the web UI.
   Future<void> stopRingingFromWeb(String callId) async {
     final id = callId.trim();
+    if (id.isNotEmpty) {
+      unawaited(CallLifecycleTracker.markCallFinished(id));
+    }
     if (id.isEmpty || activeWebCallId == id) {
       activeWebCallId = null;
     }
@@ -725,6 +754,16 @@ class IncomingCallService {
     final call = currentCall.value;
     if (call == null) {
       await _stopNativeRing();
+      return;
+    }
+
+    // Suppress presentation if an active ongoing call exists or this call was already finished
+    if (OngoingCallService.instance.isCallActive ||
+        await CallLifecycleTracker.isOngoingCallActive() ||
+        await CallLifecycleTracker.isCallFinished(call.callId)) {
+      debugPrint('[IncomingCallService] Suppressing presentation: active ongoing call or call finished');
+      dismissCall();
+      await PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
       return;
     }
 
@@ -802,6 +841,9 @@ class IncomingCallService {
     IncomingCallData call, {
     BuildContext? context,
   }) async {
+    if (call.callId.isNotEmpty) {
+      unawaited(CallLifecycleTracker.markCallFinished(call.callId));
+    }
     await recordNotificationAnswer(call);
     dismissCall();
     await PushNotificationBootstrap.instance.cancelCallNotification(call.callId);
@@ -913,6 +955,9 @@ class IncomingCallService {
     debugPrint(
       '[IncomingCallService] >>> declineCall() CALLED for callId=${call.callId}, caller=${call.callerName}, hasToken=${call.actionToken.isNotEmpty} <<<',
     );
+    if (call.callId.isNotEmpty) {
+      unawaited(CallLifecycleTracker.markCallFinished(call.callId));
+    }
     if (isAnswerInProgress(call.callId)) {
       // ignore: avoid_print
       print(
