@@ -264,6 +264,116 @@ void main() {
         isFalse,
       );
     });
+
+    test('isGridRedirectUrl keeps Professional Space inside the WebView and only exact Grid exits chat', () {
+      final chatUri = Uri.parse('https://efactor.tech/index.php/grid-chat');
+
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid'), initialUri: chatUri),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/grid'), initialUri: chatUri),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid/'), initialUri: chatUri),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/v8/grid_api_creation.php'), initialUri: chatUri),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat/api/chat/send'), initialUri: chatUri),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat?conversation_id=42'), initialUri: chatUri),
+        isFalse,
+      );
+
+      final profUri = Uri.parse('https://efactor.tech/index.php/grid');
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid/team'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid?saved=1'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid/profile'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('isFileDownloadUrl detects resumes, attachments, and document files', () {
+      expect(
+        GridInAppWebViewPage.isFileDownloadUrl(
+          Uri.parse('https://efactor.tech/index.php/grid/api/jobs/applications/102/resume'),
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isFileDownloadUrl(
+          Uri.parse('https://efactor.tech/index.php/grid/api/messages/attachment/45'),
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isFileDownloadUrl(
+          Uri.parse('https://efactor.tech/index.php/grid/api/attachments/88'),
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isFileDownloadUrl(
+          Uri.parse('https://efactor.tech/uploads/candidate_cv.pdf'),
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isFileDownloadUrl(
+          Uri.parse('https://efactor.tech/files/grid/posts/sample.jpg'),
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isFileDownloadUrl(
+          Uri.parse('https://efactor.tech/index.php/grid/team'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('resolveChatSwipeTarget maps left-to-right to Moments and right-to-left to Channels', () {
+      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: 60), 'moments');
+      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: -60), 'channels');
+      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: 30), isNull);
+      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: -30), isNull);
+      expect(GridInAppWebViewPage.resolveChatSwipeTarget(dx: 0), isNull);
+    });
   });
 
   group('Grid SSO Token Extraction & Navigation Resolution', () {

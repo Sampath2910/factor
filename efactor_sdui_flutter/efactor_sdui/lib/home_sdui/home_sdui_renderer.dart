@@ -2154,8 +2154,8 @@ class HomeSduiRenderer {
           cellWidth = availableWidth <= 0 ? viewportWidth : availableWidth;
         }
 
-        // Resolve schema-driven sizing directive (sizeFormula / aspectRatio / metroGrid).
-        // Web AHP and SDUI contracts declare sizeFormula: 'slotWidth' for square boxes.
+        // The painted row uses the grid's rowHeight. sizeFormula slotWidth is
+        // the cube depth, not the tile box, unless the layout omits rowHeight.
         final sizeFormula = (layout['sizeFormula'] ??
                 _map(c['layout'])?['sizeFormula'] ??
                 _map(c['dimensions'])?['sizeFormula'] ??
@@ -2174,14 +2174,14 @@ class HomeSduiRenderer {
         final isMetro = preserveMetroColumns || _isMetroMosaic(c);
 
         double unitCellHeight;
-        if (sizeFormula == 'slotwidth' || sizeFormula == 'cellwidth') {
+        if (rowHeight != null && rowHeight > 0) {
+          unitCellHeight = rowHeight;
+        } else if (sizeFormula == 'slotwidth' || sizeFormula == 'cellwidth') {
           unitCellHeight = cellWidth;
         } else if (explicitAspectRatio != null && explicitAspectRatio > 0) {
           unitCellHeight = cellWidth / explicitAspectRatio;
         } else if (isMetro) {
           unitCellHeight = cellWidth;
-        } else if (rowHeight != null && rowHeight > 0) {
-          unitCellHeight = rowHeight;
         } else {
           unitCellHeight = cellWidth;
         }
@@ -2414,26 +2414,46 @@ class HomeSduiRenderer {
     return layout;
   }
 
-  double _metroTileRadius(Map<String, dynamic> c) {
-    final appearance = _map(c['appearance']);
-    final explicit = _d(appearance?['borderRadius']) ??
-        _d(appearance?['cardBorderRadius']);
-    if (explicit != null && explicit >= 0) return explicit;
+  /// A positive radius is an override. Zero matches the web rule: use the
+  /// home-tile preset, then the theme card radius, then designTokens.radius.card.
+  double? _positiveCornerRadius(Map<String, dynamic>? appearance) {
+    if (appearance == null) return null;
+    for (final key in const ['borderRadius', 'cardBorderRadius', 'radius']) {
+      final value = _d(appearance[key]);
+      if (value != null && value > 0) return value;
+    }
+    return null;
+  }
+
+  double _cardCornerRadius(
+    Map<String, dynamic> component, {
+    Map<String, dynamic>? faceAppearance,
+  }) {
+    final explicit = _positiveCornerRadius(faceAppearance) ??
+        _positiveCornerRadius(_map(component['appearance']));
+    if (explicit != null) return explicit;
+
+    final presetId = component['presetId']?.toString();
+    final preset = presetId == null
+        ? null
+        : _map(state.schema['componentPresets']?[presetId]);
+    final presetRadius = _tokenNumber(
+      _map(preset?['appearance'])?['radiusToken']?.toString(),
+    );
+    if (presetRadius != null && presetRadius > 0) return presetRadius;
 
     final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
         _d(state.schema['theme']?['cardBorderRadius']) ??
         _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
         _d(state.schema['grid']?['cardBorderRadius']);
-    if (themeRadius != null && themeRadius >= 0) {
-      return themeRadius;
-    }
+    if (themeRadius != null && themeRadius > 0) return themeRadius;
 
     final token = _tokenNumber('radius.card') ?? _tokenNumber('radius.small');
-    if (token != null && token >= 0) {
-      return token;
-    }
+    if (token != null && token > 0) return token;
     return 0.0;
   }
+
+  double _metroTileRadius(Map<String, dynamic> c) => _cardCornerRadius(c);
 
   /// Matches web `.ahp-card { overflow: hidden; border-radius }`.
   ///
@@ -2650,16 +2670,7 @@ class HomeSduiRenderer {
 
     final imageTextColor = tokenColor('colors.welcomeText');
 
-    final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
-        _d(state.schema['theme']?['cardBorderRadius']) ??
-        _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
-        _d(state.schema['grid']?['cardBorderRadius']);
-    final rawRadius = _d(appearance['borderRadius']) ??
-        _d(appearance['cardBorderRadius']) ??
-        themeRadius ??
-        _tokenNumber('radius.card') ??
-        0.0;
-    final radius = rawRadius >= 0 ? rawRadius : 0.0;
+    final radius = _cardCornerRadius(parent, faceAppearance: faceAppearance);
 
     final titleSize =
         _d(appearance['titleFontSize']) ??
@@ -2770,6 +2781,9 @@ class HomeSduiRenderer {
         alignment: face['imageAlignment'],
         errorIconToken: face['iconToken'],
       );
+    }
+    if (image != null) {
+      image = _scaleSchemaImage(image, _imageScalePercent(face, assetId));
     }
 
     final tileStyle = (appearance['style'] ??
@@ -3055,6 +3069,44 @@ class HomeSduiRenderer {
     }
 
     return current;
+  }
+
+  double? _imageScalePercent(Map<String, dynamic> face, String? assetId) {
+    final faceScale = _d(face['imageScale']);
+    if (faceScale != null && faceScale > 0) return faceScale;
+    if (assetId == null || assetId.isEmpty) return null;
+    final assets = state.schema['assets'];
+    Map<String, dynamic>? asset;
+    if (assets is Map) {
+      asset = _map(assets[assetId]);
+    } else if (assets is List) {
+      for (final candidate in assets) {
+        final map = _map(candidate);
+        if (map != null && map['id']?.toString() == assetId) {
+          asset = map;
+          break;
+        }
+      }
+    }
+    final scale = _d(asset?['scale']);
+    if (scale != null && scale > 0) return scale;
+    return null;
+  }
+
+  /// Schema scale is a percent. 91 draws the image at 91% of the tile so a
+  /// contain logo does not paint square corners out to the card edge.
+  Widget _scaleSchemaImage(Widget image, double? percent) {
+    if (percent == null || (percent - 100).abs() < 0.01 || percent <= 0) {
+      return image;
+    }
+    return Align(
+      alignment: Alignment.center,
+      child: FractionallySizedBox(
+        widthFactor: percent / 100.0,
+        heightFactor: percent / 100.0,
+        child: image,
+      ),
+    );
   }
 
   Widget? _networkImageFromSchema({
@@ -4896,6 +4948,33 @@ class _RotatingCardState extends State<_RotatingCard>
           return double.tryParse(raw?.toString() ?? '');
         }
 
+        if (radius == null || radius <= 0) {
+          final presetId = widget.component['presetId']?.toString();
+          final presets = widget.schema['componentPresets'];
+          final preset = presetId != null && presets is Map
+              ? presets[presetId]
+              : null;
+          final radiusToken = preset is Map && preset['appearance'] is Map
+              ? (preset['appearance'] as Map)['radiusToken']
+              : null;
+          final tokens = widget.schema['designTokens'];
+          if (radiusToken != null && tokens is Map) {
+            final parts = radiusToken.toString().split('.');
+            dynamic node = tokens;
+            for (final part in parts) {
+              if (node is Map && node[part] != null) {
+                node = node[part];
+              } else {
+                node = null;
+                break;
+              }
+            }
+            final presetRadius = asDouble(node);
+            if (presetRadius != null && presetRadius > 0) {
+              radius = presetRadius;
+            }
+          }
+        }
         if (radius == null || radius <= 0) {
           final themeRadius = asDouble(widget.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
               asDouble(widget.schema['theme']?['cardBorderRadius']) ??
