@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../grid_sdui/dynamic_grid_sdui_page.dart';
+import '../grid_sdui/grid_in_app_webview_page.dart';
 import '../iot_sdui/dynamic_iot_sdui_page.dart';
 import '../iot_sdui/iot_schema_repository.dart';
 import '../sdui/schema_pull_to_refresh.dart';
@@ -29,7 +30,12 @@ class DynamicHomeSduiPage extends StatefulWidget {
     this.onOpenIot,
     this.onOpenGrid,
     this.onOpenDevice,
+    this.enableAutoRefresh = true,
+    this.initialSchema,
   });
+
+  final bool enableAutoRefresh;
+  final Map<String, dynamic>? initialSchema;
 
   final String accessToken;
   final String? refreshToken;
@@ -58,10 +64,10 @@ class DynamicHomeSduiPage extends StatefulWidget {
   })? onOpenDevice;
 
   @override
-  State<DynamicHomeSduiPage> createState() => _DynamicHomeSduiPageState();
+  State<DynamicHomeSduiPage> createState() => DynamicHomeSduiPageState();
 }
 
-class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
+class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     with WidgetsBindingObserver {
   final HomeSchemaRepository _repository = HomeSchemaRepository();
 
@@ -101,8 +107,18 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _subscribeToSchemaInvalidations();
-    _startAutoRefreshTimer();
-    _load(forceRefresh: false);
+    if (widget.enableAutoRefresh) {
+      _startAutoRefreshTimer();
+    }
+    if (widget.initialSchema != null) {
+      _applyHomeSchema(
+        widget.initialSchema!,
+        fingerprint: _schemaFingerprint(widget.initialSchema!),
+      );
+      _loading = false;
+    } else {
+      _load(forceRefresh: false);
+    }
   }
 
   void _startAutoRefreshTimer() {
@@ -490,6 +506,65 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         }
         return;
 
+      case 'open-url':
+        final destination = action['destination'] is Map
+            ? Map<String, dynamic>.from(
+                (action['destination'] as Map).cast<dynamic, dynamic>(),
+              )
+            : null;
+        final rawUrl = (action['url'] ??
+                action['route'] ??
+                destination?['url'])
+            ?.toString()
+            .trim() ??
+            '';
+        if (rawUrl.isEmpty) {
+          throw StateError('Home schema open-url action must provide a URL.');
+        }
+        var uri = Uri.tryParse(rawUrl);
+        if (uri == null || !uri.hasScheme) {
+          final withHttps = Uri.tryParse('https://$rawUrl');
+          if (withHttps != null && withHttps.hasScheme) {
+            uri = withHttps;
+          } else {
+            throw StateError('Home schema open-url URL is invalid: "$rawUrl".');
+          }
+        }
+
+        final openIn = (action['openIn'] ?? destination?['openIn'])
+            ?.toString()
+            .trim();
+        final rawTitle = action['title'] ?? destination?['title'];
+        final title = rawTitle?.toString().trim();
+
+        if (openIn == 'inAppWebView' ||
+            openIn?.toLowerCase() == 'inappwebview' ||
+            openIn == 'in_app_webview' ||
+            openIn == 'in-app-webview') {
+          if (!mounted) return;
+          await Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => GridInAppWebViewPage(
+                uri: uri!,
+                title: (title != null && title.isNotEmpty) ? title : null,
+                showAppBar: action['showAppBar'] == true || destination?['showAppBar'] == true,
+                accessToken: widget.accessToken,
+                userId: widget.userId,
+              ),
+            ),
+          );
+          return;
+        }
+
+        final opened = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!opened) {
+          throw StateError('Unable to open the external URL: "$rawUrl".');
+        }
+        return;
+
       case 'logout':
         if (mounted &&
             (action['actionId'] == 'session-expired' ||
@@ -517,6 +592,13 @@ class _DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         throw StateError('Unsupported Home host action "$actionId".');
     }
   }
+
+  @visibleForTesting
+  Future<void> handleHostActionForTest(
+    String actionId,
+    Map<String, dynamic> action,
+  ) =>
+      _handleHostAction(actionId, action);
 
   /// Prevents a server Home schema from displaying a second login screen after
   /// AuthUiGate has already authenticated the user.

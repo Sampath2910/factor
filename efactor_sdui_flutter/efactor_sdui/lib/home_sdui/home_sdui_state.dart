@@ -1367,6 +1367,44 @@ class HomeSduiState extends ChangeNotifier {
         });
         return;
 
+      case 'open-url':
+        final destination = _map(action['destination']);
+        final rawUrl = action['url'] ?? action['route'] ?? destination?['url'];
+        final url = resolve(
+          rawUrl,
+          event: event,
+          item: item,
+          parameters: _parameters,
+          response: response,
+        )?.toString();
+
+        if (url == null || url.trim().isEmpty) {
+          throw FormatException('$actionId URL is required.');
+        }
+
+        final handler = hostActionHandler;
+        if (handler == null) {
+          throw StateError(
+            'No host action handler is registered for open-url.',
+          );
+        }
+
+        final rawTitle = action['title'] ?? destination?['title'];
+        final title = resolve(
+          rawTitle,
+          event: event,
+          item: item,
+          parameters: _parameters,
+          response: response,
+        )?.toString();
+
+        await handler('open-url', <String, dynamic>{
+          ...action,
+          'url': url.trim(),
+          if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+        });
+        return;
+
       default:
         throw FormatException(
           'Unsupported action type ${action['type']} at $actionId.',

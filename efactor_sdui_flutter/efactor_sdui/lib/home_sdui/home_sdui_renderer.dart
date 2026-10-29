@@ -2550,7 +2550,7 @@ class HomeSduiRenderer {
       onLongPress: () => _event(c, 'longPress', item: item),
     );
 
-    return _clipToTileBounds(c, cube);
+    return cube;
   }
 
   Widget _rotatingDeviceCard(
@@ -2578,7 +2578,7 @@ class HomeSduiRenderer {
     final powerVisible = powerControl?['visible'] != false;
 
     final deviceCard = Stack(
-      clipBehavior: Clip.hardEdge,
+      clipBehavior: Clip.none,
       children: [
         Positioned.fill(
           child: _RotatingCard(
@@ -2644,7 +2644,7 @@ class HomeSduiRenderer {
       ],
     );
 
-    return _clipToTileBounds(c, deviceCard);
+    return deviceCard;
   }
 
   Widget _face(
@@ -4460,6 +4460,14 @@ class _RotatingCardState extends State<_RotatingCard>
     return 0;
   }
 
+  int _effectiveFaceCount() {
+    if (widget.faces.isEmpty) return 1;
+    if (_isFourFaceBox()) {
+      return math.max(4, widget.faces.length);
+    }
+    return widget.faces.length;
+  }
+
   double _phaseOffsetFraction() {
     final durationMs = _cycleDurationMs();
     if (durationMs <= 0) return 0;
@@ -4546,7 +4554,7 @@ class _RotatingCardState extends State<_RotatingCard>
         index: widget.staggerIndex,
         totalCount: widget.staggerCount,
         speedSec: durationSec,
-        faceCount: widget.faces.isEmpty ? 4 : widget.faces.length,
+        faceCount: _effectiveFaceCount(),
       );
       var phase = (-delay) / durationSec;
       phase %= 1;
@@ -4596,10 +4604,26 @@ class _RotatingCardState extends State<_RotatingCard>
   String _axis() {
     final geometry = _geometryConfig();
     final config = _animationConfig();
-    return (geometry['axis'] ?? config['axis'] ?? 'y')
+    final rotation = widget.component['rotation'];
+    final rotMap = rotation is Map ? rotation : null;
+    final raw =
+        (rotMap?['axis'] ??
+         rotMap?['rotationAxis'] ??
+         geometry['axis'] ??
+         geometry['rotationAxis'] ??
+         config['axis'] ??
+         config['rotationAxis'] ??
+         'y')
         .toString()
         .trim()
         .toLowerCase();
+    if (raw == 'x' ||
+        raw == 'vertical' ||
+        raw == 'top-to-bottom' ||
+        raw == 'bottom-to-top') {
+      return 'x';
+    }
+    return 'y';
   }
 
   double _perspectiveEntry() {
@@ -4670,9 +4694,11 @@ class _RotatingCardState extends State<_RotatingCard>
     return faceIndex * _geometryDegreesPerFace();
   }
 
-  double _depthForWidth(double width) {
+  double _depthForWidth(double width, [double height = 0.0]) {
     final geometry = _geometryConfig();
     final dimensions = widget.component['dimensions'];
+    final axis = _axis();
+    final baseDimension = (axis == 'x' && height > 0) ? height : width;
     final raw =
         geometry['halfDepthFormula'] ??
         (dimensions is Map ? dimensions['halfDepthFormula'] : null) ??
@@ -4691,30 +4717,30 @@ class _RotatingCardState extends State<_RotatingCard>
 
     final formula = raw?.toString().trim();
     if (formula == null || formula.isEmpty) {
-      return _isFourFaceBox() ? width / 2 : 0;
+      return _isFourFaceBox() ? baseDimension / 2 : 0;
     }
 
     final compact = formula.replaceAll(' ', '');
     if (RegExp(
-      r'^(?:slotWidth|cellWidth|cardWidth|width)$',
+      r'^(?:slotWidth|cellWidth|cardWidth|width|slotHeight|cellHeight|cardHeight|height)$',
       caseSensitive: false,
     ).hasMatch(compact)) {
-      return width / 2;
+      return baseDimension / 2;
     }
 
     final match = RegExp(
-      r'^(?:slotWidth|cellWidth|cardWidth|width)([/*])([0-9]+(?:\.[0-9]+)?)$',
+      r'^(?:slotWidth|cellWidth|cardWidth|width|slotHeight|cellHeight|cardHeight|height)([/*])([0-9]+(?:\.[0-9]+)?)$',
       caseSensitive: false,
     ).firstMatch(compact);
     if (match == null) {
-      return _isFourFaceBox() ? width / 2 : 0;
+      return _isFourFaceBox() ? baseDimension / 2 : 0;
     }
 
     final operand = double.tryParse(match.group(2) ?? '');
     if (operand == null || operand == 0) {
-      return _isFourFaceBox() ? width / 2 : 0;
+      return _isFourFaceBox() ? baseDimension / 2 : 0;
     }
-    return match.group(1) == '*' ? width * operand : width / operand;
+    return match.group(1) == '*' ? baseDimension * operand : baseDimension / operand;
   }
 
   double _rotationSign() {
@@ -4775,7 +4801,7 @@ class _RotatingCardState extends State<_RotatingCard>
     final config = _animationConfig();
     final nested = _nestedAnimationConfig();
     final cycleMs = _cycleDurationMs();
-    final faceCount = widget.faces.isEmpty ? 1 : widget.faces.length;
+    final faceCount = _effectiveFaceCount();
     final faceDuration = cycleMs > 0 ? cycleMs / faceCount : 0.0;
 
     final holdMsRaw =
@@ -4829,7 +4855,7 @@ class _RotatingCardState extends State<_RotatingCard>
     required double perspective,
   }) {
     final matrix = Matrix4.identity();
-    if (perspective > 0) matrix.setEntry(3, 2, perspective);
+    if (perspective > 0) matrix.setEntry(3, 2, -perspective.abs());
 
     // Web parent transform is translateZ(-halfDepth) rotateY(angle). Without
     // the centering translate the box orbits around the front face instead of
@@ -4866,7 +4892,7 @@ class _RotatingCardState extends State<_RotatingCard>
   }
 
   _CubeProgress _progressFor(double cycle) {
-    final faceCount = widget.faces.isEmpty ? 1 : widget.faces.length;
+    final faceCount = _effectiveFaceCount();
     final scaled = (cycle % 1.0) * faceCount;
     final segment = scaled.floor().clamp(0, faceCount - 1);
     final segmentProgress = scaled - scaled.floor();
@@ -4906,7 +4932,7 @@ class _RotatingCardState extends State<_RotatingCard>
     // completes. There is no mid-turn content swap.
     final parentAngle =
         (progress.segmentIndex + progress.easedFlip) * animationRadiansPerFace;
-    final currentIndex = progress.segmentIndex;
+    final currentIndex = progress.segmentIndex % widget.faces.length;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -4920,58 +4946,10 @@ class _RotatingCardState extends State<_RotatingCard>
           return widget.buildFace(widget.faces[currentIndex], currentIndex);
         }
 
-        final depth = _depthForWidth(width);
+        final depth = _depthForWidth(width, height);
         final perspective = _perspectiveEntry();
         final axis = _axis();
-
-        Widget cube = RepaintBoundary(
-          child: Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.none,
-            children: [
-              for (
-                var faceIndex = 0;
-                faceIndex < widget.faces.length;
-                faceIndex++
-              )
-                Builder(
-                  builder: (context) {
-                    final baseAngle =
-                        _faceBaseDegrees(faceIndex) * math.pi / 180;
-                    final effectiveAngle = parentAngle + baseAngle;
-                    final visible = _faceVisible(effectiveAngle);
-
-                    return IgnorePointer(
-                      ignoring: faceIndex != currentIndex,
-                      child: Visibility(
-                        visible: visible,
-                        maintainState: true,
-                        maintainAnimation: true,
-                        maintainSize: true,
-                        child: Transform(
-                          alignment: Alignment.center,
-                          filterQuality: FilterQuality.low,
-                          transform: _cubeFaceTransform(
-                            parentAngle: parentAngle,
-                            faceAngle: baseAngle,
-                            depth: depth,
-                            axis: axis,
-                            perspective: perspective,
-                          ),
-                          child: SizedBox.expand(
-                            child: widget.buildFace(
-                              widget.faces[faceIndex],
-                              faceIndex,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-            ],
-          ),
-        );
+        final totalSides = _effectiveFaceCount();
 
         final appearance = widget.component['appearance'];
         double? radius;
@@ -5035,17 +5013,88 @@ class _RotatingCardState extends State<_RotatingCard>
           }
         }
 
-        // Web `.ahp-card { overflow:hidden; border-radius }` clips the
-        // projected cube to the metro tile. Side faces remain visible
-        // inside that rounded rect during the turn.
-        if (radius != null && radius > 0) {
-          cube = ClipRRect(
-            borderRadius: BorderRadius.circular(radius),
-            clipBehavior: Clip.antiAlias,
-            child: cube,
-          );
-        } else {
-          cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
+        final sortedSideIndices = List<int>.generate(totalSides, (i) => i)
+          ..sort((a, b) {
+            final angleA = parentAngle + _faceBaseDegrees(a % 4) * math.pi / 180;
+            final angleB = parentAngle + _faceBaseDegrees(b % 4) * math.pi / 180;
+            return math.cos(angleA).compareTo(math.cos(angleB));
+          });
+
+        Widget cube = RepaintBoundary(
+          child: Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.none,
+            children: [
+              for (final sideIndex in sortedSideIndices)
+                Builder(
+                  key: ValueKey('cube_side_$sideIndex'),
+                  builder: (context) {
+                    final faceDataIndex = sideIndex % widget.faces.length;
+                    final baseAngle =
+                        _faceBaseDegrees(sideIndex % 4) * math.pi / 180;
+                    final effectiveAngle = parentAngle + baseAngle;
+                    final visible = _faceVisible(effectiveAngle);
+
+                    final shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22).clamp(0.0, 0.4);
+
+                    return IgnorePointer(
+                      ignoring: faceDataIndex != currentIndex,
+                      child: Visibility(
+                        visible: visible,
+                        maintainState: true,
+                        maintainAnimation: true,
+                        maintainSize: true,
+                        child: Transform(
+                          alignment: Alignment.center,
+                          filterQuality: FilterQuality.low,
+                          transform: _cubeFaceTransform(
+                            parentAngle: parentAngle,
+                            faceAngle: baseAngle,
+                            depth: depth,
+                            axis: axis,
+                            perspective: perspective,
+                          ),
+                          child: SizedBox.expand(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                widget.buildFace(
+                                  widget.faces[faceDataIndex],
+                                  faceDataIndex,
+                                ),
+                                if (shadeOpacity > 0.01)
+                                  IgnorePointer(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Color.fromRGBO(0, 0, 0, shadeOpacity),
+                                        borderRadius: radius != null && radius > 0
+                                            ? BorderRadius.circular(radius)
+                                            : null,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        );
+
+        if (!_isFourFaceBox()) {
+          if (radius != null && radius > 0) {
+            cube = ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              clipBehavior: Clip.antiAlias,
+              child: cube,
+            );
+          } else {
+            cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
+          }
         }
         return cube;
       },

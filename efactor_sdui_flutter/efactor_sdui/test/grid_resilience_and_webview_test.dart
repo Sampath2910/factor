@@ -387,6 +387,46 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid?exit=1'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid?action=exit'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridRedirectUrl(
+          Uri.parse('https://efactor.tech/index.php/grid/exit'),
+          initialUri: profUri,
+          pageFinished: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('isProfessionalSpaceRootUrl accurately identifies root feed vs subpages', () {
+      // Root paths:
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid')), isTrue);
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/')), isTrue);
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/grid')), isTrue);
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/grid/')), isTrue);
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid?grid_sso=xyz123')), isTrue);
+
+      // Subpages (should NOT be treated as root):
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/team')), isFalse);
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/profile')), isFalse);
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/settings')), isFalse);
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/jobs')), isFalse);
+      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid-chat')), isFalse);
     });
 
     test('isFileDownloadUrl detects résumés, message attachments, and document files', () {

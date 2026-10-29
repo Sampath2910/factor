@@ -5,12 +5,12 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -126,14 +126,19 @@ class GridInAppWebViewPage extends StatefulWidget {
     required Uri initialUri,
     bool pageFinished = true,
   }) {
+    final targetPath = targetUri.path.toLowerCase();
+
     // Dedicated exit URL from GRID menu:
     // "Switch to Circle Connect" -> https://efactor.tech/index.php/grid?app=exit
+    // Or explicit exit query / path (/exit, ?exit=1, ?action=exit)
     if (targetUri.queryParameters['app'] == 'exit' ||
-        targetUri.toString().contains('app=exit')) {
+        targetUri.queryParameters['exit'] == '1' ||
+        targetUri.queryParameters['action'] == 'exit' ||
+        targetUri.toString().contains('app=exit') ||
+        targetPath.endsWith('/exit') ||
+        targetPath.endsWith('/exit/')) {
       return true;
     }
-
-    final targetPath = targetUri.path.toLowerCase();
     final initialPath = initialUri.path.toLowerCase();
     final initialIsScanner = initialPath.contains('scanner') || initialPath.contains('scan');
     final initialIsChat = initialPath.contains('/grid-chat') || initialPath.contains('chat');
@@ -162,6 +167,15 @@ class GridInAppWebViewPage extends StatefulWidget {
     }
 
     return false;
+  }
+
+  /// Checks if the given URI points to the root of Professional Space (the main feed).
+  static bool isProfessionalSpaceRootUrl(Uri uri) {
+    final path = uri.path.toLowerCase();
+    return path == '/grid' ||
+        path == '/grid/' ||
+        path == '/index.php/grid' ||
+        path == '/index.php/grid/';
   }
 
   /// Identifies file and document download requests (résumés, attachments, documents)
@@ -475,8 +489,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   bool _chatUiReady = false;
   bool _showChatTutorial = false;
   bool _chatTutorialScheduled = false;
-  double _chatTutorialDragDistance = 0.0;
   bool _isInsideChatConversation = false;
+
+  /// Returns true when inside an active 1:1 or group chat conversation room.
+  bool get isInsideChatConversation => _isInsideChatConversation;
 
   /// True when this GRID Chat page can show the in-app incoming-call banner.
   bool get circleConnectReady {
@@ -844,11 +860,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         ),
       );
 
-    // Configure WebKit (iOS) navigation gestures and media permissions
+    // Disable iOS back-forward swipe interception so horizontal swipes (e.g. Reels -> Chats
+    // and in-chat 3-pane navigation) are delivered directly to the web application.
     if (_controller.platform is WebKitWebViewController) {
       final webKitController =
           _controller.platform as WebKitWebViewController;
-      webKitController.setAllowsBackForwardNavigationGestures(true);
+      webKitController.setAllowsBackForwardNavigationGestures(false);
     }
 
     // Configure Android-specific WebRTC and hardware media permissions
@@ -2159,21 +2176,40 @@ Error: $error
 
   Future<void> _handleBackPress() async {
     if (_isPopping) return;
-    try {
-      if (await _isReelsActive()) {
-        await _switchToChatsFromReels();
-        return;
+    if (_isCircleConnect) {
+      try {
+        if (await _isReelsActive()) {
+          await _switchToChatsFromReels();
+          return;
+        }
+      } catch (_) {}
+    }
+
+    if (_isProfessionalSpace) {
+      final currentUrlStr = await _controller.currentUrl();
+      if (currentUrlStr != null && currentUrlStr.isNotEmpty) {
+        final currentUri = Uri.tryParse(currentUrlStr);
+        if (currentUri != null && GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
+          if (!mounted || _isPopping) return;
+          _safeExitToGrid();
+          return;
+        }
       }
-    } catch (_) {}
+    }
+
     final canGoBack = await _controller.canGoBack();
     if (canGoBack) {
       await _controller.goBack();
       return;
     }
-    try {
-      final handledInWeb = await _tryCloseWebChatConversation();
-      if (handledInWeb) return;
-    } catch (_) {}
+
+    if (_isCircleConnect) {
+      try {
+        final handledInWeb = await _tryCloseWebChatConversation();
+        if (handledInWeb) return;
+      } catch (_) {}
+    }
+
     if (!mounted || _isPopping) return;
     _safeExitToGrid();
   }
@@ -2184,24 +2220,43 @@ Error: $error
       _dismissChatTutorial();
       return;
     }
-    try {
-      if (await _isReelsActive()) {
-        await _switchToChatsFromReels();
-        return;
+    if (_isCircleConnect) {
+      try {
+        if (await _isReelsActive()) {
+          await _switchToChatsFromReels();
+          return;
+        }
+      } catch (_) {}
+    }
+
+    if (_isProfessionalSpace) {
+      final currentUrlStr = await _controller.currentUrl();
+      if (currentUrlStr != null && currentUrlStr.isNotEmpty) {
+        final currentUri = Uri.tryParse(currentUrlStr);
+        if (currentUri != null && GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
+          if (!mounted || _isPopping) return;
+          _safeExitToGrid();
+          return;
+        }
       }
-    } catch (_) {}
+    }
+
     final canGoBack = await _controller.canGoBack();
     if (canGoBack) {
       await _controller.goBack();
       return;
     }
-    try {
-      final handledInWeb = await _tryCloseWebChatConversation();
-      if (handledInWeb) {
-        _onChatConversationClosed();
-        return;
-      }
-    } catch (_) {}
+
+    if (_isCircleConnect) {
+      try {
+        final handledInWeb = await _tryCloseWebChatConversation();
+        if (handledInWeb) {
+          _onChatConversationClosed();
+          return;
+        }
+      } catch (_) {}
+    }
+
     if (!mounted || _isPopping) return;
     _safeExitToGrid();
   }
@@ -2211,6 +2266,18 @@ Error: $error
       final result = await _controller.runJavaScriptReturningResult('''
         (function() {
           try {
+            function isVisible(el) {
+              if (!el) return false;
+              try {
+                var style = window.getComputedStyle ? window.getComputedStyle(el) : el.style;
+                if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) return false;
+                var r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0;
+              } catch (_) {
+                return false;
+              }
+            }
+
             // Check if user is inside an open chat conversation (back arrow or message composer present)
             function isGridBrand(el) {
               if (!el) return false;
@@ -2227,11 +2294,8 @@ Error: $error
 
             var selectors = [
               'header [class*="back" i]',
-              'header button',
               'header [aria-label*="back" i]',
               'header [title*="back" i]',
-              'header svg',
-              'header a',
               '.back-arrow',
               '[class*="back-button" i]',
               '[class*="back_button" i]',
@@ -2240,7 +2304,7 @@ Error: $error
             ];
             for (var j = 0; j < selectors.length; j++) {
               var btn = document.querySelector(selectors[j]);
-              if (btn && typeof btn.click === 'function' && !isGridBrand(btn)) {
+              if (btn && isVisible(btn) && typeof btn.click === 'function' && !isGridBrand(btn)) {
                 var r = btn.getBoundingClientRect();
                 if (r.top >= 0 && r.top < 120 && r.left >= 0 && r.left < 160) {
                   btn.click();
@@ -2249,19 +2313,26 @@ Error: $error
               }
             }
 
-            var hasComposer = !!document.querySelector(
+            var composer = document.querySelector(
               'input[placeholder*="Type a message" i], textarea[placeholder*="Type a message" i], [class*="chat-input" i], [class*="message-input" i]'
             );
-            var search = (window.location.search || '').toLowerCase();
-            var isChatRoom = search.includes('conversation_id=') || search.includes('chat_id=') || search.includes('room=') || hasComposer;
-            if (isChatRoom) {
+            var hasComposer = !!(composer && isVisible(composer));
+            if (hasComposer) {
               var topEl = document.elementFromPoint(25, 30);
               if (topEl) {
-                if (typeof topEl.click === 'function') {
-                  topEl.click();
+                var isBrand = false;
+                var check = topEl;
+                while (check && check !== document.body) {
+                  if (isGridBrand(check)) { isBrand = true; break; }
+                  check = check.parentElement;
                 }
-                topEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                return true;
+                if (!isBrand) {
+                  if (typeof topEl.click === 'function') {
+                    topEl.click();
+                  }
+                  topEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                  return true;
+                }
               }
               if (window.history && window.history.length > 1) {
                 window.history.back();
@@ -2777,7 +2848,14 @@ Error: $error
           child: Stack(
             children: <Widget>[
               if (_error == null)
-                WebViewWidget(controller: _controller)
+                WebViewWidget(
+                  controller: _controller,
+                  gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                    Factory<OneSequenceGestureRecognizer>(
+                      () => EagerGestureRecognizer(),
+                    ),
+                  },
+                )
               else
                 _buildOfflineState(context),
               if (_loading && _error == null)
@@ -2793,8 +2871,6 @@ Error: $error
                     onTap: _handleTopLeftTap,
                   ),
                 ),
-              if (_showChatTutorial)
-                _buildChatConversationTutorialOverlay(),
               if (_isConnectingCall)
                 _buildConnectingCallOverlay(),
             ],
@@ -2963,17 +3039,19 @@ Error: $error
       _dismissChatTutorial();
       return;
     }
-    try {
-      if (await _isReelsActive()) {
-        await _switchToChatsFromReels();
-        return;
-      }
-      final handledInWeb = await _tryCloseWebChatConversation();
-      if (handledInWeb) {
-        _onChatConversationClosed();
-        return;
-      }
-    } catch (_) {}
+    if (_isCircleConnect) {
+      try {
+        if (await _isReelsActive()) {
+          await _switchToChatsFromReels();
+          return;
+        }
+        final handledInWeb = await _tryCloseWebChatConversation();
+        if (handledInWeb) {
+          _onChatConversationClosed();
+          return;
+        }
+      } catch (_) {}
+    }
     if (!mounted || _isPopping) return;
     _safeExitToGrid();
   }
@@ -2985,6 +3063,20 @@ Error: $error
   Future<void> _injectGridBackButton() async {
     const js = '''
 (function() {
+  function postBackToGrid() {
+    try {
+      if (window.CircleConnectNavBridge && typeof window.CircleConnectNavBridge.postMessage === 'function') {
+        window.CircleConnectNavBridge.postMessage('go_back_to_grid');
+        return;
+      }
+    } catch (_) {}
+    try {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.CircleConnectNavBridge) {
+        window.webkit.messageHandlers.CircleConnectNavBridge.postMessage('go_back_to_grid');
+      }
+    } catch (_) {}
+  }
+
   function isGridElement(el) {
     if (!el || el === document.body || el === document.documentElement) return false;
 
@@ -3015,6 +3107,18 @@ Error: $error
     return false;
   }
 
+  function isVisible(el) {
+    if (!el) return false;
+    try {
+      var style = window.getComputedStyle ? window.getComputedStyle(el) : el.style;
+      if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) return false;
+      var r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function isInsideConversation() {
     try {
       // Must be on a chat page to be in a chat conversation!
@@ -3024,22 +3128,18 @@ Error: $error
         return false;
       }
       var backBtn = document.querySelector(
-        'header [class*="back" i], header button, header [aria-label*="back" i], header [title*="back" i], .back-arrow, [class*="back-button" i], [class*="back_button" i], [class*="arrow-back" i], [class*="arrow_back" i]'
+        'header [class*="back" i], header [aria-label*="back" i], header [title*="back" i], .back-arrow, [class*="back-button" i], [class*="back_button" i], [class*="arrow-back" i], [class*="arrow_back" i]'
       );
-      if (backBtn && !isGridElement(backBtn)) {
+      if (backBtn && !isGridElement(backBtn) && isVisible(backBtn)) {
         var r = backBtn.getBoundingClientRect();
-        if (r.top >= 0 && r.top < 120 && r.left >= 0 && r.left < 160 && r.width > 0 && r.height > 0) {
+        if (r.top >= 0 && r.top < 120 && r.left >= 0 && r.left < 160) {
           return true;
         }
       }
-      var hasComposer = !!document.querySelector(
-        'input[placeholder*="Type a message" i], textarea[placeholder*="Type a message" i], [class*="chat-input" i], [class*="message-input" i], [class*="composer" i]'
+      var composer = document.querySelector(
+        'input[placeholder*="Type a message" i], textarea[placeholder*="Type a message" i], [class*="chat-input" i], [class*="message-input" i]'
       );
-      if (hasComposer) {
-        return true;
-      }
-      var search = (window.location.search || '').toLowerCase();
-      if (search.includes('conversation_id=') || search.includes('chat_id=') || search.includes('room=') || path.includes('/room/') || path.includes('/c/')) {
+      if (composer && isVisible(composer)) {
         return true;
       }
     } catch (_) {}
@@ -3047,11 +3147,6 @@ Error: $error
   }
 
   function handleGridTrigger(e) {
-    // If inside a conversation, NEVER intercept. Let web app handle the back arrow natively!
-    if (isInsideConversation()) {
-      return;
-    }
-
     // If watching reels, never intercept as a GRID exit trigger
     var href = (window.location.href || '').toLowerCase();
     var hasVideo = !!document.querySelector('video');
@@ -3060,12 +3155,12 @@ Error: $error
       return;
     }
 
-    // In Professional Space (/grid), the GRID logo goes to GRID home within the WebView.
-    // As confirmed by the web team: "GRID has no button meant to leave it. The GRID logo goes to the
-    // GRID home (https://efactor.tech/index.php/grid), so it stays inside the WebView."
+    // In Professional Space (/grid), subpages navigate back to root feed inside WebView.
+    // On the root feed (/grid or /index.php/grid), the GRID logo exits back to native Grid SDUI.
     var path = (window.location.pathname || '').toLowerCase();
     var isProfSpace = path.includes('/grid') && !path.includes('/grid-chat');
-    if (isProfSpace) {
+    var isProfSpaceSubpage = isProfSpace && (path.includes('/team') || path.includes('/profile') || path.includes('/settings') || path.includes('/jobs') || path.includes('/post') || path.includes('/resume'));
+    if (isProfSpaceSubpage) {
       return;
     }
 
@@ -3099,17 +3194,19 @@ Error: $error
     if (matched) {
       e.preventDefault();
       e.stopPropagation();
-      if (window.CircleConnectNavBridge) {
-        window.CircleConnectNavBridge.postMessage('go_back_to_grid');
-      }
+      postBackToGrid();
+      return;
+    }
+
+    // If inside a conversation, NEVER intercept. Let web app handle the back arrow natively!
+    if (isInsideConversation()) {
+      return;
     }
   }
 
   if (!window.__gridClickInterceptorInstalled) {
     window.__gridClickInterceptorInstalled = true;
     document.addEventListener('click', handleGridTrigger, true);
-    document.addEventListener('touchend', handleGridTrigger, true);
-    document.addEventListener('pointerup', handleGridTrigger, true);
   }
 
   if (!window.__gridTargetBlankInterceptorInstalled) {
@@ -3139,9 +3236,6 @@ Error: $error
   }
 
   function attachGridDirect() {
-    if (isInsideConversation()) {
-      return;
-    }
     var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2, img, button');
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
@@ -3149,12 +3243,13 @@ Error: $error
         el.__gridDirectAttached = true;
         el.style.cursor = 'pointer';
         el.addEventListener('click', function(e) {
-          if (isInsideConversation()) return;
+          var curPath = (window.location.pathname || '').toLowerCase();
+          var curProf = curPath.includes('/grid') && !curPath.includes('/grid-chat');
+          var curSubpage = curProf && (curPath.includes('/team') || curPath.includes('/profile') || curPath.includes('/settings') || curPath.includes('/jobs') || curPath.includes('/post') || curPath.includes('/resume'));
+          if (curSubpage) return;
           e.preventDefault();
           e.stopPropagation();
-          if (window.CircleConnectNavBridge) {
-            window.CircleConnectNavBridge.postMessage('go_back_to_grid');
-          }
+          postBackToGrid();
         }, true);
       }
     }
@@ -3173,9 +3268,8 @@ Error: $error
     } catch (_) {}
   }
 
-  /// Injects horizontal swipe detection and conversation state monitoring when inside a chat room.
-  /// Swipe left-to-right (dx > 55) -> navigates to Moments.
-  /// Swipe right-to-left (dx < -55) -> navigates to Channels.
+  /// Injects conversation state monitoring when inside a chat room.
+  /// Note: In-chat horizontal sliding ([Moments] <-> [Chat] <-> [Channel]) is handled natively by the web app.
   Future<void> _injectChatSwipeBridge() async {
     if (!_isCircleConnect) return;
     const js = '''
@@ -3183,9 +3277,6 @@ Error: $error
   if (window.__circleChatSwipeBridgeInstalled) return;
   window.__circleChatSwipeBridgeInstalled = true;
 
-  var chatTouchStartX = 0;
-  var chatTouchStartY = 0;
-  var chatTouchStartTime = 0;
   var lastInsideConv = false;
 
   function isInsideConversation() {
@@ -3226,37 +3317,6 @@ Error: $error
     }
   }
 
-  document.addEventListener('touchstart', function(e) {
-    if (!isInsideConversation()) return;
-    var t = (e.touches && e.touches[0]) || e;
-    chatTouchStartX = t.clientX;
-    chatTouchStartY = t.clientY;
-    chatTouchStartTime = Date.now();
-  }, { passive: true });
-
-  document.addEventListener('touchend', function(e) {
-    if (!isInsideConversation()) return;
-    var t = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]) || e;
-    var dx = t.clientX - chatTouchStartX;
-    var dy = t.clientY - chatTouchStartY;
-    var dt = Date.now() - chatTouchStartTime;
-
-    // Must be predominantly horizontal gesture within 800ms
-    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.6 && dt < 800) {
-      if (dx > 55) {
-        // Swipe Left to Right -> Moments
-        if (window.CircleConnectNavBridge) {
-          window.CircleConnectNavBridge.postMessage('chat_swipe:moments');
-        }
-      } else if (dx < -55) {
-        // Swipe Right to Left -> Channels
-        if (window.CircleConnectNavBridge) {
-          window.CircleConnectNavBridge.postMessage('chat_swipe:channels');
-        }
-      }
-    }
-  }, { passive: true });
-
   reportState();
   if (document.body && !window.__circleChatStateObserver) {
     window.__circleChatStateObserver = new MutationObserver(function() {
@@ -3277,25 +3337,70 @@ Error: $error
     } catch (_) {}
   }
 
-  /// Injects compatibility bridge for the scanner web page back button.
-  /// When user taps the top-left back button, the web page calls
-  /// window.flutter_inappwebview.callHandler('closeWebView') which this bridge
-  /// forwards to CircleConnectNavBridge ('go_back_to_grid') to pop back to Grid SDUI.
+  /// Injects compatibility bridge for scanner and professional space exit/close buttons.
+  /// When user taps the top-left back button or an in-page exit button, the web page may call:
+  /// - window.exit()
+  /// - window.flutter_inappwebview.callHandler('closeWebView' / 'exit')
+  /// - window.dispatchEvent(new Event('exit'))
+  /// This bridge forwards all exit actions to CircleConnectNavBridge ('go_back_to_grid')
+  /// to safely pop back to Grid SDUI.
   Future<void> _injectScannerBridge() async {
     const js = '''
 (function() {
-  if (!window.flutter_inappwebview) {
-    window.flutter_inappwebview = {
-      callHandler: function(handlerName) {
-        var name = String(handlerName || '').toLowerCase();
-        if (name === 'closewebview' || name === 'goback' || name === 'close' || name === 'back') {
-          if (window.CircleConnectNavBridge) {
-            window.CircleConnectNavBridge.postMessage('go_back_to_grid');
-          }
-        }
+  function handleExit() {
+    try {
+      if (window.CircleConnectNavBridge && typeof window.CircleConnectNavBridge.postMessage === 'function') {
+        window.CircleConnectNavBridge.postMessage('go_back_to_grid');
+        return;
       }
-    };
+    } catch (_) {}
+    try {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.CircleConnectNavBridge) {
+        window.webkit.messageHandlers.CircleConnectNavBridge.postMessage('go_back_to_grid');
+      }
+    } catch (_) {}
   }
+
+  // 1. Ensure window.exit() is defined globally
+  if (typeof window.exit !== 'function') {
+    window.exit = handleExit;
+  }
+
+  // 2. Ensure window.flutter_inappwebview.callHandler forwards exit/close handlers
+  if (!window.flutter_inappwebview) {
+    window.flutter_inappwebview = {};
+  }
+  var origCallHandler = window.flutter_inappwebview.callHandler;
+  window.flutter_inappwebview.callHandler = function(handlerName) {
+    var name = String(handlerName || '').toLowerCase();
+    if (name === 'closewebview' || name === 'goback' || name === 'close' || name === 'back' || name === 'exit') {
+      handleExit();
+      return Promise.resolve(true);
+    }
+    if (typeof origCallHandler === 'function') {
+      return origCallHandler.apply(this, arguments);
+    }
+    return Promise.resolve();
+  };
+
+  // 3. Listen for custom exit events
+  window.addEventListener('exit', handleExit, true);
+  window.addEventListener('closeWebView', handleExit, true);
+
+  // 4. Attach click listener for explicit exit buttons
+  document.addEventListener('click', function(e) {
+    var el = e.target;
+    while (el && el !== document.body && el !== document.documentElement) {
+      var action = (el.getAttribute && el.getAttribute('data-action')) || '';
+      var aria = (el.getAttribute && el.getAttribute('aria-label')) || '';
+      var clz = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+      if (action.toLowerCase() === 'exit' || clz.includes('btn-exit') || clz.includes('exit-button') || aria.toLowerCase() === 'exit') {
+        handleExit();
+        return;
+      }
+      el = el.parentElement;
+    }
+  }, true);
 })();
 ''';
     try {
@@ -3314,6 +3419,16 @@ Error: $error
         fullUrl.contains('grid-chat');
   }
 
+  bool get _isProfessionalSpace {
+    if (_isCircleConnect) return false;
+    final path = widget.uri.path.toLowerCase();
+    final title = (widget.title ?? '').toLowerCase();
+    final fullUrl = widget.uri.toString().toLowerCase();
+    return path.contains('/grid') ||
+        title.contains('professional') ||
+        fullUrl.contains('/index.php/grid');
+  }
+
   void _onChatConversationOpened() {
     if (!mounted) return;
     _isInsideChatConversation = true;
@@ -3329,415 +3444,25 @@ Error: $error
   }
 
   Future<void> _checkChatTutorial() async {
+    // In-chat 3-pane navigation ([Moments] <-> [Chat] <-> [Channel]) is handled
+    // natively by the web application. Do not overlay any gesture detectors.
     if (!_isCircleConnect) return;
     if (_chatTutorialScheduled) return;
     _chatTutorialScheduled = true;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final seen = prefs.getBool('has_seen_chat_conversation_swipe_tutorial_v1') ?? false;
-      if (!seen && mounted) {
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (mounted && _isInsideChatConversation && !_showChatTutorial) {
-            setState(() {
-              _showChatTutorial = true;
-            });
-          }
-        });
-      }
-    } catch (_) {}
   }
 
   Future<void> _dismissChatTutorial() async {
     if (!_showChatTutorial && mounted) return;
-    setState(() {
-      _showChatTutorial = false;
-    });
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('has_seen_chat_conversation_swipe_tutorial_v1', true);
-    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _showChatTutorial = false;
+      });
+    }
   }
 
   Future<void> _handleChatSwipeNavigation({required String targetTab}) async {
-    _dismissChatTutorial();
-    final js = '''
-(function() {
-  try {
-    var target = '$targetTab'.toLowerCase();
-    // 1. Exit active chat conversation
-    var backBtn = document.querySelector(
-      'header [class*="back" i], header button, header [aria-label*="back" i], header [title*="back" i], .back-arrow, [class*="back-button" i], [class*="back_button" i], [class*="arrow-back" i], [class*="arrow_back" i]'
-    );
-    if (backBtn && typeof backBtn.click === 'function') {
-      try { backBtn.click(); } catch(_) {}
-    } else if (window.history && window.history.length > 1) {
-      try { window.history.back(); } catch(_) {}
-    }
-
-    // 2. Select target bottom tab (Moments or Channels)
-    function clickTargetTab() {
-      var selectors = [
-        '[data-tab="' + target + '"]',
-        '[data-testid="' + target + '-tab"]',
-        '[data-testid*="' + target + '" i]',
-        '#' + target + '-tab',
-        '.' + target + '-tab'
-      ];
-      for (var i = 0; i < selectors.length; i++) {
-        var el = document.querySelector(selectors[i]);
-        if (el && typeof el.click === 'function') {
-          el.click();
-          return true;
-        }
-      }
-      var allNav = document.querySelectorAll('.bottom-nav .nav-item, nav button, nav a, [role="tab"], button, div[role="button"]');
-      for (var j = 0; j < allNav.length; j++) {
-        var t = (allNav[j].innerText || allNav[j].textContent || '').trim().toLowerCase();
-        if (t === target || t.includes(target)) {
-          if (typeof allNav[j].click === 'function') {
-            allNav[j].click();
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-
-    if (!clickTargetTab()) {
-      setTimeout(clickTargetTab, 100);
-      setTimeout(clickTargetTab, 250);
-      setTimeout(clickTargetTab, 500);
-    }
-  } catch(e) {
-    console.error('Error navigating chat swipe:', e);
-  }
-})();
-''';
-    try {
-      await _controller.runJavaScript(js);
-    } catch (_) {}
-  }
-
-  Widget _buildChatConversationTutorialOverlay() {
-    return Positioned.fill(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOut,
-        builder: (context, opacity, child) {
-          return Opacity(
-            opacity: opacity,
-            child: child,
-          );
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart: (_) {
-            _chatTutorialDragDistance = 0.0;
-          },
-          onHorizontalDragUpdate: (details) {
-            _chatTutorialDragDistance += details.delta.dx;
-          },
-          onHorizontalDragEnd: (details) {
-            final velocity = details.primaryVelocity ?? 0;
-            // Drag finger right (positive dx/velocity) -> Moments
-            // Drag finger left (negative dx/velocity) -> Channels
-            final isSwipeRight = velocity > 80 || _chatTutorialDragDistance > 30;
-            final isSwipeLeft = velocity < -80 || _chatTutorialDragDistance < -30;
-            if (isSwipeRight) {
-              _handleChatSwipeNavigation(targetTab: 'moments');
-            } else if (isSwipeLeft) {
-              _handleChatSwipeNavigation(targetTab: 'channels');
-            }
-          },
-          child: Material(
-            // Translucent overlay so the active chat conversation remains softly visible underneath
-            color: Colors.black.withValues(alpha: 0.48),
-            child: Stack(
-              children: [
-                // Top-right 'skip' button
-                Positioned(
-                  top: 18,
-                  right: 18,
-                  child: SafeArea(
-                    child: InkWell(
-                      onTap: _dismissChatTutorial,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white70, width: 1.5),
-                        ),
-                        child: const Text(
-                          'skip',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Center gesture demonstration: Dual directional sliding arrows
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 1. Swipe Right for Moments
-                      const SizedBox(
-                        width: 220,
-                        height: 54,
-                        child: _DirectionalSlidingArrow(isPointingRight: true),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: const Color(0xFF38BDF8).withValues(alpha: 0.40),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF38BDF8).withValues(alpha: 0.20),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Swipe Right for Moments',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                            SizedBox(width: 6),
-                            Icon(Icons.arrow_forward_rounded, color: Color(0xFF38BDF8), size: 16),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 36),
-
-                      // 2. Swipe Left for Channels
-                      const SizedBox(
-                        width: 220,
-                        height: 54,
-                        child: _DirectionalSlidingArrow(isPointingRight: false),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: const Color(0xFFF59E0B).withValues(alpha: 0.40),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFF59E0B).withValues(alpha: 0.20),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.arrow_back_rounded, color: Color(0xFFF59E0B), size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'Swipe Left for Channels',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Swipe anywhere inside chat to switch spaces',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-}
-
-/// Crisp transparent outline arrow pointing right with luminous border
-class _TransparentOutlineArrowPainter extends CustomPainter {
-  final bool isPointingLeft;
-
-  const _TransparentOutlineArrowPainter({this.isPointingLeft = false});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    if (isPointingLeft) {
-      canvas.translate(size.width, 0);
-      canvas.scale(-1, 1);
-    }
-    final centerY = size.height / 2;
-    const totalWidth = 114.0;
-    const headHeight = 52.0;
-    const shaftHeight = 18.0;
-    const headLength = 46.0;
-    const barbDepth = 10.0;
-    final tailX = (size.width - totalWidth) / 2;
-    final tipX = tailX + totalWidth;
-
-    final path = Path()
-      ..moveTo(tailX, centerY - shaftHeight / 2)
-      ..lineTo(tipX - headLength + barbDepth, centerY - shaftHeight / 2)
-      ..lineTo(tipX - headLength, centerY - headHeight / 2)
-      ..lineTo(tipX, centerY)
-      ..lineTo(tipX - headLength, centerY + headHeight / 2)
-      ..lineTo(tipX - headLength + barbDepth, centerY + shaftHeight / 2)
-      ..lineTo(tailX, centerY + shaftHeight / 2)
-      ..close();
-
-    // Subtle frosted interior (transparent so chats are completely visible through the arrow body)
-    final fillPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.10)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(path, fillPaint);
-
-    // Soft luminous outer glow
-    final glowPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.40)
-      ..strokeWidth = 6.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    canvas.drawPath(path, glowPaint);
-
-    // Sharp white outline border
-    final strokePaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 3.2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(path, strokePaint);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-/// Bidirectional continuous gliding arrow for chat tutorial (pointing right or left)
-class _DirectionalSlidingArrow extends StatefulWidget {
-  final bool isPointingRight;
-
-  const _DirectionalSlidingArrow({required this.isPointingRight});
-
-  @override
-  State<_DirectionalSlidingArrow> createState() => _DirectionalSlidingArrowState();
-}
-
-class _DirectionalSlidingArrowState extends State<_DirectionalSlidingArrow>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<Offset> _slideAnimation;
-  late final Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1300),
-    )..repeat();
-
-    final beginOffset = widget.isPointingRight
-        ? const Offset(-0.35, 0.0)
-        : const Offset(0.35, 0.0);
-    final endOffset = widget.isPointingRight
-        ? const Offset(0.35, 0.0)
-        : const Offset(-0.35, 0.0);
-
-    _slideAnimation = Tween<Offset>(
-      begin: beginOffset,
-      end: endOffset,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOutCubic,
-      ),
-    );
-
-    _fadeAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 20,
-      ),
-      TweenSequenceItem(
-        tween: ConstantTween<double>(1.0),
-        weight: 60,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 20,
-      ),
-    ]).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SlideTransition(
-        position: _slideAnimation,
-        child: Center(
-          child: CustomPaint(
-            size: const Size(130, 50),
-            painter: _TransparentOutlineArrowPainter(
-              isPointingLeft: !widget.isPointingRight,
-            ),
-          ),
-        ),
-      ),
-    );
+    // In-chat 3-pane swipe navigation ([Moments] <-> [Chat] <-> [Channel])
+    // is handled natively by the web application. Never exit or kill the conversation.
+    await _dismissChatTutorial();
   }
 }
