@@ -48,7 +48,8 @@ class OngoingCallService {
       '[OngoingCallService] >>> startCall: callId=$_activeCallId, type=$_activeCallType, name=$_activeCallerName, isGroup=$_isGroup',
     );
 
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
       try {
         await _channel.invokeMethod<bool>('startOngoingCallService', {
           'callId': _activeCallId,
@@ -57,7 +58,7 @@ class OngoingCallService {
           'isGroup': _isGroup,
         });
       } catch (e) {
-        debugPrint('[OngoingCallService] Failed starting Android foreground service: $e');
+        debugPrint('[OngoingCallService] Failed starting ongoing call service: $e');
       }
     }
   }
@@ -89,11 +90,12 @@ class OngoingCallService {
 
     unawaited(CallLifecycleTracker.setOngoingCallActive(false, callId: callId ?? stoppedId));
 
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
       try {
         await _channel.invokeMethod<bool>('stopOngoingCallService');
       } catch (e) {
-        debugPrint('[OngoingCallService] Failed stopping Android foreground service: $e');
+        debugPrint('[OngoingCallService] Failed stopping ongoing call service: $e');
       }
     }
   }

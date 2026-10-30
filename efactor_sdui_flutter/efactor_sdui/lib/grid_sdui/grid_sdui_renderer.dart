@@ -190,6 +190,16 @@ class GridSduiRenderer {
           controlId: action['id']?.toString(),
         );
       }
+      final appearance = _map(action['appearance']) ?? const <String, dynamic>{};
+      final layout = _map(action['layout']) ?? const <String, dynamic>{};
+      final actionSize = _d(appearance['size'] ?? layout['width']) ?? 40.0;
+      final imageUrl = (action['imageUrl'] ??
+              action['avatarUrl'] ??
+              action['image'] ??
+              appearance['imageUrl'])
+          ?.toString()
+          .trim();
+
       return Padding(
         padding: const EdgeInsets.only(left: 8),
         child: Container(
@@ -206,22 +216,41 @@ class GridSduiRenderer {
           child: Material(
             color: color,
             shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: () => state.dispatch(action['actionId']?.toString()),
               child: SizedBox(
-                width: 40,
-                height: 40,
-                child: Center(
-                  child: Text(
-                    action['label']?.toString() ?? '',
-                    style: TextStyle(
-                      color: onAccent,
-                      fontWeight: FontWeight.w800,
-                      fontSize: fontSize,
-                    ),
-                  ),
-                ),
+                width: actionSize,
+                height: actionSize,
+                child: (imageUrl != null && imageUrl.isNotEmpty)
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        cacheManager: SduiNetworkImageCache.manager,
+                        width: actionSize,
+                        height: actionSize,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => Center(
+                          child: Text(
+                            action['label']?.toString() ?? '',
+                            style: TextStyle(
+                              color: onAccent,
+                              fontWeight: FontWeight.w800,
+                              fontSize: fontSize,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Text(
+                          action['label']?.toString() ?? '',
+                          style: TextStyle(
+                            color: onAccent,
+                            fontWeight: FontWeight.w800,
+                            fontSize: fontSize,
+                          ),
+                        ),
+                      ),
               ),
             ),
           ),
@@ -249,6 +278,12 @@ class GridSduiRenderer {
       );
     }
 
+    final iconToken = action['iconToken']?.toString().trim();
+    final isScannerIcon = iconToken == 'scanner' ||
+        iconToken == 'scan' ||
+        iconToken == 'viewfinder' ||
+        iconToken == 'cropFree';
+
     return Padding(
       padding: const EdgeInsets.only(left: 8),
       child: Material(
@@ -262,11 +297,17 @@ class GridSduiRenderer {
             width: actionSize,
             height: actionSize,
             child: Center(
-              child: FaIcon(
-                icons.resolve(action['iconToken']?.toString()),
-                size: iconSize,
-                color: iconColor,
-              ),
+              child: isScannerIcon
+                  ? Icon(
+                      Icons.qr_code_scanner,
+                      size: iconSize,
+                      color: iconColor,
+                    )
+                  : FaIcon(
+                      icons.resolve(iconToken),
+                      size: iconSize,
+                      color: iconColor,
+                    ),
             ),
           ),
         ),
@@ -400,7 +441,10 @@ class GridSduiRenderer {
     final titleSize = _d(appearance['titleFontSize']);
     final subtitleSize = _d(appearance['subtitleFontSize']) ??
         _tokenSize('pageSubtitle');
-    final titlePadding = _d(appearance['titlePadding']);
+    final paddingRaw =
+        _d(appearance['padding'] ?? appearance['titlePadding']);
+    final cardPadding =
+        (paddingRaw == null || paddingRaw <= 0.0) ? 12.0 : paddingRaw;
     final accent = state.parseColor(c['color']) ??
         state.tokenColor('colors.accent') ??
         textColor;
@@ -416,7 +460,7 @@ class GridSduiRenderer {
         iconSize == null ||
         titleSize == null ||
         subtitleSize == null ||
-        titlePadding == null ||
+        paddingRaw == null ||
         accent == null ||
         onAccent == null ||
         iconOverlay == null) {
@@ -424,7 +468,7 @@ class GridSduiRenderer {
         title: 'Schema tokens missing',
         details: const [
           'Provide appearance.borderRadius, layout.minHeight, textColor or colors.textPrimary,',
-          'gradient/backgroundColor or colors.surface, appearance.iconSize/titleFontSize/subtitleFontSize/titlePadding,',
+          'gradient/backgroundColor or colors.surface, appearance.iconSize/titleFontSize/subtitleFontSize/padding,',
           'component.color or colors.accent, and colors.surface (for overlays)',
         ],
         componentType: c['type']?.toString(),
@@ -433,6 +477,245 @@ class GridSduiRenderer {
     }
     final iconBox = iconSize;
     final glyphSize = iconSize * 0.5;
+    final direction = (layout['direction'] ?? 'vertical')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final isHorizontal = direction == 'horizontal' ||
+        appearance['titlePosition'] == 'besideIcon' ||
+        appearance['iconPosition'] == 'leading';
+
+    Widget cardBody;
+    if (isHorizontal) {
+      final iconMap = _map(c['icon']) ?? _map(c['leading']);
+      final avatarLabel = (iconMap?['label'] ??
+              iconMap?['initial'] ??
+              c['label'] ??
+              c['initial'] ??
+              c['initials'] ??
+              '')
+          .toString()
+          .trim();
+      final avatarColor = state.parseColor(
+              iconMap?['backgroundColor'] ??
+                  iconMap?['color'] ??
+                  c['avatarColor']) ??
+          accent;
+      final avatarImageUrl = (iconMap?['imageUrl'] ??
+              iconMap?['avatarUrl'] ??
+              c['imageUrl'] ??
+              c['image'])
+          ?.toString()
+          .trim();
+      final iconBorderRadius =
+          _d(appearance['iconBorderRadius']) ?? (iconBox / 2.0);
+      final hasAvatar = iconMap != null ||
+          avatarLabel.isNotEmpty ||
+          (avatarImageUrl != null && avatarImageUrl.isNotEmpty);
+
+      Widget leadingWidget;
+      if (hasAvatar) {
+        leadingWidget = Container(
+          width: iconBox,
+          height: iconBox,
+          decoration: BoxDecoration(
+            color: avatarColor,
+            borderRadius: BorderRadius.circular(iconBorderRadius),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: (avatarImageUrl != null && avatarImageUrl.isNotEmpty)
+              ? CachedNetworkImage(
+                  imageUrl: avatarImageUrl,
+                  cacheManager: SduiNetworkImageCache.manager,
+                  width: iconBox,
+                  height: iconBox,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, __, ___) => Center(
+                    child: Text(
+                      avatarLabel.isNotEmpty ? avatarLabel : 'M',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                )
+              : Center(
+                  child: Text(
+                    avatarLabel.isNotEmpty ? avatarLabel : 'M',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+        );
+      } else {
+        leadingWidget = Container(
+          width: iconBox,
+          height: iconBox,
+          decoration: BoxDecoration(
+            color: iconOverlay.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(iconBorderRadius),
+          ),
+          alignment: Alignment.center,
+          child: FaIcon(
+            icons.resolve(c['iconToken']?.toString()),
+            size: glyphSize,
+            color: accent,
+          ),
+        );
+      }
+
+      final badgeText =
+          (c['badge'] ?? _map(c['chip'])?['label'])?.toString().trim() ?? '';
+      final showBadge =
+          appearance['showBadge'] != false && badgeText.isNotEmpty;
+
+      cardBody = Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          leadingWidget,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  c['title']?.toString() ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (appearance['showSubtitle'] != false) ...<Widget>[
+                  const SizedBox(height: 3),
+                  Text(
+                    c['subtitle']?.toString() ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: textColor.withValues(alpha: 0.72),
+                      fontSize: subtitleSize,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (showBadge) ...<Widget>[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                badgeText,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+          if (appearance['showActionArrow'] == true) ...<Widget>[
+            const SizedBox(width: 8),
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: accent,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: FaIcon(
+                  icons.resolve(
+                    c['actionArrowIconToken']?.toString() ?? 'chevron-right',
+                  ),
+                  size: 12,
+                  color: onAccent,
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    } else {
+      cardBody = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: iconBox,
+            height: iconBox,
+            decoration: BoxDecoration(
+              color: iconOverlay.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            alignment: Alignment.center,
+            child: FaIcon(
+              icons.resolve(c['iconToken']?.toString()),
+              size: glyphSize,
+              color: accent,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            c['title']?.toString() ?? '',
+            style: TextStyle(
+              color: textColor,
+              fontSize: titleSize,
+              fontWeight: FontWeight.w800,
+              height: 1.15,
+            ),
+          ),
+          if (appearance['showSubtitle'] != false) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              c['subtitle']?.toString() ?? '',
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.78),
+                fontSize: subtitleSize,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+          const Spacer(),
+          if (appearance['showActionArrow'] != false)
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: FaIcon(
+                    icons.resolve(
+                      c['actionArrowIconToken']?.toString() ??
+                          'chevron-right',
+                    ),
+                    size: 14,
+                    color: onAccent,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
 
     return Material(
       color: Colors.transparent,
@@ -448,7 +731,7 @@ class GridSduiRenderer {
           },
         ),
         child: Ink(
-          padding: EdgeInsets.all(titlePadding),
+          padding: EdgeInsets.all(cardPadding),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
             gradient: LinearGradient(
@@ -458,71 +741,9 @@ class GridSduiRenderer {
             ),
           ),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: minHeight - titlePadding * 2),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Container(
-                  width: iconBox,
-                  height: iconBox,
-                  decoration: BoxDecoration(
-                    color: iconOverlay.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  alignment: Alignment.center,
-                  child: FaIcon(
-                    icons.resolve(c['iconToken']?.toString()),
-                    size: glyphSize,
-                    color: accent,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  c['title']?.toString() ?? '',
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: titleSize,
-                    fontWeight: FontWeight.w800,
-                    height: 1.15,
-                  ),
-                ),
-                if (appearance['showSubtitle'] != false) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Text(
-                    c['subtitle']?.toString() ?? '',
-                    style: TextStyle(
-                      color: textColor.withValues(alpha: 0.78),
-                      fontSize: subtitleSize,
-                      height: 1.35,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                if (appearance['showActionArrow'] != false)
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: accent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: FaIcon(
-                          icons.resolve(
-                            c['actionArrowIconToken']?.toString() ??
-                                'chevron-right',
-                          ),
-                          size: 14,
-                          color: onAccent,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            constraints:
+                BoxConstraints(minHeight: minHeight - cardPadding * 2),
+            child: cardBody,
           ),
         ),
       ),

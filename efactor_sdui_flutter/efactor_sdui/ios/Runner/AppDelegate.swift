@@ -10,6 +10,7 @@ import UserNotifications
   private var isBridgeRegistered = false
   private var incomingRingPlayer: AVAudioPlayer?
   private var incomingRingTimer: Timer?
+  private var isOngoingCallAudioActive = false
 
   override func application(
     _ application: UIApplication,
@@ -63,9 +64,53 @@ import UserNotifications
       case "stopIncomingRing":
         self.stopIncomingRing()
         result(true)
+      case "startOngoingCallService":
+        self.startOngoingCallAudioSession()
+        result(true)
+      case "stopOngoingCallService":
+        self.stopOngoingCallAudioSession()
+        result(true)
+      case "isOngoingCallActive":
+        result(self.isOngoingCallAudioActive)
+      case "openNotificationChannelSettings":
+        if let url = URL(string: UIApplication.openSettingsURLString), UIApplication.shared.canOpenURL(url) {
+          UIApplication.shared.open(url, options: [:], completionHandler: nil)
+          result(true)
+        } else {
+          result(false)
+        }
+      case "getDeviceManufacturer":
+        result("apple")
+      case "wakeAndUnlock":
+        result(true)
+      case "canDrawOverlays", "isIgnoringBatteryOptimizations":
+        result(true)
+      case "openOverlaySettings", "openAutostartSettings", "requestIgnoreBatteryOptimizations", "openFullScreenIntentSettings":
+        result(true)
       default:
         result(FlutterMethodNotImplemented)
       }
+    }
+  }
+
+  private func startOngoingCallAudioSession() {
+    isOngoingCallAudioActive = true
+    stopIncomingRing()
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP, .duckOthers])
+      try session.setActive(true)
+    } catch {
+      NSLog("[AppDelegate] Failed to activate AVAudioSession for ongoing call: \(error.localizedDescription)")
+    }
+  }
+
+  private func stopOngoingCallAudioSession() {
+    isOngoingCallAudioActive = false
+    do {
+      try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    } catch {
+      NSLog("[AppDelegate] Failed to deactivate AVAudioSession for ongoing call: \(error.localizedDescription)")
     }
   }
 

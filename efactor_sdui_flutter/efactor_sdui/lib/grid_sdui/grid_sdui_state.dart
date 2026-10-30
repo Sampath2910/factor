@@ -115,6 +115,9 @@ class GridSduiState extends ChangeNotifier {
   /// (embedded WebView). When null, falls back to url_launcher Custom Tabs.
   Future<bool> Function(Uri uri, {String? title})? inAppWebViewOpener;
 
+  /// Native camera scanner opener for QR and barcode scanning.
+  Future<bool> Function()? nativeScannerOpener;
+
   Map<String, dynamic> get components => schema['components'] is Map
       ? Map<String, dynamic>.from(
           (schema['components'] as Map).cast<dynamic, dynamic>(),
@@ -211,6 +214,20 @@ class GridSduiState extends ChangeNotifier {
   }) async {
     lastError = null;
     final type = action['type']?.toString();
+    final actionIdLower = actionId.toLowerCase();
+    if (actionIdLower == 'grid-open-scanner' ||
+        actionIdLower == 'open-scanner' ||
+        actionIdLower == 'openscanner' ||
+        type == 'open-scanner' ||
+        type == 'openScanner' ||
+        type == 'qrScanner') {
+      final opener = nativeScannerOpener;
+      if (opener != null) {
+        final handled = await opener();
+        if (handled) return;
+      }
+    }
+
     switch (type) {
       case 'open-url':
         await _openUrl(action, extra: extra);
@@ -287,6 +304,15 @@ class GridSduiState extends ChangeNotifier {
       lastError = 'Grid open-url is not a valid URL.';
       notifyListeners();
       return;
+    }
+
+    final pathLower = uri.path.toLowerCase();
+    if (pathLower.endsWith('/grid/qr') || pathLower.endsWith('/qr')) {
+      final scanner = nativeScannerOpener;
+      if (scanner != null) {
+        final handled = await scanner();
+        if (handled) return;
+      }
     }
 
     final openIn = (action['openIn']?.toString() ??

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../sdui/scanner_page.dart';
 import '../sdui/schema_guard.dart';
 import '../sdui/schema_pull_to_refresh.dart';
 import '../sdui/sdui_network_image_cache.dart';
@@ -328,6 +329,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     _activeSchemaFingerprint = fingerprint;
     final next = GridSduiState(schema);
     next.inAppWebViewOpener = _openInAppWebView;
+    next.nativeScannerOpener = _openNativeScanner;
     _state?.dispose();
     setState(() {
       _state = next;
@@ -338,8 +340,62 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
   }
 
+  Future<bool> _openNativeScanner() async {
+    if (!mounted) return false;
+    final scan = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute<Map<String, dynamic>>(
+        builder: (_) => const ScannerPage(
+          camera: 'back',
+          qrOnly: true,
+        ),
+      ),
+    );
+
+    if (!mounted || scan == null) return false;
+    final rawValue =
+        (scan['value'] ?? scan['displayValue'])?.toString().trim() ?? '';
+    if (rawValue.isEmpty) return false;
+
+    // If scanned value is an HTTP/HTTPS URL, open it authenticated in WebView
+    final uri = Uri.tryParse(rawValue);
+    if (uri != null &&
+        uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https')) {
+      await _openInAppWebView(uri, title: 'Connect');
+      return true;
+    }
+
+    if (mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(
+            Icons.qr_code_scanner,
+            size: 36,
+            color: Color(0xFF7C3AED),
+          ),
+          title: const Text('QR Code Scanned'),
+          content: SelectableText(rawValue),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+    return true;
+  }
+
   Future<bool> _openInAppWebView(Uri uri, {String? title}) async {
     if (!mounted) return false;
+    final path = uri.path.toLowerCase();
+    if (path.endsWith('/grid/qr') ||
+        path.endsWith('/qr') ||
+        (title ?? '').toLowerCase() == 'scan qr') {
+      return _openNativeScanner();
+    }
     final authenticatedUri = await _repository.resolveAuthenticatedUri(
       uri,
       activeSchema: _state?.schema,

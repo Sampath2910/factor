@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:efactor_sdui/data/schema_repository.dart';
 import 'package:efactor_sdui/services/device_parameter_store.dart';
+import 'package:efactor_sdui/services/ongoing_call_service.dart';
 import 'package:efactor_sdui/sdui/component_registry.dart';
 import 'package:efactor_sdui/sdui/renderer.dart';
 import 'package:efactor_sdui/sdui/style.dart';
@@ -338,5 +340,51 @@ void main() {
         state.dispose();
       });
     }
+
+    test('OngoingCallService invokes startOngoingCallService and stopOngoingCallService under iOS platform', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        final calls = <String>[];
+        final payloads = <Map<dynamic, dynamic>>[];
+
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          const MethodChannel('tech.efactor/circle_connect'),
+          (MethodCall methodCall) async {
+            calls.add(methodCall.method);
+            if (methodCall.arguments is Map) {
+              payloads.add(methodCall.arguments as Map<dynamic, dynamic>);
+            }
+            return true;
+          },
+        );
+
+        await OngoingCallService.instance.startCall(
+          callId: 'call_ios_123',
+          callType: 'audio',
+          name: 'Pavan',
+          isGroup: false,
+        );
+
+        expect(OngoingCallService.instance.isCallActive, isTrue);
+        expect(OngoingCallService.instance.activeCallId, 'call_ios_123');
+        expect(calls, contains('startOngoingCallService'));
+        expect(payloads.first['callId'], 'call_ios_123');
+
+        await OngoingCallService.instance.stopCall('call_ios_123');
+        expect(OngoingCallService.instance.isCallActive, isFalse);
+        expect(calls, contains('stopOngoingCallService'));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    test('iOS Info.plist disables Impeller (FLTEnableImpeller: false) to match Android Skia 3D parity', () async {
+      final file = File('ios/Runner/Info.plist');
+      expect(file.existsSync(), isTrue);
+      final content = await file.readAsString();
+      expect(content, contains('<key>FLTEnableImpeller</key>'));
+      expect(content, contains('<false/>'));
+    });
   });
 }

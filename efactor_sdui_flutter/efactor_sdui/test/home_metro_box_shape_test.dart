@@ -250,8 +250,8 @@ void main() {
     expect(clipFinder, findsWidgets, reason: 'Border radius should be 24.0 dynamically from designTokens without arbitrary clamping');
   });
 
-  testWidgets('borderRadius 0 uses the theme card radius', (tester) async {
-    final schema = _radiusSchema(borderRadius: 0, tokenRadius: 16);
+  testWidgets('omitted borderRadius uses the theme card radius', (tester) async {
+    final schema = _radiusSchema(borderRadius: null, tokenRadius: 16);
     final renderer = HomeSduiRenderer(
       HomeSduiState(schema: schema, accessToken: 'test-token'),
     );
@@ -268,6 +268,27 @@ void main() {
     await tester.pump();
 
     expect(_clipRadii(tester), contains(16));
+  });
+
+  testWidgets('explicit borderRadius 0 produces square corners (0.0)', (tester) async {
+    final schema = _radiusSchema(borderRadius: 0, tokenRadius: 16);
+    final renderer = HomeSduiRenderer(
+      HomeSduiState(schema: schema, accessToken: 'test-token'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => renderer.buildComponent(context, 'tile'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(_clipRadii(tester), contains(0.0));
+    expect(_clipRadii(tester), isNot(contains(16)));
   });
 
   testWidgets('explicit borderRadius overrides the theme radius', (tester) async {
@@ -389,7 +410,7 @@ void main() {
     expect(tile, findsOneWidget);
   });
 
-  testWidgets('a zero-radius tile paints a rounded corner', (tester) async {
+  testWidgets('a zero-radius tile paints a square corner', (tester) async {
     final schema = _radiusSchema(borderRadius: 0, tokenRadius: 16);
     final renderer = HomeSduiRenderer(
       HomeSduiState(schema: schema, accessToken: 'test-token'),
@@ -428,8 +449,8 @@ void main() {
       return bytes!.getUint8(offset);
     }
 
-    // Corner of the 160 tile must show the black page, not the purple face.
-    expect(at(2, 2), lessThan(40), reason: 'top-left corner is not clipped');
+    // Corner of the 160 tile must be painted with the purple face (sharp square), not clipped.
+    expect(at(2, 2), greaterThan(80), reason: 'top-left corner is painted as a sharp square');
     expect(at(80, 80), greaterThan(80), reason: 'tile center should be painted');
   });
 
@@ -552,9 +573,9 @@ void main() {
   );
 
   testWidgets(
-    'profile with component and face borderRadius 0 uses theme cardBorderRadius 16',
+    'tile with omitted borderRadius uses theme cardBorderRadius 16',
     (tester) async {
-      final schema = _radiusSchema(borderRadius: 0, tokenRadius: 16);
+      final schema = _radiusSchema(borderRadius: null, tokenRadius: 16);
       final renderer = HomeSduiRenderer(
         HomeSduiState(schema: schema, accessToken: 'test-token'),
       );
@@ -574,10 +595,151 @@ void main() {
       expect(radii, everyElement(equals(16.0)));
     },
   );
+
+  testWidgets(
+    'tiles with borderRadius: 0 remain squares even if theme.cardBorderRadius is 20 (like User 770)',
+    (tester) async {
+      final schema = _radiusSchema(borderRadius: 0, tokenRadius: 20);
+      final renderer = HomeSduiRenderer(HomeSduiState(schema: schema, accessToken: 'test-token'));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => renderer.buildComponent(context, 'tile'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final radii = _clipRadii(tester);
+      expect(radii, contains(0.0), reason: 'tile with borderRadius 0 must have radius 0.0 despite theme radius 20');
+    },
+  );
+
+  testWidgets(
+    'squares with curves: renders 1:1 square box cell with curved border radius dynamically from schema',
+    (tester) async {
+      final schema = <String, dynamic>{
+        'designTokens': <String, dynamic>{
+          'colors': <String, dynamic>{
+            'surface': '#151b2e',
+            'textPrimary': '#ffffff',
+            'textSecondary': '#94a3b8',
+            'welcomeText': '#ffffff',
+          },
+          'radius': <String, dynamic>{'card': 16.0},
+          'spacing': <String, dynamic>{'sm': 8.0, 'xs': 4.0, 'xxs': 2.0},
+          'typography': <String, dynamic>{
+            'cardTitle': <String, dynamic>{
+              'fontSize': 12.0,
+              'fontWeight': 800,
+              'maxLines': 1,
+              'overflow': 'clip',
+            },
+            'cardSubtitle': <String, dynamic>{
+              'fontSize': 9.0,
+              'fontWeight': 700,
+              'maxLines': 1,
+              'overflow': 'clip',
+            },
+            'pageTitle': <String, dynamic>{'fontSize': 18.0},
+            'statValue': <String, dynamic>{'fontSize': 14.0, 'fontWeight': 700},
+          },
+        },
+        'uiRenderContract': <String, dynamic>{
+          'cubeGeometry': <String, dynamic>{
+            'sizeFormula': 'slotWidth',
+          },
+        },
+        'meta': <String, dynamic>{
+          'layoutSnapshot': <String, dynamic>{
+            'theme': <String, dynamic>{
+              'squareTiles': true,
+              'cardBorderRadius': 16.0, // Curves requested in theme
+            },
+          },
+        },
+        'components': <String, dynamic>{
+          'home-grid': <String, dynamic>{
+            'id': 'home-grid',
+            'type': 'responsiveGrid',
+            'layout': <String, dynamic>{
+              'type': 'metroGrid',
+              'columns': 3,
+              'columnGap': 6.0,
+              'rowGap': 6.0,
+              'sizeFormula': 'slotWidth',
+            },
+            'children': <dynamic>['curved-square-tile'],
+          },
+          'curved-square-tile': <String, dynamic>{
+            'id': 'curved-square-tile',
+            'type': 'rotatingFaceCard',
+            'layout': <String, dynamic>{
+              'columnSpan': 1,
+              'rowSpan': 1,
+            },
+            'appearance': <String, dynamic>{
+              'borderRadius': 16.0, // Explicit curve override
+            },
+            'faces': <dynamic>[
+              <String, dynamic>{
+                'id': 'face-0',
+                'title': 'Curved Square',
+                'appearance': <String, dynamic>{
+                  'backgroundColor': '#7c3aed',
+                  'borderRadius': 16.0,
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final renderer = HomeSduiRenderer(
+        HomeSduiState(schema: schema, accessToken: 'test-token'),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 375,
+              child: Builder(
+                builder: (context) => renderer.buildComponent(context, 'home-grid'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Verify 1:1 square box geometry:
+      final tileFinder = find.byWidgetPredicate((widget) {
+        if (widget is Positioned && widget.width != null && widget.height != null) {
+          return (widget.width! - 121.0).abs() < 0.1 && (widget.height! - 121.0).abs() < 0.1;
+        }
+        return false;
+      });
+      expect(tileFinder, findsOneWidget, reason: 'Tile must be a 1:1 square (width == height == 121.0)');
+
+      // 2. Verify curves:
+      final radii = _clipRadii(tester);
+      expect(radii, contains(16.0), reason: 'Tile and faces must have 16.0dp curved corners');
+    },
+  );
 }
 
 Map<String, dynamic> _radiusSchema({
-  required num borderRadius,
+  num? borderRadius,
   required num tokenRadius,
 }) {
   return <String, dynamic>{
@@ -622,17 +784,18 @@ Map<String, dynamic> _radiusSchema({
       'tile': <String, dynamic>{
         'id': 'tile',
         'presetId': 'home-tile',
-        'appearance': <String, dynamic>{
-          'borderRadius': borderRadius,
-          'style': 'metroTile',
-        },
+        if (borderRadius != null)
+          'appearance': <String, dynamic>{
+            'borderRadius': borderRadius,
+            'style': 'metroTile',
+          },
         'faces': <dynamic>[
           <String, dynamic>{
             'id': 'face-0',
             'title': 'Online',
             'appearance': <String, dynamic>{
               'backgroundColor': '#7c3aed',
-              'borderRadius': borderRadius,
+              if (borderRadius != null) 'borderRadius': borderRadius,
               'style': 'startTile',
             },
           },

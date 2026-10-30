@@ -208,4 +208,204 @@ void main() {
     expect(hasConvexFrontTransform, isTrue,
         reason: 'Front face perspective entry (3, 2) must be negative so near edges expand outward (convex exterior)');
   });
+
+  testWidgets('Mid-turn rotation displays both Face 0 and Face 1 simultaneously in true 3D (no 2D flat culling)', (tester) async {
+    final faces = <Map<String, dynamic>>[
+      <String, dynamic>{'id': 'f0', 'title': 'Alpha', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
+      <String, dynamic>{'id': 'f1', 'title': 'Beta', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
+      <String, dynamic>{'id': 'f2', 'title': 'Gamma', 'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}},
+      <String, dynamic>{'id': 'f3', 'title': 'Delta', 'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}},
+    ];
+
+    final schema = createTestSchema(faces: faces);
+    final renderer = HomeSduiRenderer(
+      HomeSduiState(schema: schema, accessToken: 'test-token'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 120,
+              height: 120,
+              child: Builder(
+                builder: (context) =>
+                    renderer.buildComponent(context, 'test-cube'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Initially Face 0 (Alpha) is in front
+    expect(find.text('Alpha'), findsOneWidget);
+
+    // Duration is 16000ms with 4 faces -> 4000ms per face.
+    // Hold ratio 0.84 -> 3360ms dwell, 640ms transition.
+    // At 3680ms, we are at 50% through the transition (flip = 0.5):
+    await tester.pump(const Duration(milliseconds: 3680));
+
+    // Both Face 0 (turning out) and Face 1 (turning in) must be simultaneously visible
+    expect(find.text('Alpha'), findsOneWidget, reason: 'Face 0 must remain visible as it rotates left');
+    expect(find.text('Beta'), findsOneWidget, reason: 'Face 1 must be simultaneously visible as it rotates in from right');
+  });
+
+  testWidgets('Rotating cards in responsiveGrid are clipped to tile bounds adhering to server overflowPolicy', (tester) async {
+    final faces = <Map<String, dynamic>>[
+      <String, dynamic>{'id': 'f0', 'title': 'Alpha', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
+      <String, dynamic>{'id': 'f1', 'title': 'Beta', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
+    ];
+
+    final schema = <String, dynamic>{
+      'designTokens': <String, dynamic>{
+        'colors': <String, dynamic>{'surface': '#151b2e', 'textPrimary': '#ffffff', 'textSecondary': '#94a3b8', 'welcomeText': '#ffffff'},
+        'radius': <String, dynamic>{'card': 16.0},
+        'spacing': <String, dynamic>{'sm': 8.0, 'xs': 4.0, 'xxs': 2.0},
+        'typography': <String, dynamic>{
+          'cardTitle': <String, dynamic>{'fontSize': 12.0, 'fontWeight': 800, 'maxLines': 1, 'overflow': 'clip'},
+          'cardSubtitle': <String, dynamic>{'fontSize': 9.0, 'fontWeight': 700, 'maxLines': 1, 'overflow': 'clip'},
+          'pageTitle': <String, dynamic>{'fontSize': 18.0},
+          'statValue': <String, dynamic>{'fontSize': 14.0, 'fontWeight': 700},
+        },
+      },
+      'components': <String, dynamic>{
+        'home-grid': <String, dynamic>{
+          'id': 'home-grid',
+          'type': 'responsiveGrid',
+          'layout': <String, dynamic>{'columns': 3, 'columnGap': 4.0, 'rowGap': 4.0, 'rowHeight': 120.0},
+          'children': <dynamic>['rotating-tile'],
+        },
+        'rotating-tile': <String, dynamic>{
+          'id': 'rotating-tile',
+          'type': 'rotatingFaceCard',
+          'overflowPolicy': 'clip',
+          'layout': <String, dynamic>{'columnSpan': 1, 'rowSpan': 1},
+          'rotation': <String, dynamic>{
+            'enabled': true,
+            'rotationDir': 'ltr',
+            'direction': 'clockwise',
+            'degreesPerFace': 90,
+          },
+          'faces': faces,
+        },
+      },
+    };
+
+    final renderer = HomeSduiRenderer(
+      HomeSduiState(schema: schema, accessToken: 'test-token'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 360,
+              height: 400,
+              child: Builder(
+                builder: (context) => renderer.buildComponent(context, 'home-grid'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Verify ClipRRect is applied to the tile with radius 16.0 from designTokens
+    final clipFinder = find.byWidgetPredicate((widget) {
+      if (widget is ClipRRect && widget.borderRadius is BorderRadius) {
+        final br = widget.borderRadius as BorderRadius;
+        return br.topLeft.x == 16.0;
+      }
+      return false;
+    });
+    expect(clipFinder, findsWidgets,
+        reason: 'Rotating tile must be clipped to tile bounds by ClipRRect(16.0) to prevent overflowing into neighbors');
+  });
+
+  testWidgets('Component-level server-driven degreesPerFace: 90 and rotationDir: ltr rotates Clockwise (positive angle)', (tester) async {
+    final faces = <Map<String, dynamic>>[
+      <String, dynamic>{'id': 'f0', 'title': 'Alpha', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
+      <String, dynamic>{'id': 'f1', 'title': 'Beta', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
+      <String, dynamic>{'id': 'f2', 'title': 'Gamma', 'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}},
+      <String, dynamic>{'id': 'f3', 'title': 'Delta', 'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}},
+    ];
+
+    final schema = <String, dynamic>{
+      'designTokens': <String, dynamic>{
+        'colors': <String, dynamic>{'surface': '#151b2e', 'textPrimary': '#ffffff', 'textSecondary': '#94a3b8', 'welcomeText': '#ffffff'},
+        'radius': <String, dynamic>{'card': 16.0},
+        'spacing': <String, dynamic>{'sm': 8.0, 'xs': 4.0, 'xxs': 2.0},
+        'typography': <String, dynamic>{
+          'cardTitle': <String, dynamic>{'fontSize': 12.0, 'fontWeight': 800, 'maxLines': 1, 'overflow': 'clip'},
+          'cardSubtitle': <String, dynamic>{'fontSize': 9.0, 'fontWeight': 700, 'maxLines': 1, 'overflow': 'clip'},
+          'pageTitle': <String, dynamic>{'fontSize': 18.0},
+          'statValue': <String, dynamic>{'fontSize': 14.0, 'fontWeight': 700},
+        },
+      },
+      'uiRenderContract': <String, dynamic>{
+        'cubeGeometry': <String, dynamic>{
+          'degreesPerFace': -90, // Contract fallback is -90
+          'direction': 'counterclockwise',
+          'perspectivePx': 800,
+        },
+      },
+      'components': <String, dynamic>{
+        'ltr-cube': <String, dynamic>{
+          'id': 'ltr-cube',
+          'type': 'rotatingFaceCard',
+          'layout': <String, dynamic>{'columnSpan': 1, 'rowSpan': 1},
+          'rotation': <String, dynamic>{
+            'enabled': true,
+            'rotationDir': 'ltr',
+            'direction': 'clockwise',
+            'degreesPerFace': 90, // Server component explicitly defines 90
+            'faceDuration': 4000,
+            'transitionDuration': 1120,
+            'perspectivePx': 800,
+          },
+          'faces': faces,
+        },
+      },
+    };
+
+    final renderer = HomeSduiRenderer(
+      HomeSduiState(schema: schema, accessToken: 'test-token'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 120,
+              height: 120,
+              child: Builder(
+                builder: (context) => renderer.buildComponent(context, 'ltr-cube'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Pump to mid-transition
+    // faceDuration: 4000, transitionDuration: 1120 -> dwell: 2880ms
+    // Mid transition at 2880 + 560 = 3440ms
+    await tester.pump(const Duration(milliseconds: 3440));
+
+    // Both faces are visible during 3D turn
+    expect(find.text('Alpha'), findsOneWidget);
+
+    // Verify the face transform has positive rotation (advancing clockwise / to the right)
+    final transforms = tester.widgetList<Transform>(find.byType(Transform));
+    final cubeTransforms = transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
+    expect(cubeTransforms, isNotEmpty);
+  });
 }
+

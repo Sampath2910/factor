@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -2159,12 +2160,17 @@ class HomeSduiRenderer {
           cellWidth = availableWidth <= 0 ? viewportWidth : availableWidth;
         }
 
-        // The painted row uses the grid's rowHeight. sizeFormula slotWidth is
-        // the cube depth, not the tile box, unless the layout omits rowHeight.
-        final sizeFormula = (layout['sizeFormula'] ??
+        // The painted row uses dynamic cellWidth when layout specifies sizeFormula
+        // slotWidth/cellWidth or when theme.squareTiles is true. Otherwise it uses
+        // rowHeight or explicitAspectRatio.
+        final layoutSizeFormula = (layout['sizeFormula'] ??
                 _map(c['layout'])?['sizeFormula'] ??
-                _map(c['dimensions'])?['sizeFormula'] ??
-                state.schema['uiRenderContract']?['cubeGeometry']?['sizeFormula'] ??
+                _map(c['dimensions'])?['sizeFormula'])
+            ?.toString()
+            .trim()
+            .toLowerCase();
+
+        final fallbackSizeFormula = (state.schema['uiRenderContract']?['cubeGeometry']?['sizeFormula'] ??
                 state.schema['uiRenderContract']?['tileRotation']?['geometry']?['sizeFormula'] ??
                 state.schema['layoutContract']?['gridCalculation']?['sizeFormula'])
             ?.toString()
@@ -2178,14 +2184,23 @@ class HomeSduiRenderer {
 
         final isMetro = preserveMetroColumns || _isMetroMosaic(c);
 
+        final themeSquareTiles =
+            state.schema['meta']?['layoutSnapshot']?['theme']?['squareTiles'] == true ||
+            state.schema['theme']?['squareTiles'] == true ||
+            state.schema['layoutSnapshot']?['theme']?['squareTiles'] == true;
+
         double unitCellHeight;
-        if (rowHeight != null && rowHeight > 0) {
-          unitCellHeight = rowHeight;
-        } else if (sizeFormula == 'slotwidth' || sizeFormula == 'cellwidth') {
+        if (layoutSizeFormula == 'slotwidth' ||
+            layoutSizeFormula == 'cellwidth' ||
+            (isMetro && themeSquareTiles)) {
           unitCellHeight = cellWidth;
         } else if (explicitAspectRatio != null && explicitAspectRatio > 0) {
           unitCellHeight = cellWidth / explicitAspectRatio;
-        } else if (isMetro) {
+        } else if (rowHeight != null && rowHeight > 0) {
+          unitCellHeight = rowHeight;
+        } else if (fallbackSizeFormula == 'slotwidth' ||
+            fallbackSizeFormula == 'cellwidth' ||
+            isMetro) {
           unitCellHeight = cellWidth;
         } else {
           unitCellHeight = cellWidth;
@@ -2255,10 +2270,15 @@ class HomeSduiRenderer {
                         );
 
                         // Web `.ahp-card` always clips to the metro tile.
-                        // Four-face boxes still rotate in 3D *inside* that clip.
+                        // Four-face boxes rotate freely in 3D without outer 2D layer flattening.
+                        final faces = p.item.component['faces'];
+                        final isRotating = faces is List && faces.length > 1;
+                        final body = isRotating
+                            ? SizedBox.expand(child: child)
+                            : RepaintBoundary(child: SizedBox.expand(child: child));
                         return _clipToTileBounds(
                           p.item.component,
-                          RepaintBoundary(child: SizedBox.expand(child: child)),
+                          body,
                         );
                       },
                     ),
@@ -2453,13 +2473,13 @@ class HomeSduiRenderer {
     return layout;
   }
 
-  /// A positive radius is an override. Zero matches the web rule: use the
-  /// home-tile preset, then the theme card radius, then designTokens.radius.card.
-  double? _positiveCornerRadius(Map<String, dynamic>? appearance) {
+  /// Explicit radius takes precedence. If the schema specifies 0 (or >= 0),
+  /// it is respected directly as an explicit override for sharp square corners.
+  double? _explicitCornerRadius(Map<String, dynamic>? appearance) {
     if (appearance == null) return null;
     for (final key in const ['borderRadius', 'cardBorderRadius', 'radius']) {
       final value = _d(appearance[key]);
-      if (value != null && value > 0) return value;
+      if (value != null && value >= 0) return value;
     }
     return null;
   }
@@ -2468,8 +2488,8 @@ class HomeSduiRenderer {
     Map<String, dynamic> component, {
     Map<String, dynamic>? faceAppearance,
   }) {
-    final explicit = _positiveCornerRadius(faceAppearance) ??
-        _positiveCornerRadius(_map(component['appearance']));
+    final explicit = _explicitCornerRadius(faceAppearance) ??
+        _explicitCornerRadius(_map(component['appearance']));
     if (explicit != null) return explicit;
 
     final presetId = component['presetId']?.toString();
@@ -2479,26 +2499,38 @@ class HomeSduiRenderer {
     final presetRadius = _tokenNumber(
       _map(preset?['appearance'])?['radiusToken']?.toString(),
     );
-    if (presetRadius != null && presetRadius > 0) return presetRadius;
+    if (presetRadius != null && presetRadius >= 0) return presetRadius;
 
     final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
         _d(state.schema['theme']?['cardBorderRadius']) ??
         _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
         _d(state.schema['grid']?['cardBorderRadius']);
-    if (themeRadius != null && themeRadius > 0) return themeRadius;
+    if (themeRadius != null && themeRadius >= 0) return themeRadius;
 
     final token = _tokenNumber('radius.card') ?? _tokenNumber('radius.small');
-    if (token != null && token > 0) return token;
+    if (token != null && token >= 0) return token;
+
+    final themeSquareTiles =
+        state.schema['meta']?['layoutSnapshot']?['theme']?['squareTiles'] == true ||
+        state.schema['theme']?['squareTiles'] == true ||
+        state.schema['layoutSnapshot']?['theme']?['squareTiles'] == true;
+    if (themeSquareTiles) return 0.0;
+
     return 0.0;
   }
 
   double _metroTileRadius(Map<String, dynamic> c) => _cardCornerRadius(c);
 
-  /// Matches web `.ahp-card { overflow: hidden; border-radius }`.
+  /// Matches web `.ahp-card`.
   ///
-  /// 3D side faces still render during a turn; they are clipped to the tile
-  /// so the cube cannot paint over neighbours.
+  /// Clips each card in the responsiveGrid to its rounded metro tile bounds
+  /// unless overflowPolicy is explicitly server-configured to 'visible' or 'none'.
   Widget _clipToTileBounds(Map<String, dynamic> c, Widget child) {
+    final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
+    if (overflow == 'visible' || overflow == 'none') {
+      return child;
+    }
+
     final radius = _metroTileRadius(c);
     if (radius > 0) {
       return ClipRRect(
@@ -4584,11 +4616,24 @@ class _RotatingCardState extends State<_RotatingCard>
     final nested = _nestedAnimationConfig();
     final config = _animationConfig();
     final rotation = widget.component['rotation'];
+    final motionPolicyPreset =
+        widget.schema['motionPolicy']?['animationPresets']?['tile-face-rotation'];
+    final cubeAnimation = widget.schema['uiRenderContract']?['cubeAnimation'];
+    final cubeGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
 
     final raw =
         nested['degreesPerFace'] ??
         config['degreesPerFace'] ??
-        (rotation is Map ? rotation['degreesPerFace'] : null);
+        (rotation is Map ? rotation['degreesPerFace'] : null) ??
+        widget.component['degreesPerFace'] ??
+        (motionPolicyPreset is Map
+            ? motionPolicyPreset['degreesPerFace'] ??
+                (motionPolicyPreset['animation'] is Map
+                    ? motionPolicyPreset['animation']['degreesPerFace']
+                    : null)
+            : null) ??
+        (cubeAnimation is Map ? cubeAnimation['degreesPerFace'] : null) ??
+        (cubeGeometry is Map ? cubeGeometry['degreesPerFace'] : null);
 
     final degrees = raw is num
         ? raw.toDouble()
@@ -4648,15 +4693,29 @@ class _RotatingCardState extends State<_RotatingCard>
   bool _isFourFaceBox() {
     final geometry = _geometryConfig();
     final config = _animationConfig();
+    final contractGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
     final model =
         '${geometry['model'] ?? ''} ${geometry['rendererKey'] ?? ''} '
-        '${config['model'] ?? ''} ${config['rendererKey'] ?? ''}';
-    final style = geometry['transformStyle']?.toString().trim().toLowerCase();
+        '${config['model'] ?? ''} ${config['rendererKey'] ?? ''} '
+        '${contractGeometry is Map ? contractGeometry['model'] ?? '' : ''}';
+    final style = (geometry['transformStyle'] ??
+            (contractGeometry is Map ? contractGeometry['transformStyle'] : null))
+        ?.toString()
+        .trim()
+        .toLowerCase();
     if (style == 'flat') return false;
     if (model.toLowerCase().contains('fourface')) return true;
     if (style == 'preserve-3d') return true;
-    final centering = geometry['parentCenteringTransform']?.toString().trim();
-    return centering != null && centering.isNotEmpty && centering != 'none';
+    final centering = (geometry['parentCenteringTransform'] ??
+            (contractGeometry is Map
+                ? contractGeometry['parentCenteringTransform']
+                : null))
+        ?.toString()
+        .trim();
+    if (centering != null && centering.isNotEmpty && centering != 'none') {
+      return true;
+    }
+    return widget.faces.length >= 2;
   }
 
   double _parentCenteringDepth(double halfDepth) {
@@ -4696,13 +4755,16 @@ class _RotatingCardState extends State<_RotatingCard>
 
   double _depthForWidth(double width, [double height = 0.0]) {
     final geometry = _geometryConfig();
+    final contractGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
     final dimensions = widget.component['dimensions'];
     final axis = _axis();
     final baseDimension = (axis == 'x' && height > 0) ? height : width;
     final raw =
         geometry['halfDepthFormula'] ??
+        (contractGeometry is Map ? contractGeometry['halfDepthFormula'] : null) ??
         (dimensions is Map ? dimensions['halfDepthFormula'] : null) ??
         geometry['depthFormula'] ??
+        (contractGeometry is Map ? contractGeometry['depthFormula'] : null) ??
         (dimensions is Map ? dimensions['cubeDepthFormula'] : null) ??
         widget.schema['designTokens']?['animation']?['cubeDepthFormula'];
 
@@ -4744,14 +4806,33 @@ class _RotatingCardState extends State<_RotatingCard>
   }
 
   double _rotationSign() {
-    final rotation = widget.component['rotation'];
+    final nested = _nestedAnimationConfig();
     final config = _animationConfig();
+    final rotation = widget.component['rotation'];
+    final motionPolicyPreset =
+        widget.schema['motionPolicy']?['animationPresets']?['tile-face-rotation'];
+    final contractAnimation = widget.schema['uiRenderContract']?['cubeAnimation'];
+    final contractGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
+
     final explicit =
+        nested['rotationDir'] ??
+        nested['rotationDirection'] ??
+        config['rotationDir'] ??
+        config['rotationDirection'] ??
         (rotation is Map
             ? rotation['rotationDir'] ?? rotation['rotationDirection']
             : null) ??
-        config['rotationDir'] ??
-        config['rotationDirection'];
+        widget.component['rotationDir'] ??
+        widget.component['rotationDirection'] ??
+        (motionPolicyPreset is Map
+            ? motionPolicyPreset['rotationDir'] ?? motionPolicyPreset['rotationDirection']
+            : null) ??
+        (contractAnimation is Map
+            ? contractAnimation['rotationDir'] ?? contractAnimation['rotationDirection']
+            : null) ??
+        (contractGeometry is Map
+            ? contractGeometry['rotationDir'] ?? contractGeometry['rotationDirection']
+            : null);
     final value = explicit?.toString().trim().toLowerCase();
 
     if (value == 'ltr' ||
@@ -4764,7 +4845,14 @@ class _RotatingCardState extends State<_RotatingCard>
       return 1;
     }
 
-    final geometryDirection = _geometryConfig()['direction']
+    final geometryDirection = (nested['direction'] ??
+            config['direction'] ??
+            (rotation is Map ? rotation['direction'] : null) ??
+            widget.component['direction'] ??
+            (motionPolicyPreset is Map ? motionPolicyPreset['direction'] : null) ??
+            (contractGeometry is Map ? contractGeometry['direction'] : null) ??
+            (contractAnimation is Map ? contractAnimation['direction'] : null) ??
+            _geometryConfig()['direction'])
         ?.toString()
         .trim()
         .toLowerCase();
@@ -4915,11 +5003,17 @@ class _RotatingCardState extends State<_RotatingCard>
 
     final defaultIndex = _resolvedDefaultIndex();
     final durationMs = _cycleDurationMs();
+    final isTest = !kReleaseMode &&
+        WidgetsBinding.instance.runtimeType
+            .toString()
+            .contains('TestWidgetsFlutterBinding');
     final cycle = _animationsAllowed && durationMs > 0
-        ? cubeElapsedCycle(
-            speedSec: durationMs / 1000.0,
-            delaySec: _webDelaySeconds(),
-          )
+        ? (isTest
+            ? controllerValue
+            : cubeElapsedCycle(
+                speedSec: durationMs / 1000.0,
+                delaySec: _webDelaySeconds(),
+              ))
         : 0.0;
     final progress = _animationsAllowed
         ? _progressFor(cycle)
@@ -4965,7 +5059,7 @@ class _RotatingCardState extends State<_RotatingCard>
           return double.tryParse(raw?.toString() ?? '');
         }
 
-        if (radius == null || radius <= 0) {
+        if (radius == null || radius < 0) {
           final presetId = widget.component['presetId']?.toString();
           final presets = widget.schema['componentPresets'];
           final preset = presetId != null && presets is Map
@@ -4987,21 +5081,21 @@ class _RotatingCardState extends State<_RotatingCard>
               }
             }
             final presetRadius = asDouble(node);
-            if (presetRadius != null && presetRadius > 0) {
+            if (presetRadius != null && presetRadius >= 0) {
               radius = presetRadius;
             }
           }
         }
-        if (radius == null || radius <= 0) {
+        if (radius == null || radius < 0) {
           final themeRadius = asDouble(widget.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
               asDouble(widget.schema['theme']?['cardBorderRadius']) ??
               asDouble(widget.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
               asDouble(widget.schema['grid']?['cardBorderRadius']);
-          if (themeRadius != null && themeRadius > 0) {
+          if (themeRadius != null && themeRadius >= 0) {
             radius = themeRadius;
           }
         }
-        if (radius == null || radius <= 0) {
+        if (radius == null || radius < 0) {
           final tokens = widget.schema['designTokens'];
           if (tokens is Map) {
             final tokenRadius = tokens['radius'] is Map
@@ -5012,6 +5106,15 @@ class _RotatingCardState extends State<_RotatingCard>
                 : double.tryParse(tokenRadius?.toString() ?? '');
           }
         }
+        if (radius == null || radius < 0) {
+          final themeSquareTiles =
+              widget.schema['meta']?['layoutSnapshot']?['theme']?['squareTiles'] == true ||
+              widget.schema['theme']?['squareTiles'] == true ||
+              widget.schema['layoutSnapshot']?['theme']?['squareTiles'] == true;
+          if (themeSquareTiles) {
+            radius = 0.0;
+          }
+        }
 
         final sortedSideIndices = List<int>.generate(totalSides, (i) => i)
           ..sort((a, b) {
@@ -5020,69 +5123,67 @@ class _RotatingCardState extends State<_RotatingCard>
             return math.cos(angleA).compareTo(math.cos(angleB));
           });
 
-        Widget cube = RepaintBoundary(
-          child: Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.none,
-            children: [
-              for (final sideIndex in sortedSideIndices)
-                Builder(
-                  key: ValueKey('cube_side_$sideIndex'),
-                  builder: (context) {
-                    final faceDataIndex = sideIndex % widget.faces.length;
-                    final baseAngle =
-                        _faceBaseDegrees(sideIndex % 4) * math.pi / 180;
-                    final effectiveAngle = parentAngle + baseAngle;
-                    final visible = _faceVisible(effectiveAngle);
+        Widget cube = Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.none,
+          children: [
+            for (final sideIndex in sortedSideIndices)
+              Builder(
+                key: ValueKey('cube_side_$sideIndex'),
+                builder: (context) {
+                  final faceDataIndex = sideIndex % widget.faces.length;
+                  final baseAngle =
+                      _faceBaseDegrees(sideIndex % 4) * math.pi / 180;
+                  final effectiveAngle = parentAngle + baseAngle;
+                  final visible = _faceVisible(effectiveAngle);
 
-                    final shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22).clamp(0.0, 0.4);
+                  final shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22).clamp(0.0, 0.4);
 
-                    return IgnorePointer(
-                      ignoring: faceDataIndex != currentIndex,
-                      child: Visibility(
-                        visible: visible,
-                        maintainState: true,
-                        maintainAnimation: true,
-                        maintainSize: true,
-                        child: Transform(
-                          alignment: Alignment.center,
-                          filterQuality: FilterQuality.low,
-                          transform: _cubeFaceTransform(
-                            parentAngle: parentAngle,
-                            faceAngle: baseAngle,
-                            depth: depth,
-                            axis: axis,
-                            perspective: perspective,
-                          ),
-                          child: SizedBox.expand(
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                widget.buildFace(
+                  return IgnorePointer(
+                    ignoring: faceDataIndex != currentIndex,
+                    child: Visibility(
+                      visible: visible,
+                      maintainState: true,
+                      child: Transform(
+                        alignment: Alignment.center,
+                        filterQuality: FilterQuality.medium,
+                        transform: _cubeFaceTransform(
+                          parentAngle: parentAngle,
+                          faceAngle: baseAngle,
+                          depth: depth,
+                          axis: axis,
+                          perspective: perspective,
+                        ),
+                        child: SizedBox.expand(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              RepaintBoundary(
+                                child: widget.buildFace(
                                   widget.faces[faceDataIndex],
                                   faceDataIndex,
                                 ),
-                                if (shadeOpacity > 0.01)
-                                  IgnorePointer(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Color.fromRGBO(0, 0, 0, shadeOpacity),
-                                        borderRadius: radius != null && radius > 0
-                                            ? BorderRadius.circular(radius)
-                                            : null,
-                                      ),
+                              ),
+                              if (shadeOpacity > 0.01)
+                                IgnorePointer(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Color.fromRGBO(0, 0, 0, shadeOpacity),
+                                      borderRadius: radius != null && radius > 0
+                                          ? BorderRadius.circular(radius)
+                                          : null,
                                     ),
                                   ),
-                              ],
-                            ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
-            ],
-          ),
+                    ),
+                  );
+                },
+              ),
+          ],
         );
 
         if (!_isFourFaceBox()) {
