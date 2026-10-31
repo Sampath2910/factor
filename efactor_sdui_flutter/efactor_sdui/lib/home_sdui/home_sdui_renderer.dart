@@ -2540,12 +2540,6 @@ class HomeSduiRenderer {
       );
     }
 
-    final faces = c['faces'];
-    final isRotating = faces is List && faces.length > 1;
-    if (isRotating) {
-      return child;
-    }
-
     return ClipRect(clipBehavior: Clip.antiAlias, child: child);
   }
 
