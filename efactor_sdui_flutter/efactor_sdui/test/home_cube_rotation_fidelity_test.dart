@@ -407,5 +407,64 @@ void main() {
     final cubeTransforms = transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
     expect(cubeTransforms, isNotEmpty);
   });
+
+  testWidgets('Platform isolation: Android retains untouched 044f965 Skia RepaintBoundary while iOS eliminates it for Impeller', (tester) async {
+    final faces = <Map<String, dynamic>>[
+      <String, dynamic>{'id': 'f0', 'title': 'One', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
+      <String, dynamic>{'id': 'f1', 'title': 'Two', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
+    ];
+
+    final schema = createTestSchema(faces: faces);
+    final renderer = HomeSduiRenderer(
+      HomeSduiState(schema: schema, accessToken: 'test-token'),
+    );
+
+    // 1. Test Android platform
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 120,
+              height: 120,
+              child: Builder(
+                builder: (context) => renderer.buildComponent(context, 'test-cube'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // On Android, RepaintBoundary wraps the cube Stack (matching 044f965)
+    final androidBoundaries = tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
+    expect(androidBoundaries, isNotEmpty, reason: 'Android Skia pipeline must wrap cube in RepaintBoundary');
+
+    // 2. Test iOS platform
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.iOS),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 120,
+              height: 120,
+              child: Builder(
+                builder: (context) => renderer.buildComponent(context, 'test-cube'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // On iOS, cube Stack is directly returned without RepaintBoundary (avoiding Impeller layer flattening)
+    final iosTransforms = tester.widgetList<Transform>(find.byType(Transform));
+    final iosCubeTransforms = iosTransforms.where((t) => t.transform.entry(3, 2) != 0).toList();
+    expect(iosCubeTransforms, isNotEmpty, reason: 'iOS Impeller pipeline must render 3D perspective transforms');
+  });
 }
 

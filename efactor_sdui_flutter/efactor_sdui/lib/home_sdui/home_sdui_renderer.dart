@@ -2269,8 +2269,19 @@ class HomeSduiRenderer {
                                 },
                         );
 
-                        // Web `.ahp-card` always clips to the metro tile.
-                        // Four-face boxes rotate freely in 3D without outer 2D layer flattening.
+                        final isIOS =
+                            Theme.of(context).platform == TargetPlatform.iOS ||
+                            defaultTargetPlatform == TargetPlatform.iOS;
+                        if (!isIOS) {
+                          // 100% UNTOUCHED ANDROID BASELINE (Commit 044f965)
+                          return _clipToTileBounds(
+                            p.item.component,
+                            RepaintBoundary(child: SizedBox.expand(child: child)),
+                            context,
+                          );
+                        }
+
+                        // iOS IMPELLER PATH
                         final faces = p.item.component['faces'];
                         final isRotating = faces is List && faces.length > 1;
                         final body = isRotating
@@ -2279,6 +2290,7 @@ class HomeSduiRenderer {
                         return _clipToTileBounds(
                           p.item.component,
                           body,
+                          context,
                         );
                       },
                     ),
@@ -2525,9 +2537,40 @@ class HomeSduiRenderer {
   ///
   /// Clips each card in the responsiveGrid to its rounded metro tile bounds
   /// unless overflowPolicy is explicitly server-configured to 'visible' or 'none'.
-  Widget _clipToTileBounds(Map<String, dynamic> c, Widget child) {
+  Widget _clipToTileBounds(
+    Map<String, dynamic> c,
+    Widget child, [
+    BuildContext? context,
+  ]) {
+    final isIOS = (context != null &&
+            Theme.of(context).platform == TargetPlatform.iOS) ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+
+    if (!isIOS) {
+      // 100% UNTOUCHED ANDROID BASELINE (Commit 044f965)
+      final radius = _metroTileRadius(c);
+      if (radius > 0) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          clipBehavior: Clip.antiAlias,
+          child: child,
+        );
+      }
+      return ClipRect(clipBehavior: Clip.antiAlias, child: child);
+    }
+
+    // iOS IMPELLER PATH
     final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
     if (overflow == 'visible' || overflow == 'none') {
+      return child;
+    }
+
+    final faces = c['faces'];
+    final isRotating = faces is List && faces.length > 1;
+    if (isRotating) {
+      // On iOS Impeller (Metal), 3D rotating cards rotate unclipped at the container level
+      // so 3D convex corners and perspective are not flattened into 2D offscreen textures.
+      // Individual faces inside _face() already clip their own rounded corners.
       return child;
     }
 
@@ -5152,7 +5195,10 @@ class _RotatingCardState extends State<_RotatingCard>
             return math.cos(angleA).compareTo(math.cos(angleB));
           });
 
-        Widget cube = Stack(
+        final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.iOS;
+
+        Widget cubeStack = Stack(
           fit: StackFit.expand,
           clipBehavior: Clip.none,
           children: [
@@ -5166,14 +5212,22 @@ class _RotatingCardState extends State<_RotatingCard>
                   final effectiveAngle = parentAngle + baseAngle;
                   final visible = _faceVisible(effectiveAngle);
 
-                  final turnAmount =
-                      (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
-                  final isRecedingFace =
-                      (animationRadiansPerFace < 0 && math.sin(effectiveAngle) < 0) ||
-                      (animationRadiansPerFace > 0 && math.sin(effectiveAngle) > 0);
-                  final directionalFactor = isRecedingFace ? 0.28 : 0.08;
-                  final shadeOpacity =
-                      (turnAmount * directionalFactor).clamp(0.0, 0.45);
+                  final double shadeOpacity;
+                  if (!isIOS) {
+                    // 100% UNTOUCHED ANDROID BASELINE (Commit 044f965)
+                    shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
+                        .clamp(0.0, 0.4);
+                  } else {
+                    // iOS IMPELLER DIRECTIONAL LIGHTING CONTRAST
+                    final turnAmount =
+                        (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
+                    final isRecedingFace =
+                        (animationRadiansPerFace < 0 && math.sin(effectiveAngle) < 0) ||
+                        (animationRadiansPerFace > 0 && math.sin(effectiveAngle) > 0);
+                    final directionalFactor = isRecedingFace ? 0.28 : 0.08;
+                    shadeOpacity =
+                        (turnAmount * directionalFactor).clamp(0.0, 0.45);
+                  }
 
                   return IgnorePointer(
                     ignoring: faceDataIndex != currentIndex,
@@ -5182,7 +5236,8 @@ class _RotatingCardState extends State<_RotatingCard>
                       maintainState: true,
                       child: Transform(
                         alignment: Alignment.center,
-                        filterQuality: FilterQuality.medium,
+                        filterQuality:
+                            isIOS ? FilterQuality.medium : FilterQuality.low,
                         transform: _cubeFaceTransform(
                           parentAngle: parentAngle,
                           faceAngle: baseAngle,
@@ -5219,6 +5274,8 @@ class _RotatingCardState extends State<_RotatingCard>
               ),
           ],
         );
+
+        Widget cube = !isIOS ? RepaintBoundary(child: cubeStack) : cubeStack;
 
         if (!_isFourFaceBox()) {
           if (radius != null && radius > 0) {
