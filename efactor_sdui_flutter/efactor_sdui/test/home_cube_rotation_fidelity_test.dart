@@ -401,8 +401,9 @@ void main() {
 
     // Both faces are visible during 3D turn
     expect(find.text('Alpha'), findsOneWidget);
+    expect(find.text('Beta'), findsOneWidget, reason: 'Face 1 must be simultaneously visible entering during 3D turn');
 
-    // Verify the face transform has positive rotation (advancing clockwise / to the right)
+    // Verify the face transform has 3D perspective
     final transforms = tester.widgetList<Transform>(find.byType(Transform));
     final cubeTransforms = transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
     expect(cubeTransforms, isNotEmpty);
