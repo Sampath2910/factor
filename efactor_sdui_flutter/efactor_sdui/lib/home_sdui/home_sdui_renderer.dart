@@ -2531,15 +2531,6 @@ class HomeSduiRenderer {
       return child;
     }
 
-    final faces = c['faces'];
-    final isRotating = faces is List && faces.length > 1;
-    if (isRotating) {
-      // 3D rotating cards use hardware scissor ClipRect at the tile container boundary
-      // to prevent tile overrun while avoiding 2D layer flattening on iOS Impeller/Metal.
-      // Individual faces inside _face() already clip their own rounded corners.
-      return ClipRect(clipBehavior: Clip.antiAlias, child: child);
-    }
-
     final radius = _metroTileRadius(c);
     if (radius > 0) {
       return ClipRRect(
@@ -2548,6 +2539,13 @@ class HomeSduiRenderer {
         child: child,
       );
     }
+
+    final faces = c['faces'];
+    final isRotating = faces is List && faces.length > 1;
+    if (isRotating) {
+      return child;
+    }
+
     return ClipRect(clipBehavior: Clip.antiAlias, child: child);
   }
 
@@ -4645,16 +4643,6 @@ class _RotatingCardState extends State<_RotatingCard>
     final cubeAnimation = widget.schema['uiRenderContract']?['cubeAnimation'];
     final cubeGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
 
-    // If uiRenderContract explicitly specifies degreesPerFace (e.g. -90 for standard 3D web/Flutter cube rotation),
-    // respect that exact signed direction.
-    final contractAnimDegrees = cubeAnimation is Map ? cubeAnimation['degreesPerFace'] : null;
-    final parsedContractDegrees = contractAnimDegrees is num
-        ? contractAnimDegrees.toDouble()
-        : double.tryParse(contractAnimDegrees?.toString() ?? '');
-    if (parsedContractDegrees != null && parsedContractDegrees != 0) {
-      return parsedContractDegrees;
-    }
-
     final raw =
         nested['degreesPerFace'] ??
         config['degreesPerFace'] ??
@@ -4666,21 +4654,17 @@ class _RotatingCardState extends State<_RotatingCard>
                     ? motionPolicyPreset['animation']['degreesPerFace']
                     : null)
             : null) ??
+        (cubeAnimation is Map ? cubeAnimation['degreesPerFace'] : null) ??
         (cubeGeometry is Map ? cubeGeometry['degreesPerFace'] : null);
 
     final degrees = raw is num
         ? raw.toDouble()
         : double.tryParse(raw?.toString() ?? '');
 
-    if (degrees != null && degrees != 0) {
-      // In Flutter 3D coordinates, advancing through the face sequence (Face 0 -> Face 1 at +90deg base)
-      // requires a negative rotation around Y (-90deg) so that Face 1 enters from the right
-      // and remains visible alongside Face 0 throughout the transition.
-      return -degrees.abs();
-    }
+    if (degrees != null && degrees != 0) return degrees;
 
     // Backward-compatible fallback for older schemas.
-    return -_geometryDegreesPerFace();
+    return -_rotationSign() * _geometryDegreesPerFace();
   }
 
   String _axis() {
@@ -4723,7 +4707,9 @@ class _RotatingCardState extends State<_RotatingCard>
     final perspective = raw is num
         ? raw.toDouble()
         : double.tryParse(raw?.toString() ?? '');
-    if (perspective == null || perspective <= 0) return 0;
+    if (perspective == null || perspective <= 0) {
+      return 1.0 / 800.0;
+    }
     return 1 / perspective;
   }
 
@@ -5186,7 +5172,14 @@ class _RotatingCardState extends State<_RotatingCard>
                   final effectiveAngle = parentAngle + baseAngle;
                   final visible = _faceVisible(effectiveAngle);
 
-                  final shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22).clamp(0.0, 0.4);
+                  final turnAmount =
+                      (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
+                  final isRecedingFace =
+                      (animationRadiansPerFace < 0 && math.sin(effectiveAngle) < 0) ||
+                      (animationRadiansPerFace > 0 && math.sin(effectiveAngle) > 0);
+                  final directionalFactor = isRecedingFace ? 0.28 : 0.08;
+                  final shadeOpacity =
+                      (turnAmount * directionalFactor).clamp(0.0, 0.45);
 
                   return IgnorePointer(
                     ignoring: faceDataIndex != currentIndex,
@@ -5207,11 +5200,9 @@ class _RotatingCardState extends State<_RotatingCard>
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              RepaintBoundary(
-                                child: widget.buildFace(
-                                  widget.faces[faceDataIndex],
-                                  faceDataIndex,
-                                ),
+                              widget.buildFace(
+                                widget.faces[faceDataIndex],
+                                faceDataIndex,
                               ),
                               if (shadeOpacity > 0.01)
                                 IgnorePointer(
