@@ -155,7 +155,8 @@ class GridChatMessage {
 
     return GridChatMessage(
       conversationId: conversationId,
-      messageId: (data['message_id'] ?? data['messageId'] ?? '').toString().trim(),
+      messageId:
+          (data['message_id'] ?? data['messageId'] ?? '').toString().trim(),
       messageType: (data['msg_type'] ??
               data['msgType'] ??
               data['message_type'] ??
@@ -235,9 +236,8 @@ class PendingChatOpen {
       conversationId: conversationId,
       compose: raw['compose'] == true,
       needsJs: raw['needs_js'] == true,
-      storedAtMs: stored is int
-          ? stored
-          : int.tryParse(stored?.toString() ?? '') ?? 0,
+      storedAtMs:
+          stored is int ? stored : int.tryParse(stored?.toString() ?? '') ?? 0,
     );
   }
 }
@@ -247,6 +247,8 @@ class GridChatMessageNotifications {
   GridChatMessageNotifications._();
   static final GridChatMessageNotifications instance =
       GridChatMessageNotifications._();
+
+  static String activeChannelId = kMessagesChannelId;
 
   static const String gridChatUrl = 'https://efactor.tech/index.php/grid-chat';
 
@@ -309,7 +311,8 @@ class GridChatMessageNotifications {
         appResumed: appResumed,
       )) {
         await _rememberSeen(seen, message.messageId);
-        await plugin.cancel(message.notificationId, tag: message.notificationTag);
+        await plugin.cancel(message.notificationId,
+            tag: message.notificationTag);
         chatTrace('suppressed', message.conversationId, message.messageId);
         return;
       }
@@ -453,7 +456,8 @@ class GridChatMessageNotifications {
       return;
     }
     final lines = _linesFrom(entry)
-      ..removeWhere((line) => line.messageId == message.messageId && message.messageId.isNotEmpty);
+      ..removeWhere((line) =>
+          line.messageId == message.messageId && message.messageId.isNotEmpty);
     if (lines.isEmpty || entry['locked'] == true) {
       stacks.remove(message.conversationId);
       await _writeStacks(stacks);
@@ -476,7 +480,7 @@ class GridChatMessageNotifications {
     final details = locked
         ? NotificationDetails(
             android: AndroidNotificationDetails(
-              kMessagesChannelId,
+              activeChannelId,
               kMessagesChannelName,
               channelDescription: kMessagesChannelDescription,
               icon: 'ic_notification',
@@ -511,7 +515,7 @@ class GridChatMessageNotifications {
           )
         : NotificationDetails(
             android: AndroidNotificationDetails(
-              kMessagesChannelId,
+              activeChannelId,
               kMessagesChannelName,
               channelDescription: kMessagesChannelDescription,
               icon: 'ic_notification',
@@ -566,12 +570,10 @@ class GridChatMessageNotifications {
               categoryIdentifier: 'messages_category',
             ),
           );
-    final title = locked
-        ? GridChatMessage.lockedLabel
-        : notificationTitle(message);
-    final body = locked
-        ? GridChatMessage.lockedLabel
-        : formatNotificationBody(message);
+    final title =
+        locked ? GridChatMessage.lockedLabel : notificationTitle(message);
+    final body =
+        locked ? GridChatMessage.lockedLabel : formatNotificationBody(message);
     await plugin.show(
       message.notificationId,
       title,
@@ -649,7 +651,8 @@ class GridChatMessageNotifications {
 
   static int? _timeoutAfter(DateTime? expiresAt) {
     if (expiresAt == null) return null;
-    final remaining = expiresAt.difference(DateTime.now().toUtc()).inMilliseconds;
+    final remaining =
+        expiresAt.difference(DateTime.now().toUtc()).inMilliseconds;
     if (remaining < 1000) return 1000;
     const maxTimeout = 12 * 60 * 60 * 1000;
     if (remaining > maxTimeout) return maxTimeout;
@@ -672,7 +675,10 @@ class GridChatMessageNotifications {
       if (raw == null || raw.isEmpty) return <String>[];
       final decoded = jsonDecode(raw);
       if (decoded is! List) return <String>[];
-      return decoded.map((item) => item.toString()).where((id) => id.isNotEmpty).toList();
+      return decoded
+          .map((item) => item.toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
     } catch (_) {
       return <String>[];
     }

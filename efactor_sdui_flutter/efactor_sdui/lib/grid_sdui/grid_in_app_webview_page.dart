@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -103,12 +104,12 @@ class GridInAppWebViewPage extends StatefulWidget {
     String? ssoTokenFallback,
     bool includeRedirectUrl = false,
   }) {
-    final ssoToken =
-        initialUri.queryParameters['grid_sso'] ?? ssoTokenFallback;
+    final ssoToken = initialUri.queryParameters['grid_sso'] ?? ssoTokenFallback;
     if (ssoToken == null || ssoToken.isEmpty) return uri;
     final updated = Map<String, String>.from(uri.queryParameters);
     updated['grid_sso'] = ssoToken;
-    final existingRedirect = uri.queryParameters['redirect'] ?? uri.queryParameters['redirect_url'];
+    final existingRedirect =
+        uri.queryParameters['redirect'] ?? uri.queryParameters['redirect_url'];
     final initialRedirect = initialUri.queryParameters['redirect_url'];
     if (existingRedirect != null && existingRedirect.isNotEmpty) {
       updated['redirect_url'] = existingRedirect;
@@ -140,9 +141,12 @@ class GridInAppWebViewPage extends StatefulWidget {
       return true;
     }
     final initialPath = initialUri.path.toLowerCase();
-    final initialIsScanner = initialPath.contains('scanner') || initialPath.contains('scan');
-    final initialIsChat = initialPath.contains('/grid-chat') || initialPath.contains('chat');
-    final initialIsGrid = !initialIsChat && !initialIsScanner && initialPath.contains('/grid');
+    final initialIsScanner =
+        initialPath.contains('scanner') || initialPath.contains('scan');
+    final initialIsChat =
+        initialPath.contains('/grid-chat') || initialPath.contains('chat');
+    final initialIsGrid =
+        !initialIsChat && !initialIsScanner && initialPath.contains('/grid');
 
     // Inside Professional Space (GRID), no navigation should exit to native Grid.
     // The GRID logo goes to GRID home and stays inside the WebView. Team, saved
@@ -275,7 +279,8 @@ class GridInAppWebViewPage extends StatefulWidget {
   /// GRID Chat has called chatUiReady() on this page.
   static bool get isChatUiReady {
     final state = _activeState;
-    if (state == null || !state.mounted || !state._isCircleConnect) return false;
+    if (state == null || !state.mounted || !state._isCircleConnect)
+      return false;
     return state._chatUiReady;
   }
 
@@ -305,10 +310,12 @@ class GridInAppWebViewPage extends StatefulWidget {
 })()
 ''';
     try {
-      final result = await _activeState?._controller.runJavaScriptReturningResult(
+      final result =
+          await _activeState?._controller.runJavaScriptReturningResult(
         answerJs,
       );
-      final text = result?.toString().trim().toLowerCase().replaceAll('"', '') ?? '';
+      final text =
+          result?.toString().trim().toLowerCase().replaceAll('"', '') ?? '';
       final delivered = text == 'true' || text == '1';
       if (!delivered) return false;
       if (!IncomingCallService.instance.claimAnswerJs(id)) {
@@ -432,8 +439,10 @@ class GridInAppWebViewPage extends StatefulWidget {
 })()
 ''';
     try {
-      final result = await _activeState?._controller.runJavaScriptReturningResult(js);
-      final text = result?.toString().trim().toLowerCase().replaceAll('"', '') ?? '';
+      final result =
+          await _activeState?._controller.runJavaScriptReturningResult(js);
+      final text =
+          result?.toString().trim().toLowerCase().replaceAll('"', '') ?? '';
       return text == 'true' || text == '1';
     } catch (e) {
       debugPrint('[GridInAppWebView] openChat JS failed: $e');
@@ -564,7 +573,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     _isPopping = false;
     GridInAppWebViewPage._activeState = this;
 
-    final isAnswerAction = _effectiveUri.queryParameters['call_action'] == 'answer';
+    final isAnswerAction =
+        _effectiveUri.queryParameters['call_action'] == 'answer';
     if (isAnswerAction) {
       _isConnectingCall = true;
       _connectingCallTimer = Timer(const Duration(seconds: 5), () {
@@ -575,15 +585,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     }
 
     if (widget.accessToken != null && widget.accessToken!.isNotEmpty) {
-      GridOfflineOutboxService.instance.setDefaultBearerToken(widget.accessToken);
+      GridOfflineOutboxService.instance
+          .setDefaultBearerToken(widget.accessToken);
     }
-    _outboxSyncedSub = GridOfflineOutboxService.instance.onActionSynced.listen((action) {
+    _outboxSyncedSub =
+        GridOfflineOutboxService.instance.onActionSynced.listen((action) {
       _notifyWebActionSynced(action);
     });
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
       final isConnected = results.any((r) => r != ConnectivityResult.none);
       if (isConnected && (_error != null || _showingSnapshot)) {
-        debugPrint('[GridInAppWebView] Network restored -> auto-retrying live connection');
+        debugPrint(
+            '[GridInAppWebView] Network restored -> auto-retrying live connection');
         if (mounted) {
           _retry();
         }
@@ -695,7 +708,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             // Intercept external protocol schemes (WhatsApp, phone, email, SMS, intent)
             if (GridInAppWebViewPage.isExternalScheme(targetUri)) {
               try {
-                await launchUrl(targetUri, mode: LaunchMode.externalApplication);
+                await launchUrl(targetUri,
+                    mode: LaunchMode.externalApplication);
               } catch (e) {
                 debugPrint('[GridInAppWebView] External launch failed: $e');
               }
@@ -718,7 +732,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               return NavigationDecision.prevent;
             }
 
-            if (isEfactor && GridInAppWebViewPage.isFileDownloadUrl(targetUri)) {
+            if (isEfactor &&
+                GridInAppWebViewPage.isFileDownloadUrl(targetUri)) {
               unawaited(_handleFileDownload(targetUri));
               return NavigationDecision.prevent;
             }
@@ -749,9 +764,13 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             // Defensively intercept redirects between modules or to generic dashboard/home
             final targetPath = targetUri.path.toLowerCase();
             final initialPath = widget.uri.path.toLowerCase();
-            final initialIsScanner = initialPath.contains('scanner') || initialPath.contains('scan');
-            final initialIsChat = initialPath.contains('/grid-chat') || initialPath.contains('chat');
-            final initialIsGrid = !initialIsChat && !initialIsScanner && initialPath.contains('/grid');
+            final initialIsScanner =
+                initialPath.contains('scanner') || initialPath.contains('scan');
+            final initialIsChat = initialPath.contains('/grid-chat') ||
+                initialPath.contains('chat');
+            final initialIsGrid = !initialIsChat &&
+                !initialIsScanner &&
+                initialPath.contains('/grid');
 
             // If user opened Professional Space (/grid), do not allow server to redirect to Circle Connect (/grid-chat)
             if (initialIsGrid && targetPath.contains('/grid-chat')) {
@@ -863,8 +882,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     // Disable iOS back-forward swipe interception so horizontal swipes (e.g. Reels -> Chats
     // and in-chat 3-pane navigation) are delivered directly to the web application.
     if (_controller.platform is WebKitWebViewController) {
-      final webKitController =
-          _controller.platform as WebKitWebViewController;
+      final webKitController = _controller.platform as WebKitWebViewController;
       webKitController.setAllowsBackForwardNavigationGestures(false);
     }
 
@@ -1341,6 +1359,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   if (!window.CircleConnectPush) {
     window.CircleConnectPush = {};
   }
+  window.CircleConnectPush.systemSoundsSupported = true;
   window.CircleConnectPush._token = fcmToken;
   window.CircleConnectPush.getToken = function() {
     return window.__efactor_fcm_token || "";
@@ -1353,6 +1372,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
       window.CircleConnectPush = {};
     }
     var api = window.CircleConnectPush;
+    api.systemSoundsSupported = true;
     function post(payload) {
       try {
         if (window.CircleConnectPushBridge) {
@@ -1404,6 +1424,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         conversationId: String(conversationId || '')
       });
     };
+    api.systemSoundsSupported = true;
     api.messageNotificationsManaged = true;
     api.__efactorNativeBridge = true;
   }
@@ -1547,7 +1568,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     try {
       await _controller.runJavaScript(js);
     } catch (e) {
-      debugPrint('[GridInAppWebView] CircleConnectPush bridge inject failed: $e');
+      debugPrint(
+          '[GridInAppWebView] CircleConnectPush bridge inject failed: $e');
     }
   }
 
@@ -1708,7 +1730,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         }
       } else if (action == 'clearChatNotifications') {
         final conversationId = data['conversationId']?.toString() ?? '';
-        PushNotificationBootstrap.instance.clearChatNotifications(conversationId);
+        PushNotificationBootstrap.instance
+            .clearChatNotifications(conversationId);
       } else if (action == 'activeConversationChanged' ||
           action == 'conversationOpened' ||
           action == 'setActiveConversation') {
@@ -1729,6 +1752,83 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           action == 'clearActiveConversation') {
         PushNotificationBootstrap.instance.setActiveConversationId(null);
         _onChatConversationClosed();
+      } else if (action == 'pickSystemSound') {
+        final kind = data['kind']?.toString() ?? 'ringtone';
+        final requestId = data['requestId']?.toString() ?? '';
+        final currentUri = data['currentUri']?.toString() ?? '';
+        unawaited(() async {
+          try {
+            const channel = MethodChannel('tech.efactor/circle_connect');
+            final result = await channel.invokeMethod<Map<dynamic, dynamic>>(
+              'pickSystemSound',
+              {
+                'kind': kind,
+                'requestId': requestId,
+                'currentUri': currentUri,
+              },
+            );
+            final isCancelled = result?['cancelled'] == true;
+            final uri = result?['uri']?.toString() ?? '';
+            final title = result?['title']?.toString() ?? '';
+            final detailJson = isCancelled
+                ? jsonEncode({'requestId': requestId, 'cancelled': true})
+                : jsonEncode({
+                    'requestId': requestId,
+                    'kind': kind,
+                    'uri': uri,
+                    'title': title,
+                  });
+            final js =
+                "window.dispatchEvent(new CustomEvent('circleConnectSoundPicked', { detail: $detailJson }));";
+            await _controller.runJavaScript(js);
+          } catch (e) {
+            debugPrint('[CircleConnectSound] pickSystemSound error: $e');
+            final errJson =
+                jsonEncode({'requestId': requestId, 'cancelled': true});
+            await _controller.runJavaScript(
+              "window.dispatchEvent(new CustomEvent('circleConnectSoundPicked', { detail: $errJson }));",
+            );
+          }
+        }());
+      } else if (action == 'setAppSound') {
+        final kind = data['kind']?.toString() ?? 'ringtone';
+        final choice = data['choice']?.toString() ?? 'phone_default';
+        final uri = data['uri']?.toString() ?? '';
+        final soundId = data['soundId']?.toString() ?? '';
+        unawaited(() async {
+          try {
+            const channel = MethodChannel('tech.efactor/circle_connect');
+            await channel.invokeMethod('setAppSound', {
+              'kind': kind,
+              'choice': choice,
+              'uri': uri,
+              'soundId': soundId,
+            });
+            await PushNotificationBootstrap.refreshActiveChannels();
+          } catch (e) {
+            debugPrint('[CircleConnectSound] setAppSound error: $e');
+          }
+        }());
+      } else if (action == 'playAppSound') {
+        final kind = data['kind']?.toString() ?? 'ringtone';
+        unawaited(() async {
+          try {
+            const channel = MethodChannel('tech.efactor/circle_connect');
+            await channel.invokeMethod('playAppSound', {'kind': kind});
+          } catch (e) {
+            debugPrint('[CircleConnectSound] playAppSound error: $e');
+          }
+        }());
+      } else if (action == 'stopAppSound') {
+        final kind = data['kind']?.toString() ?? 'ringtone';
+        unawaited(() async {
+          try {
+            const channel = MethodChannel('tech.efactor/circle_connect');
+            await channel.invokeMethod('stopAppSound', {'kind': kind});
+          } catch (e) {
+            debugPrint('[CircleConnectSound] stopAppSound error: $e');
+          }
+        }());
       } else if (action == 'callSignalLog') {
         final name = data['name']?.toString() ?? '';
         final callId = data['callId']?.toString() ?? '';
@@ -1808,7 +1908,8 @@ Error: $error
         GridLiveLocationService.instance.stop(messageId, postStop: false);
       }
     } catch (e) {
-      debugPrint('[GridInAppWebView] Failed parsing CircleConnectPushBridge msg: $e');
+      debugPrint(
+          '[GridInAppWebView] Failed parsing CircleConnectPushBridge msg: $e');
     }
   }
 
@@ -1836,8 +1937,7 @@ Error: $error
     try {
       final uri = Uri.tryParse(endpoint);
       if (uri != null) {
-        final cookieList =
-            await WebViewCookieManager().getCookies(domain: uri);
+        final cookieList = await WebViewCookieManager().getCookies(domain: uri);
         if (cookieList.isNotEmpty) {
           return cookieList.map((c) => '${c.name}=${c.value}').join('; ');
         }
@@ -2189,7 +2289,8 @@ Error: $error
       final currentUrlStr = await _controller.currentUrl();
       if (currentUrlStr != null && currentUrlStr.isNotEmpty) {
         final currentUri = Uri.tryParse(currentUrlStr);
-        if (currentUri != null && GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
+        if (currentUri != null &&
+            GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
           if (!mounted || _isPopping) return;
           _safeExitToGrid();
           return;
@@ -2233,7 +2334,8 @@ Error: $error
       final currentUrlStr = await _controller.currentUrl();
       if (currentUrlStr != null && currentUrlStr.isNotEmpty) {
         final currentUri = Uri.tryParse(currentUrlStr);
-        if (currentUri != null && GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
+        if (currentUri != null &&
+            GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
           if (!mounted || _isPopping) return;
           _safeExitToGrid();
           return;
@@ -2355,10 +2457,11 @@ Error: $error
     PlatformWebViewPermissionRequest request,
   ) async {
     final types = request.types;
-    final requiresVideo = types.contains(WebViewPermissionResourceType.camera) ||
-        types.any((t) =>
-            t.name.toLowerCase().contains('camera') ||
-            t.name.toLowerCase().contains('video'));
+    final requiresVideo =
+        types.contains(WebViewPermissionResourceType.camera) ||
+            types.any((t) =>
+                t.name.toLowerCase().contains('camera') ||
+                t.name.toLowerCase().contains('video'));
     final requiresAudio =
         types.contains(WebViewPermissionResourceType.microphone) ||
             types.any((t) =>
@@ -2579,8 +2682,8 @@ Error: $error
   }
 })();
 ''';
-      final hasError =
-          await _controller.runJavaScriptReturningResult(detectChannelsNetworkErrorJs);
+      final hasError = await _controller
+          .runJavaScriptReturningResult(detectChannelsNetworkErrorJs);
       if (hasError.toString().trim() == 'true') {
         debugPrint(
           '[GridInAppWebView] Detected Network error on Channels tab offline -> restoring Channels snapshot',
@@ -2721,7 +2824,8 @@ Error: $error
                         color: const Color(0xFFEF4444),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF0F172A) : Colors.white,
                           width: 2,
                         ),
                       ),
@@ -2754,9 +2858,8 @@ Error: $error
               style: TextStyle(
                 fontSize: 14,
                 height: 1.5,
-                color: isDark
-                    ? const Color(0xFF94A3B8)
-                    : const Color(0xFF64748B),
+                color:
+                    isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
               ),
               textAlign: TextAlign.center,
             ),
@@ -2790,9 +2893,8 @@ Error: $error
             TextButton.icon(
               onPressed: _handleBackPress,
               style: TextButton.styleFrom(
-                foregroundColor: isDark
-                    ? const Color(0xFF94A3B8)
-                    : const Color(0xFF64748B),
+                foregroundColor:
+                    isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 10,
@@ -2871,8 +2973,7 @@ Error: $error
                     onTap: _handleTopLeftTap,
                   ),
                 ),
-              if (_isConnectingCall)
-                _buildConnectingCallOverlay(),
+              if (_isConnectingCall) _buildConnectingCallOverlay(),
             ],
           ),
         ),
@@ -2940,7 +3041,8 @@ Error: $error
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF38BDF8)),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFF38BDF8)),
                   ),
                 ),
                 const SizedBox(width: 10),

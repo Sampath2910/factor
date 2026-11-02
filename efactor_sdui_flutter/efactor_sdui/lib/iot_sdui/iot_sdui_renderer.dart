@@ -16,6 +16,15 @@ import 'iot_sdui_state.dart';
 class IotSduiRenderer {
   IotSduiRenderer(this.state) : _icons = IotSchemaIcon(state.schema);
 
+  static final Map<String, int> _lastToggleTapAt = <String, int>{};
+  static final Set<String> _togglesInFlight = <String>{};
+
+  @visibleForTesting
+  static void resetToggleThrottleForTesting() {
+    _lastToggleTapAt.clear();
+    _togglesInFlight.clear();
+  }
+
   final IotSduiState state;
   final IotSchemaIcon _icons;
 
@@ -1947,37 +1956,100 @@ class IotSduiRenderer {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () async {
+        final deviceIdKey =
+            (device['node_id'] ?? device['id'] ?? device.hashCode).toString();
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final lastTap = _lastToggleTapAt[deviceIdKey] ?? 0;
+        if (now - lastTap < 300 || _togglesInFlight.contains(deviceIdKey)) {
+          logDebug(
+            '[IOT_SDUI][POWER_TOGGLE][THROTTLED] device=$deviceIdKey '
+            'inFlight=${_togglesInFlight.contains(deviceIdKey)} '
+            'elapsed=${now - lastTap}ms',
+          );
+          return;
+        }
+        _lastToggleTapAt[deviceIdKey] = now;
+        _togglesInFlight.add(deviceIdKey);
+
+        final originalPower = power;
+        final nextPower = !originalPower;
+
         logDebug(
           '[IOT_SDUI][POWER_TOGGLE][TAP] '
-          'device=${device['node_id'] ?? device['id'] ?? '-'} '
-          'from=$power to=${!power}',
+          'device=$deviceIdKey '
+          'from=$originalPower to=$nextPower (optimistic)',
         );
 
-        final result = await state.executeAction(
-          onTap,
-          device: device,
-          event: <String, dynamic>{
-            'value': !power,
-            'toggle_state': !power,
-            'toggle_next': !power,
-          },
-        );
+        // 1. Instant Visual Feedback (0ms):
+        // Immediately update in-memory device state and notify state bindings
+        device['power'] = nextPower;
+        state.writeBinding(field['bind'], nextPower, device);
 
-        logDebug(
-          '[IOT_SDUI][POWER_TOGGLE][RESULT] '
-          'device=${device['node_id'] ?? device['id'] ?? '-'} '
-          'resultType=${result?.runtimeType ?? 'null'} '
-          'error=${state.lastError ?? '-'}',
-        );
+        try {
+          final result = await state.executeAction(
+            onTap,
+            device: device,
+            event: <String, dynamic>{
+              'value': nextPower,
+              'toggle_state': nextPower,
+              'toggle_next': nextPower,
+            },
+          );
 
-        // Re-read the server state after a successful command instead of
-        // inventing the new power state locally in Flutter.
-        if (state.lastError == null) {
-          await state.refreshDeviceGrid();
+          final isSuccess = state.lastError == null && result != null;
+          logDebug(
+            '[IOT_SDUI][POWER_TOGGLE][RESULT] '
+            'device=$deviceIdKey '
+            'resultType=${result?.runtimeType ?? 'null'} '
+            'isSuccess=$isSuccess error=${state.lastError ?? '-'}',
+          );
+
+          if (!isSuccess) {
+            if (context.mounted) {
+              _rollbackToggle(context, device, field, originalPower);
+            } else {
+              device['power'] = originalPower;
+              state.writeBinding(field['bind'], originalPower, device);
+            }
+          }
+        } catch (error) {
+          logDebug(
+            '[IOT_SDUI][POWER_TOGGLE][ERROR] device=$deviceIdKey error=$error',
+          );
+          if (context.mounted) {
+            _rollbackToggle(context, device, field, originalPower);
+          } else {
+            device['power'] = originalPower;
+            state.writeBinding(field['bind'], originalPower, device);
+          }
+        } finally {
+          _togglesInFlight.remove(deviceIdKey);
         }
       },
       child: toggle,
     );
+  }
+
+  void _rollbackToggle(
+    BuildContext context,
+    Map<String, dynamic> device,
+    Map<String, dynamic> field,
+    bool originalPower,
+  ) {
+    device['power'] = originalPower;
+    state.writeBinding(field['bind'], originalPower, device);
+    if (context.mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to change device state. Please check your connection.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   TextStyle _textStyle(

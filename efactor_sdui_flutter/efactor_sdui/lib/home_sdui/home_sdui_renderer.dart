@@ -62,10 +62,10 @@ class HomeSduiRenderer {
       'responsiveGrid' => _responsiveGrid(context, component),
       'rotatingFaceCard' => _rotatingFaceCard(context, component, item: item),
       'rotatingDeviceCard' => _rotatingDeviceCard(
-        context,
-        component,
-        item: item,
-      ),
+          context,
+          component,
+          item: item,
+        ),
       'bottomNavigation' => _bottomNavigation(context, component),
       'floatingActionButton' => _floatingAction(context, component),
       'list' => _list(context, component),
@@ -74,28 +74,28 @@ class HomeSduiRenderer {
       'errorState' => _errorState(context, component),
       'faceSelector' => _faceSelector(context, component, item: item),
       'deviceControlPanel' => _deviceControlPanel(
-        context,
-        component,
-        item: item,
-      ),
+          context,
+          component,
+          item: item,
+        ),
       'deviceDetailsHeader' => _deviceDetailsHeader(
-        context,
-        component,
-        item: item,
-      ),
+          context,
+          component,
+          item: item,
+        ),
       'profileHeader' => _profileHeader(context, component),
       'profileMenu' => _profileMenu(context, component),
       'themeModeSelector' => _themeModeSelector(context, component),
       'actionButton' => _actionButton(context, component),
       'loginForm' => _loginForm(context, component),
       'staticHomeUi' => HomeStaticTemplateRenderer(
-        state: state,
-        icons: icons,
-      ).build(context, component),
+          state: state,
+          icons: icons,
+        ).build(context, component),
       _ => _error(
-        'Unsupported home component type "$type" '
-        'for ${component['id']}.',
-      ),
+          'Unsupported home component type "$type" '
+          'for ${component['id']}.',
+        ),
     };
   }
 
@@ -104,9 +104,8 @@ class HomeSduiRenderer {
     if (direct != null && direct.isNotEmpty) return direct;
 
     final presetId = component['presetId']?.toString();
-    final preset = presetId == null
-        ? null
-        : state.schema['componentPresets']?[presetId];
+    final preset =
+        presetId == null ? null : state.schema['componentPresets']?[presetId];
 
     if (preset is Map) {
       return preset['type']?.toString();
@@ -277,8 +276,7 @@ class HomeSduiRenderer {
         _d(layout['marginBottom']) ?? _d(appearance['marginBottom']) ?? 0;
     final rowChildren = <Widget>[];
     final breakpoint = _responsiveBreakpointName(context);
-    final useCompactLogo =
-        breakpoint == 'narrow' || breakpoint == 'compact';
+    final useCompactLogo = breakpoint == 'narrow' || breakpoint == 'compact';
 
     if (logo != null) {
       final source = logo['imageUrl']?.toString().trim() ?? '';
@@ -298,8 +296,8 @@ class HomeSduiRenderer {
         source: source,
         fit: logo['objectFit'],
         alignment: logo['objectPosition'],
-        errorIconToken:
-            state.schema['rendererRequirements']?['fallbacks']?['missingImage'],
+        errorIconToken: state.schema['rendererRequirements']?['fallbacks']
+            ?['missingImage'],
       );
       if (image != null) {
         rowChildren.add(
@@ -330,14 +328,11 @@ class HomeSduiRenderer {
       final rawWidth = _d(avatarAppearance['width']);
       final rawHeight = _d(avatarAppearance['height']);
       final rawRadius = _d(avatarAppearance['borderRadius']);
-      final avatarStart =
-          _color(avatarAppearance['gradientStart']) ??
+      final avatarStart = _color(avatarAppearance['gradientStart']) ??
           tokenColor('colors.avatarGradientStart');
-      final avatarEnd =
-          _color(avatarAppearance['gradientEnd']) ??
+      final avatarEnd = _color(avatarAppearance['gradientEnd']) ??
           tokenColor('colors.avatarGradientEnd');
-      final avatarTextColor =
-          _color(avatarAppearance['textColor']) ??
+      final avatarTextColor = _color(avatarAppearance['textColor']) ??
           tokenColor('colors.welcomeText');
       final rawFontSize = _d(avatarAppearance['fontSize']);
 
@@ -363,13 +358,12 @@ class HomeSduiRenderer {
 
       Widget avatarChild;
       if (hasImage) {
-        avatarChild =
-            _networkImageFromSchema(
+        avatarChild = _networkImageFromSchema(
               source: imageUrl,
               fit: avatarAppearance['objectFit'],
               alignment: avatarAppearance['objectPosition'],
-              errorIconToken: state
-                  .schema['rendererRequirements']?['fallbacks']?['missingImage'],
+              errorIconToken: state.schema['rendererRequirements']?['fallbacks']
+                  ?['missingImage'],
             ) ??
             Text(
               initials,
@@ -704,40 +698,31 @@ class HomeSduiRenderer {
 
     final background =
         tokenColor(appearance['backgroundColorToken']?.toString()) ??
-        tokenColor('colors.surface');
-    final border =
-        tokenColor(appearance['borderColorToken']?.toString()) ??
+            tokenColor('colors.surface');
+    final border = tokenColor(appearance['borderColorToken']?.toString()) ??
         tokenColor('colors.border');
-    final radius =
-        _tokenNumber(appearance['radiusToken']?.toString()) ??
+    final radius = _tokenNumber(appearance['radiusToken']?.toString()) ??
         _tokenNumber('radius.card');
-    final padding =
-        _paddingOrNull(appearance['padding']) ??
+    final padding = _paddingOrNull(appearance['padding']) ??
         EdgeInsets.all(_tokenNumber('spacing.lg') ?? 0);
     final gap = _d(appearance['gap']) ?? _tokenNumber('spacing.sm') ?? 0;
 
-    final avatarSize =
-        _d(avatar['size']) ??
+    final avatarSize = _d(avatar['size']) ??
         _d(state.schema['accessibility']?['minimumTapTargetDp']);
-    final avatarBorder =
-        tokenColor(avatar['borderColorToken']?.toString()) ??
+    final avatarBorder = tokenColor(avatar['borderColorToken']?.toString()) ??
         tokenColor('colors.surface');
-    final avatarStart =
-        tokenColor(avatar['startColorToken']?.toString()) ??
+    final avatarStart = tokenColor(avatar['startColorToken']?.toString()) ??
         tokenColor('colors.avatarGradientStart');
-    final avatarEnd =
-        tokenColor(avatar['endColorToken']?.toString()) ??
+    final avatarEnd = tokenColor(avatar['endColorToken']?.toString()) ??
         tokenColor('colors.avatarGradientEnd');
 
     final chipBackground =
         tokenColor(chip['backgroundColorToken']?.toString()) ??
-        tokenColor('colors.surfaceElevated');
-    final chipRadius =
-        _tokenNumber(chip['radiusToken']?.toString()) ??
+            tokenColor('colors.surfaceElevated');
+    final chipRadius = _tokenNumber(chip['radiusToken']?.toString()) ??
         _tokenNumber('radius.pill');
     final chipGap = _d(chip['gap']) ?? _tokenNumber('spacing.xs') ?? 0;
-    final chipPadding =
-        _paddingOrNull(chip['padding']) ??
+    final chipPadding = _paddingOrNull(chip['padding']) ??
         EdgeInsets.symmetric(
           horizontal: _tokenNumber('spacing.sm') ?? 0,
           vertical: _tokenNumber('spacing.xs') ?? 0,
@@ -775,21 +760,20 @@ class HomeSduiRenderer {
     }
 
     Widget chipWidget(String value) => Container(
-      padding: chipPadding,
-      decoration: BoxDecoration(
-        color: chipBackground,
-        borderRadius: BorderRadius.circular(chipRadius),
-      ),
-      child: Text(
-        value,
-        style: _typography(
-          chip['typographyToken']?.toString() ?? 'typography.cardSubtitle',
-          fallbackColor:
-              tokenColor(chip['textColorToken']?.toString()) ??
-              tokenColor('colors.textSecondary'),
-        ),
-      ),
-    );
+          padding: chipPadding,
+          decoration: BoxDecoration(
+            color: chipBackground,
+            borderRadius: BorderRadius.circular(chipRadius),
+          ),
+          child: Text(
+            value,
+            style: _typography(
+              chip['typographyToken']?.toString() ?? 'typography.cardSubtitle',
+              fallbackColor: tokenColor(chip['textColorToken']?.toString()) ??
+                  tokenColor('colors.textSecondary'),
+            ),
+          ),
+        );
 
     return Container(
       padding: padding,
@@ -821,7 +805,7 @@ class HomeSduiRenderer {
                 avatar['typographyToken']?.toString() ?? 'typography.pageTitle',
                 fallbackColor:
                     tokenColor(avatar['textColorToken']?.toString()) ??
-                    tokenColor('colors.welcomeText'),
+                        tokenColor('colors.welcomeText'),
               ),
             ),
           ),
@@ -834,7 +818,7 @@ class HomeSduiRenderer {
                   'typography.pageTitle',
               fallbackColor:
                   tokenColor(appearance['nameColorToken']?.toString()) ??
-                  tokenColor('colors.textPrimary'),
+                      tokenColor('colors.textPrimary'),
             ),
           ),
           SizedBox(
@@ -849,7 +833,7 @@ class HomeSduiRenderer {
                   'typography.pageSubtitle',
               fallbackColor:
                   tokenColor(appearance['emailColorToken']?.toString()) ??
-                  tokenColor('colors.textSecondary'),
+                      tokenColor('colors.textSecondary'),
             ),
           ),
           if (phone.isNotEmpty || memberId.isNotEmpty) ...[
@@ -883,28 +867,23 @@ class HomeSduiRenderer {
     final gap = _d(appearance['gap']) ?? _tokenNumber('spacing.sm') ?? 0;
     final background =
         tokenColor(appearance['backgroundColorToken']?.toString()) ??
-        tokenColor('colors.surface');
-    final border =
-        tokenColor(appearance['borderColorToken']?.toString()) ??
+            tokenColor('colors.surface');
+    final border = tokenColor(appearance['borderColorToken']?.toString()) ??
         tokenColor('colors.border');
-    final radius =
-        _tokenNumber(appearance['radiusToken']?.toString()) ??
+    final radius = _tokenNumber(appearance['radiusToken']?.toString()) ??
         _tokenNumber('radius.card');
-    final padding =
-        _paddingOrNull(appearance['padding']) ??
+    final padding = _paddingOrNull(appearance['padding']) ??
         EdgeInsets.all(_tokenNumber('spacing.md') ?? 0);
-    final iconSize =
-        _d(appearance['iconContainerSize']) ??
+    final iconSize = _d(appearance['iconContainerSize']) ??
         _d(state.schema['accessibility']?['minimumTapTargetDp']);
     final iconBackground =
         tokenColor(appearance['iconBackgroundColorToken']?.toString()) ??
-        tokenColor('colors.surfaceElevated');
-    final iconColor =
-        tokenColor(appearance['iconColorToken']?.toString()) ??
+            tokenColor('colors.surfaceElevated');
+    final iconColor = tokenColor(appearance['iconColorToken']?.toString()) ??
         tokenColor('colors.accent');
     final trailingColor =
         tokenColor(appearance['trailingIconColorToken']?.toString()) ??
-        tokenColor('colors.textMuted');
+            tokenColor('colors.textMuted');
 
     if (background == null ||
         border == null ||
@@ -958,14 +937,12 @@ class HomeSduiRenderer {
                         child: FaIconAdapter(
                           icon: icons.resolve(entry['iconToken']?.toString()),
                           color: iconColor,
-                          size:
-                              _d(appearance['iconSize']) ??
+                          size: _d(appearance['iconSize']) ??
                               _tokenNumber('typography.pageSubtitle.fontSize'),
                         ),
                       ),
                       SizedBox(
-                        width:
-                            _d(appearance['contentGap']) ??
+                        width: _d(appearance['contentGap']) ??
                             _tokenNumber('spacing.sm') ??
                             gap,
                       ),
@@ -979,8 +956,7 @@ class HomeSduiRenderer {
                                 appearance['labelTypographyToken']
                                         ?.toString() ??
                                     'typography.cardTitle',
-                                fallbackColor:
-                                    tokenColor(
+                                fallbackColor: tokenColor(
                                       appearance['labelColorToken']?.toString(),
                                     ) ??
                                     tokenColor('colors.textPrimary'),
@@ -988,8 +964,7 @@ class HomeSduiRenderer {
                             ),
                             if (_textValue(entry['subtitle']).isNotEmpty) ...[
                               SizedBox(
-                                height:
-                                    _d(appearance['labelGap']) ??
+                                height: _d(appearance['labelGap']) ??
                                     _tokenNumber('spacing.xs') ??
                                     gap,
                               ),
@@ -999,8 +974,7 @@ class HomeSduiRenderer {
                                   appearance['subtitleTypographyToken']
                                           ?.toString() ??
                                       'typography.cardSubtitle',
-                                  fallbackColor:
-                                      tokenColor(
+                                  fallbackColor: tokenColor(
                                         appearance['subtitleColorToken']
                                             ?.toString(),
                                       ) ??
@@ -1015,8 +989,7 @@ class HomeSduiRenderer {
                         FaIconAdapter(
                           icon: icons.resolve(trailing),
                           color: trailingColor,
-                          size:
-                              _d(appearance['trailingIconSize']) ??
+                          size: _d(appearance['trailingIconSize']) ??
                               _tokenNumber('typography.pageSubtitle.fontSize'),
                         ),
                     ],
@@ -1052,19 +1025,16 @@ class HomeSduiRenderer {
 
     final selectedPreset =
         state.resolve(c['selectedPresetBinding'])?.toString() ??
-        state.readState('global.themePreset')?.toString();
+            state.readState('global.themePreset')?.toString();
 
-    final selectedMode =
-        state.resolve(c['selectedModeBinding'])?.toString() ??
+    final selectedMode = state.resolve(c['selectedModeBinding'])?.toString() ??
         state.readState('global.themeMode')?.toString();
 
-    final rowMinHeight =
-        _d(appearance['rowMinHeight']) ??
+    final rowMinHeight = _d(appearance['rowMinHeight']) ??
         _d(state.schema['accessibility']?['minimumTapTargetDp']) ??
         44;
 
-    final px =
-        _d(appearance['rowPaddingHorizontal']) ??
+    final px = _d(appearance['rowPaddingHorizontal']) ??
         _tokenNumber('spacing.md') ??
         0;
 
@@ -1075,8 +1045,7 @@ class HomeSduiRenderer {
         _d(appearance['rowBorderRadius']) ?? _tokenNumber('radius.card') ?? 0;
 
     final rowBorderWidth = _d(appearance['rowBorderWidth']) ?? 1;
-    final listGap =
-        _d(appearance['listGap']) ??
+    final listGap = _d(appearance['listGap']) ??
         _d(appearance['pageGap']) ??
         _tokenNumber('spacing.sm') ??
         0;
@@ -1128,7 +1097,7 @@ class HomeSduiRenderer {
       final selected = selectedExpression != null
           ? state.evaluate(selectedExpression)
           : ((preset.isNotEmpty && preset == selectedPreset) ||
-                (mode.isNotEmpty && mode == selectedMode));
+              (mode.isNotEmpty && mode == selectedMode));
 
       final row = Container(
         constraints: BoxConstraints(minHeight: rowMinHeight),
@@ -1152,8 +1121,7 @@ class HomeSduiRenderer {
                     label,
                     style: TextStyle(
                       color: primary,
-                      fontSize:
-                          _d(appearance['rowTitleFontSize']) ??
+                      fontSize: _d(appearance['rowTitleFontSize']) ??
                           _tokenNumber('typography.cardTitle.fontSize'),
                       fontWeight: _fontWeight(appearance['rowTitleFontWeight']),
                     ),
@@ -1164,8 +1132,7 @@ class HomeSduiRenderer {
                       subtitle,
                       style: TextStyle(
                         color: secondary,
-                        fontSize:
-                            _d(appearance['rowSubtitleFontSize']) ??
+                        fontSize: _d(appearance['rowSubtitleFontSize']) ??
                             _tokenNumber('typography.cardSubtitle.fontSize'),
                         fontWeight: _fontWeight(
                           appearance['rowSubtitleFontWeight'],
@@ -1217,29 +1184,24 @@ class HomeSduiRenderer {
     final label = _textValue(c['label']);
 
     final destructive = appearance['destructive'] == true;
-    final background =
-        _color(appearance['backgroundColor']) ??
+    final background = _color(appearance['backgroundColor']) ??
         tokenColor(appearance['backgroundColorToken']?.toString()) ??
         tokenColor(destructive ? 'colors.danger' : 'colors.accent');
 
-    final foreground =
-        _color(appearance['textColor']) ??
+    final foreground = _color(appearance['textColor']) ??
         tokenColor(appearance['textColorToken']?.toString()) ??
         tokenColor('colors.surface');
 
-    final border =
-        _color(appearance['borderColor']) ??
+    final border = _color(appearance['borderColor']) ??
         tokenColor(appearance['borderColorToken']?.toString()) ??
         background;
 
-    final height =
-        _d(appearance['height']) ??
+    final height = _d(appearance['height']) ??
         _d(appearance['minHeight']) ??
         _d(appearance['logoutMinHeight']) ??
         _d(state.schema['accessibility']?['minimumTapTargetDp']);
 
-    final radius =
-        _d(appearance['borderRadius']) ??
+    final radius = _d(appearance['borderRadius']) ??
         _d(appearance['logoutBorderRadius']) ??
         _tokenNumber(appearance['radiusToken']?.toString()) ??
         _tokenNumber('radius.card');
@@ -1284,8 +1246,7 @@ class HomeSduiRenderer {
                 FaIconAdapter(
                   icon: icons.resolve(c['iconToken']?.toString()),
                   color: foreground,
-                  size:
-                      _d(appearance['iconSize']) ??
+                  size: _d(appearance['iconSize']) ??
                       _tokenNumber('typography.pageSubtitle.fontSize'),
                 ),
                 SizedBox(width: gap),
@@ -1324,27 +1285,23 @@ class HomeSduiRenderer {
 
     final titleStyle = _typography(
       typography['titleToken']?.toString() ?? 'typography.pageTitle',
-      fallbackColor:
-          tokenColor(appearance['titleColorToken']?.toString()) ??
+      fallbackColor: tokenColor(appearance['titleColorToken']?.toString()) ??
           tokenColor('colors.textPrimary'),
     );
     final subtitleStyle = _typography(
       typography['subtitleToken']?.toString() ?? 'typography.pageSubtitle',
-      fallbackColor:
-          tokenColor(appearance['subtitleColorToken']?.toString()) ??
+      fallbackColor: tokenColor(appearance['subtitleColorToken']?.toString()) ??
           tokenColor('colors.textSecondary'),
     );
 
     final iconToken = c['iconToken']?.toString();
-    final iconSize =
-        _d(appearance['iconSize']) ??
+    final iconSize = _d(appearance['iconSize']) ??
         _tokenNumber('typography.pageTitle.fontSize');
     final iconGap =
         _d(appearance['iconGap']) ?? _tokenNumber('spacing.sm') ?? 0;
     final textGap =
         _d(appearance['textGap']) ?? _tokenNumber('spacing.xs') ?? 0;
-    final iconColor =
-        tokenColor(appearance['iconColorToken']?.toString()) ??
+    final iconColor = tokenColor(appearance['iconColorToken']?.toString()) ??
         tokenColor('colors.accent');
 
     if (iconToken != null && iconSize == null) {
@@ -1397,12 +1354,10 @@ class HomeSduiRenderer {
                     rawAction.cast<dynamic, dynamic>(),
                   );
                   final actionId = action['actionId']?.toString().trim();
-                  final iconToken =
-                      action['iconToken']?.toString() ??
+                  final iconToken = action['iconToken']?.toString() ??
                       action['icon']?.toString();
                   return IconButton(
-                    tooltip:
-                        action['accessibilityLabel']?.toString() ??
+                    tooltip: action['accessibilityLabel']?.toString() ??
                         action['label']?.toString() ??
                         action['title']?.toString(),
                     onPressed: actionId == null || actionId.isEmpty
@@ -1420,14 +1375,11 @@ class HomeSduiRenderer {
     );
 
     final padding = _paddingOrNull(appearance['padding']);
-    final radius =
-        _d(appearance['borderRadius']) ??
+    final radius = _d(appearance['borderRadius']) ??
         _tokenNumber(appearance['radiusToken']?.toString());
-    final background =
-        _color(appearance['backgroundColor']) ??
+    final background = _color(appearance['backgroundColor']) ??
         tokenColor(appearance['backgroundColorToken']?.toString());
-    final border =
-        _color(appearance['borderColor']) ??
+    final border = _color(appearance['borderColor']) ??
         tokenColor(appearance['borderColorToken']?.toString());
 
     if (padding != null ||
@@ -1471,18 +1423,15 @@ class HomeSduiRenderer {
     final supporting = _textValue(content['supportingText'], item: item);
     final caption = _textValue(content['caption'], item: item);
 
-    final radius =
-        _d(appearance['radius']) ??
+    final radius = _d(appearance['radius']) ??
         _tokenNumber(appearance['radiusToken']?.toString()) ??
         _d(appearance['borderRadius']) ??
         _tokenNumber('radius.card');
 
-    final padding =
-        _paddingOrNull(appearance['padding']) ??
+    final padding = _paddingOrNull(appearance['padding']) ??
         EdgeInsets.all(_tokenNumber('spacing.md') ?? 0);
 
-    final textColor =
-        _color(appearance['textColor']) ??
+    final textColor = _color(appearance['textColor']) ??
         tokenColor(appearance['textColorToken']?.toString()) ??
         tokenColor('colors.textPrimary');
 
@@ -1490,8 +1439,7 @@ class HomeSduiRenderer {
     final tokenBackground = tokenColor(
       appearance['backgroundColorToken']?.toString(),
     );
-    final gradient =
-        _gradient(_map(appearance['background'])) ??
+    final gradient = _gradient(_map(appearance['background'])) ??
         _gradientFromCss(appearance['backgroundColor']?.toString());
 
     if (radius == null || textColor == null) {
@@ -1527,7 +1475,8 @@ class HomeSduiRenderer {
         Text(
           value,
           maxLines: (rawMap?['maxLines'] as num?)?.toInt() ?? 2,
-          overflow: _textOverflow(rawMap?['overflow']) ?? _schemaOverflow('headerText'),
+          overflow: _textOverflow(rawMap?['overflow']) ??
+              _schemaOverflow('headerText'),
           softWrap: rawMap?['softWrap'] != false,
           style: style,
         ),
@@ -1600,13 +1549,12 @@ class HomeSduiRenderer {
       Widget avatarChild;
       final imageUrl = avatar['imageUrl']?.toString().trim() ?? '';
       if (imageUrl.isNotEmpty) {
-        avatarChild =
-            _networkImageFromSchema(
+        avatarChild = _networkImageFromSchema(
               source: imageUrl,
               fit: avatarAppearance['objectFit'],
               alignment: avatarAppearance['objectPosition'],
-              errorIconToken: state
-                  .schema['rendererRequirements']?['fallbacks']?['missingImage'],
+              errorIconToken: state.schema['rendererRequirements']?['fallbacks']
+                  ?['missingImage'],
             ) ??
             Text(initials);
       } else {
@@ -1677,8 +1625,8 @@ class HomeSduiRenderer {
       decoration: BoxDecoration(
         color: gradient == null
             ? directBackground ??
-                  tokenBackground ??
-                  tokenColor('colors.surface')
+                tokenBackground ??
+                tokenColor('colors.surface')
             : null,
         gradient: gradient,
         borderRadius: BorderRadius.circular(radius),
@@ -1705,7 +1653,8 @@ class HomeSduiRenderer {
     final content = _map(c['content']) ?? const <String, dynamic>{};
     final appearance = _map(c['appearance']) ?? const <String, dynamic>{};
 
-    final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+    final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']
+            ?['cardBorderRadius']) ??
         _d(state.schema['theme']?['cardBorderRadius']) ??
         _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']);
     final rawRadius = _d(appearance['borderRadius']) ??
@@ -1716,13 +1665,11 @@ class HomeSduiRenderer {
         0.0;
     final radius = rawRadius >= 0 ? rawRadius : 0.0;
 
-    final bg =
-        _color(appearance['backgroundColor']) ??
+    final bg = _color(appearance['backgroundColor']) ??
         tokenColor(appearance['backgroundColorToken']?.toString()) ??
         tokenColor('colors.surface');
 
-    final fg =
-        _color(appearance['textColor']) ??
+    final fg = _color(appearance['textColor']) ??
         tokenColor(appearance['textColorToken']?.toString()) ??
         tokenColor('colors.textPrimary');
 
@@ -1908,7 +1855,7 @@ class HomeSduiRenderer {
     final size = MediaQuery.sizeOf(context);
     final respectSafeArea =
         state.schema['layoutContract']?['respectSafeArea'] == true ||
-        state.schema['responsive']?['safeArea'] == true;
+            state.schema['responsive']?['safeArea'] == true;
     if (!respectSafeArea) return size.width;
     final padding = MediaQuery.viewPaddingOf(context);
     return (size.width - padding.left - padding.right)
@@ -1920,7 +1867,7 @@ class HomeSduiRenderer {
     final size = MediaQuery.sizeOf(context);
     final respectSafeArea =
         state.schema['layoutContract']?['respectSafeArea'] == true ||
-        state.schema['responsive']?['safeArea'] == true;
+            state.schema['responsive']?['safeArea'] == true;
     if (!respectSafeArea) return size.height;
     final padding = MediaQuery.viewPaddingOf(context);
     return (size.height - padding.top - padding.bottom)
@@ -1932,8 +1879,7 @@ class HomeSduiRenderer {
     final width = _responsiveViewportWidth(context);
     final height = _responsiveViewportHeight(context);
     final orientation = width > height ? 'landscape' : 'portrait';
-    var name =
-        SchemaRuntime(state.schema).resolveBreakpointName(
+    var name = SchemaRuntime(state.schema).resolveBreakpointName(
           width,
           logicalHeight: height,
           orientation: orientation,
@@ -1942,7 +1888,8 @@ class HomeSduiRenderer {
         'compact';
 
     if (orientation == 'landscape') {
-      final landscape = _map(state.schema['responsive']?['orientation']?['landscape']);
+      final landscape =
+          _map(state.schema['responsive']?['orientation']?['landscape']);
       if (landscape?['preferMediumLayout'] == true &&
           (name == 'narrow' || name == 'compact')) {
         name = 'medium';
@@ -1959,10 +1906,10 @@ class HomeSduiRenderer {
       component,
       _responsiveViewportWidth(context),
       logicalHeight: _responsiveViewportHeight(context),
-      orientation: _responsiveViewportWidth(context) >
-              _responsiveViewportHeight(context)
-          ? 'landscape'
-          : 'portrait',
+      orientation:
+          _responsiveViewportWidth(context) > _responsiveViewportHeight(context)
+              ? 'landscape'
+              : 'portrait',
     );
   }
 
@@ -1974,10 +1921,10 @@ class HomeSduiRenderer {
       layout,
       _responsiveViewportWidth(context),
       logicalHeight: _responsiveViewportHeight(context),
-      orientation: _responsiveViewportWidth(context) >
-              _responsiveViewportHeight(context)
-          ? 'landscape'
-          : 'portrait',
+      orientation:
+          _responsiveViewportWidth(context) > _responsiveViewportHeight(context)
+              ? 'landscape'
+              : 'portrait',
     );
   }
 
@@ -2069,8 +2016,7 @@ class HomeSduiRenderer {
         final columnGap = _d(layout['columnGap']) ?? _d(layout['gap']) ?? 0.0;
         final rowGap = _d(layout['rowGap']) ?? _d(layout['gap']) ?? 0.0;
         final rowHeight = _d(layout['rowHeight']) ?? _d(layout['minRowHeight']);
-        final minimumRowHeight =
-            _d(layout['minRowHeight']) ??
+        final minimumRowHeight = _d(layout['minRowHeight']) ??
             _d(_map(c['layout'])?['minRowHeight']);
         final columns = (layout['columns'] as num?)?.toInt();
 
@@ -2085,11 +2031,9 @@ class HomeSduiRenderer {
           );
         }
 
-        final gridPolicy =
-            _map(state.schema['responsive']?['grid']) ??
+        final gridPolicy = _map(state.schema['responsive']?['grid']) ??
             const <String, dynamic>{};
-        final minCell =
-            _d(layout['minimumCellWidthDp']) ??
+        final minCell = _d(layout['minimumCellWidthDp']) ??
             _d(gridPolicy['minimumCellWidthDp']) ??
             0;
         final narrowThreshold = _d(gridPolicy['narrowScreenThresholdDp']);
@@ -2102,8 +2046,8 @@ class HomeSduiRenderer {
         // Schema may declare a preferred metro column count, but narrow phones
         // still honor responsive.grid.narrowScreen* so tiles do not overflow.
         if (preserveMetroColumns) {
-          final declaredColumns =
-              (_map(c['layout'])?['columns'] as num?)?.toInt() ??
+          final declaredColumns = (_map(c['layout'])?['columns'] as num?)
+                  ?.toInt() ??
               (_map(c['layouts'])?['compact']?['columns'] as num?)?.toInt() ??
               (state.schema['uiRenderContract']?['grid']?['columns'] as num?)
                   ?.toInt() ??
@@ -2133,7 +2077,8 @@ class HomeSduiRenderer {
           availableWidth = viewportWidth;
         }
         final maxWidth = _d(layout['maximumContentWidth']);
-        if (maxWidth != null && !(preserveMetroColumns && !applyNarrowCollapse)) {
+        if (maxWidth != null &&
+            !(preserveMetroColumns && !applyNarrowCollapse)) {
           availableWidth = math.min(maxWidth, availableWidth);
         }
 
@@ -2145,8 +2090,7 @@ class HomeSduiRenderer {
                 true &&
             !applyNarrowCollapse)) {
           while (columnCount > 1) {
-            final cell =
-                (availableWidth - ((columnCount - 1) * columnGap)) /
+            final cell = (availableWidth - ((columnCount - 1) * columnGap)) /
                 columnCount;
             if (cell.isFinite && cell > 0 && cell >= minCell) break;
             columnCount -= 1;
@@ -2170,9 +2114,12 @@ class HomeSduiRenderer {
             .trim()
             .toLowerCase();
 
-        final fallbackSizeFormula = (state.schema['uiRenderContract']?['cubeGeometry']?['sizeFormula'] ??
-                state.schema['uiRenderContract']?['tileRotation']?['geometry']?['sizeFormula'] ??
-                state.schema['layoutContract']?['gridCalculation']?['sizeFormula'])
+        final fallbackSizeFormula = (state.schema['uiRenderContract']
+                    ?['cubeGeometry']?['sizeFormula'] ??
+                state.schema['uiRenderContract']?['tileRotation']?['geometry']
+                    ?['sizeFormula'] ??
+                state.schema['layoutContract']?['gridCalculation']
+                    ?['sizeFormula'])
             ?.toString()
             .trim()
             .toLowerCase();
@@ -2180,12 +2127,14 @@ class HomeSduiRenderer {
         final explicitAspectRatio = _d(layout['aspectRatio']) ??
             _d(_map(c['layout'])?['aspectRatio']) ??
             _d(c['aspectRatio']) ??
-            _d(state.schema['layoutContract']?['gridCalculation']?['aspectRatio']);
+            _d(state.schema['layoutContract']?['gridCalculation']
+                ?['aspectRatio']);
 
         final isMetro = preserveMetroColumns || _isMetroMosaic(c);
 
-        final themeSquareTiles =
-            state.schema['meta']?['layoutSnapshot']?['theme']?['squareTiles'] == true ||
+        final themeSquareTiles = state.schema['meta']?['layoutSnapshot']
+                    ?['theme']?['squareTiles'] ==
+                true ||
             state.schema['theme']?['squareTiles'] == true ||
             state.schema['layoutSnapshot']?['theme']?['squareTiles'] == true;
 
@@ -2221,11 +2170,14 @@ class HomeSduiRenderer {
           items,
           columns: columnCount,
           layoutName: layoutName,
-          clampColumnSpan:
-              c['clampChildColumnSpan'] != false &&
+          clampColumnSpan: c['clampChildColumnSpan'] != false &&
               (c['clampChildColumnSpan'] == true ||
-                  state.schema['responsive']?['grid']?['clampColumnSpanToColumns'] != false ||
-                  state.schema['layoutContract']?['responsiveGrid']?['clampColumnSpanToColumns'] != false),
+                  state.schema['responsive']?['grid']
+                          ?['clampColumnSpanToColumns'] !=
+                      false ||
+                  state.schema['layoutContract']?['responsiveGrid']
+                          ?['clampColumnSpanToColumns'] !=
+                      false),
           preferExplicitPlacement: preserveMetroColumns,
         );
 
@@ -2244,58 +2196,45 @@ class HomeSduiRenderer {
             height: height,
             child: Stack(
               children: [
-                for (final p in placements) () {
-                  final safeCol = p.column.clamp(0, math.max(0, columnCount - 1));
-                  final maxColSpan = math.max(1, columnCount - safeCol);
-                  final safeSpan = p.columnSpan.clamp(1, maxColSpan);
-                  final tileWidth = safeSpan * cellWidth + (safeSpan - 1) * columnGap;
-                  final tileHeight = p.rowSpan * effectiveRowHeight + (p.rowSpan - 1) * rowGap;
+                for (final p in placements)
+                  () {
+                    final safeCol =
+                        p.column.clamp(0, math.max(0, columnCount - 1));
+                    final maxColSpan = math.max(1, columnCount - safeCol);
+                    final safeSpan = p.columnSpan.clamp(1, maxColSpan);
+                    final tileWidth =
+                        safeSpan * cellWidth + (safeSpan - 1) * columnGap;
+                    final tileHeight = p.rowSpan * effectiveRowHeight +
+                        (p.rowSpan - 1) * rowGap;
 
-                  return Positioned(
-                    left: safeCol * (cellWidth + columnGap),
-                    top: p.row * (effectiveRowHeight + rowGap),
-                    width: tileWidth,
-                    height: tileHeight,
-                    child: Builder(
-                      builder: (context) {
-                        final child = buildNode(
-                          context,
-                          p.item.component,
-                          item: p.item.item,
-                          event: p.item.item == null
-                              ? null
-                              : <String, dynamic>{
-                                  'componentId': p.item.item!['id'],
-                                },
-                        );
+                    return Positioned(
+                      left: safeCol * (cellWidth + columnGap),
+                      top: p.row * (effectiveRowHeight + rowGap),
+                      width: tileWidth,
+                      height: tileHeight,
+                      child: Builder(
+                        builder: (context) {
+                          final child = buildNode(
+                            context,
+                            p.item.component,
+                            item: p.item.item,
+                            event: p.item.item == null
+                                ? null
+                                : <String, dynamic>{
+                                    'componentId': p.item.item!['id'],
+                                  },
+                          );
 
-                        final isIOS =
-                            Theme.of(context).platform == TargetPlatform.iOS ||
-                            defaultTargetPlatform == TargetPlatform.iOS;
-                        if (!isIOS) {
-                          // 100% UNTOUCHED ANDROID BASELINE (Commit 044f965)
                           return _clipToTileBounds(
                             p.item.component,
-                            RepaintBoundary(child: SizedBox.expand(child: child)),
+                            RepaintBoundary(
+                                child: SizedBox.expand(child: child)),
                             context,
                           );
-                        }
-
-                        // iOS IMPELLER PATH
-                        final faces = p.item.component['faces'];
-                        final isRotating = faces is List && faces.length > 1;
-                        final body = isRotating
-                            ? SizedBox.expand(child: child)
-                            : RepaintBoundary(child: SizedBox.expand(child: child));
-                        return _clipToTileBounds(
-                          p.item.component,
-                          body,
-                          context,
-                        );
-                      },
-                    ),
-                  );
-                }(),
+                        },
+                      ),
+                    );
+                  }(),
               ],
             ),
           ),
@@ -2332,8 +2271,7 @@ class HomeSduiRenderer {
     );
     final byId = <String, _GridItem>{
       for (final item in items)
-        if (item.component['id'] != null)
-          item.component['id'].toString(): item,
+        if (item.component['id'] != null) item.component['id'].toString(): item,
     };
 
     return <_Placement>[
@@ -2379,9 +2317,7 @@ class HomeSduiRenderer {
       ),
       columnStart: () {
         final raw =
-            perLayout?['columnStart'] ??
-            base['columnStart'] ??
-            base['col'];
+            perLayout?['columnStart'] ?? base['columnStart'] ?? base['col'];
         if (raw is num) return raw.toInt();
         return int.tryParse(raw?.toString() ?? '');
       }(),
@@ -2395,7 +2331,8 @@ class HomeSduiRenderer {
 
   bool _isMetroMosaic(Map<String, dynamic> c) {
     final style = c['style']?.toString().trim().toLowerCase();
-    final layoutType = _map(c['layout'])?['type']?.toString().trim().toLowerCase();
+    final layoutType =
+        _map(c['layout'])?['type']?.toString().trim().toLowerCase();
     return style == 'metromosaic' || layoutType == 'metrogrid';
   }
 
@@ -2437,8 +2374,11 @@ class HomeSduiRenderer {
       // responsiveLayouts, or theme.gridRowHeight, prioritize it over
       // stale componentLayouts (e.g. legacy 96dp templates).
       if (explicitGridRowHeight != null && explicitGridRowHeight > 0) {
-        final compHeight = _d(compLayout?['rowHeight']) ?? _d(base['rowHeight']);
-        if (compHeight == null || compHeight == 96.0 || compHeight != explicitGridRowHeight) {
+        final compHeight =
+            _d(compLayout?['rowHeight']) ?? _d(base['rowHeight']);
+        if (compHeight == null ||
+            compHeight == 96.0 ||
+            compHeight != explicitGridRowHeight) {
           res['rowHeight'] = explicitGridRowHeight;
         }
       } else if (res['rowHeight'] == null && globalRowHeight != null) {
@@ -2513,7 +2453,8 @@ class HomeSduiRenderer {
     );
     if (presetRadius != null && presetRadius >= 0) return presetRadius;
 
-    final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+    final themeRadius = _d(state.schema['meta']?['layoutSnapshot']?['theme']
+            ?['cardBorderRadius']) ??
         _d(state.schema['theme']?['cardBorderRadius']) ??
         _d(state.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
         _d(state.schema['grid']?['cardBorderRadius']);
@@ -2522,8 +2463,9 @@ class HomeSduiRenderer {
     final token = _tokenNumber('radius.card') ?? _tokenNumber('radius.small');
     if (token != null && token >= 0) return token;
 
-    final themeSquareTiles =
-        state.schema['meta']?['layoutSnapshot']?['theme']?['squareTiles'] == true ||
+    final themeSquareTiles = state.schema['meta']?['layoutSnapshot']?['theme']
+                ?['squareTiles'] ==
+            true ||
         state.schema['theme']?['squareTiles'] == true ||
         state.schema['layoutSnapshot']?['theme']?['squareTiles'] == true;
     if (themeSquareTiles) return 0.0;
@@ -2542,35 +2484,8 @@ class HomeSduiRenderer {
     Widget child, [
     BuildContext? context,
   ]) {
-    final isIOS = (context != null &&
-            Theme.of(context).platform == TargetPlatform.iOS) ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-
-    if (!isIOS) {
-      // 100% UNTOUCHED ANDROID BASELINE (Commit 044f965)
-      final radius = _metroTileRadius(c);
-      if (radius > 0) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        );
-      }
-      return ClipRect(clipBehavior: Clip.antiAlias, child: child);
-    }
-
-    // iOS IMPELLER PATH
     final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
     if (overflow == 'visible' || overflow == 'none') {
-      return child;
-    }
-
-    final faces = c['faces'];
-    final isRotating = faces is List && faces.length > 1;
-    if (isRotating) {
-      // On iOS Impeller (Metal), 3D rotating cards rotate unclipped at the container level
-      // so 3D convex corners and perspective are not flattened into 2D offscreen textures.
-      // Individual faces inside _face() already clip their own rounded corners.
       return child;
     }
 
@@ -2648,7 +2563,7 @@ class HomeSduiRenderer {
 
     final power =
         state.resolve(_map(c['powerControl'])?['powerBinding'], item: item) ==
-        true;
+            true;
 
     final powerControl = _map(c['powerControl']);
     final powerVisible = powerControl?['visible'] != false;
@@ -2699,10 +2614,10 @@ class HomeSduiRenderer {
               child: Container(
                 width:
                     _d(state.schema['accessibility']?['minimumTapTargetDp']) ??
-                    0,
+                        0,
                 height:
                     _d(state.schema['accessibility']?['minimumTapTargetDp']) ??
-                    0,
+                        0,
                 decoration: BoxDecoration(
                   color: power
                       ? tokenColor('colors.accent')
@@ -2749,35 +2664,31 @@ class HomeSduiRenderer {
     // card background when the face does not declare a background at all.
     // This preserves each schema face's own solid/gradient color instead of
     // applying the parent card gradient to every face.
-    final faceDeclaresBackground =
-        faceAppearance != null &&
+    final faceDeclaresBackground = faceAppearance != null &&
         (faceAppearance.containsKey('background') ||
             faceAppearance.containsKey('backgroundColor'));
-    final backgroundAppearance = faceDeclaresBackground
-        ? faceAppearance
-        : parentAppearance;
+    final backgroundAppearance =
+        faceDeclaresBackground ? faceAppearance : parentAppearance;
     final resolvedBackgroundColor = state.resolve(
       backgroundAppearance['backgroundColor'],
       item: item,
     );
     final backgroundGradient =
         _gradient(_map(backgroundAppearance['background'])) ??
-        _gradientFromCss(resolvedBackgroundColor?.toString());
+            _gradientFromCss(resolvedBackgroundColor?.toString());
     final background = backgroundGradient == null
         ? (_color(resolvedBackgroundColor) ??
-              (!faceDeclaresBackground &&
-                      !parentAppearance.containsKey('background') &&
-                      !parentAppearance.containsKey('backgroundColor')
-                  ? tokenColor('colors.surface')
-                  : null))
+            (!faceDeclaresBackground &&
+                    !parentAppearance.containsKey('background') &&
+                    !parentAppearance.containsKey('backgroundColor')
+                ? tokenColor('colors.surface')
+                : null))
         : null;
 
-    final titleColor =
-        _color(appearance['titleTextColor']) ??
+    final titleColor = _color(appearance['titleTextColor']) ??
         tokenColor('colors.textPrimary');
 
-    final subtitleColor =
-        _color(appearance['subtitleTextColor']) ??
+    final subtitleColor = _color(appearance['subtitleTextColor']) ??
         tokenColor('colors.textSecondary');
 
     final iconColor =
@@ -2787,19 +2698,16 @@ class HomeSduiRenderer {
 
     final radius = _cardCornerRadius(parent, faceAppearance: faceAppearance);
 
-    final titleSize =
-        _d(appearance['titleFontSize']) ??
+    final titleSize = _d(appearance['titleFontSize']) ??
         _tokenNumber('typography.cardTitle.fontSize');
 
-    final subtitleSize =
-        _d(appearance['subtitleFontSize']) ??
+    final subtitleSize = _d(appearance['subtitleFontSize']) ??
         _tokenNumber('typography.cardSubtitle.fontSize');
 
     // The schema has no dedicated global icon-size token. Use the schema's
     // page-title size as the generic icon metric unless this face explicitly
     // supplies appearance.iconSize.
-    final iconSize =
-        _d(appearance['iconSize']) ??
+    final iconSize = _d(appearance['iconSize']) ??
         _tokenNumber('typography.pageTitle.fontSize');
 
     final statSize = _tokenNumber('typography.statValue.fontSize');
@@ -2907,8 +2815,7 @@ class HomeSduiRenderer {
         ?.toString()
         .trim()
         .toLowerCase();
-    final isMetroTile =
-        tileStyle == 'metrotile' || tileStyle == 'starttile';
+    final isMetroTile = tileStyle == 'metrotile' || tileStyle == 'starttile';
 
     final iconToken = face['iconToken']?.toString().trim();
     final imageFace = face['type']?.toString() == 'image' ||
@@ -2925,17 +2832,14 @@ class HomeSduiRenderer {
       );
     }
 
-    final foregroundTitle = image == null
-        ? titleColor!
-        : (imageTextColor ?? titleColor!);
+    final foregroundTitle =
+        image == null ? titleColor! : (imageTextColor ?? titleColor!);
 
-    final foregroundSubtitle = image == null
-        ? subtitleColor!
-        : (imageTextColor ?? subtitleColor!);
+    final foregroundSubtitle =
+        image == null ? subtitleColor! : (imageTextColor ?? subtitleColor!);
 
-    final foregroundIcon = image == null
-        ? iconColor!
-        : (imageTextColor ?? iconColor!);
+    final foregroundIcon =
+        image == null ? iconColor! : (imageTextColor ?? iconColor!);
 
     final layoutPadding = _paddingOrNull(contentLayout['padding']);
     final tokenPadding = _tokenNumber('spacing.sm');
@@ -3071,7 +2975,8 @@ class HomeSduiRenderer {
     final faceTapActionId = _map(faceEvents?['tap'])?['actionId']?.toString();
     final faceLongPressActionId = _map(
       faceEvents?['longPress'],
-    )?['actionId']?.toString();
+    )?['actionId']
+        ?.toString();
 
     return GestureDetector(
       onTap: () {
@@ -3123,7 +3028,8 @@ class HomeSduiRenderer {
                   child: Align(
                     alignment: Alignment.bottomLeft,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: double.infinity),
+                      constraints:
+                          const BoxConstraints(maxWidth: double.infinity),
                       child: titleBlock(align: TextAlign.left),
                     ),
                   ),
@@ -3246,10 +3152,10 @@ class HomeSduiRenderer {
 
     final allowedDomains =
         (state.schema['security']?['allowedAssetDomains'] as List?)
-            ?.map((e) => e.toString().trim().toLowerCase())
-            .where((e) => e.isNotEmpty)
-            .toSet() ??
-        <String>{};
+                ?.map((e) => e.toString().trim().toLowerCase())
+                .where((e) => e.isNotEmpty)
+                .toSet() ??
+            <String>{};
 
     // The live schema only lists images.unsplash.com, but it also publishes
     // logo/GRID assets on efactor.tech. Web loads those schema-declared URLs;
@@ -3259,8 +3165,7 @@ class HomeSduiRenderer {
       ..._schemaDeclaredImageHosts(),
     };
 
-    if (permitted.isNotEmpty &&
-        !permitted.contains(uri.host.toLowerCase())) {
+    if (permitted.isNotEmpty && !permitted.contains(uri.host.toLowerCase())) {
       logDebug(
         '[HOME_SDUI][IMAGE] BLOCKED_BY_SCHEMA_DOMAIN '
         'host=${uri.host} allowed=${permitted.join(",")}',
@@ -3299,7 +3204,8 @@ class HomeSduiRenderer {
   }
 
   Set<String> _schemaDeclaredImageHosts() {
-    if (identical(_imageHostSchema, state.schema) && _declaredImageHosts != null) {
+    if (identical(_imageHostSchema, state.schema) &&
+        _declaredImageHosts != null) {
       return _declaredImageHosts!;
     }
 
@@ -3381,15 +3287,13 @@ class HomeSduiRenderer {
 
   Widget _bottomNavigation(BuildContext context, Map<String, dynamic> c) {
     final source = state.resolve(c['itemsSource']);
-    final items = source is List
-        ? source
-        : state.schema['navigation']?['items'];
+    final items =
+        source is List ? source : state.schema['navigation']?['items'];
     if (items is! List) {
       return _error('${c['id']}.itemsSource did not resolve.');
     }
 
-    final tokenNav =
-        _map(state.schema['designTokens']?['bottomNavigation']) ??
+    final tokenNav = _map(state.schema['designTokens']?['bottomNavigation']) ??
         _map(state.schema['componentStyles']?['bottomNavigation']) ??
         const <String, dynamic>{};
     final appearance = <String, dynamic>{
@@ -3398,24 +3302,20 @@ class HomeSduiRenderer {
     };
     final activeColor =
         tokenColor(appearance['activeColorToken']?.toString()) ??
-        tokenColor('colors.navActive');
+            tokenColor('colors.navActive');
     final inactiveColor =
         tokenColor(appearance['inactiveColorToken']?.toString()) ??
-        tokenColor('colors.textMuted');
-    final background =
-        _color(appearance['backgroundColor']) ??
+            tokenColor('colors.textMuted');
+    final background = _color(appearance['backgroundColor']) ??
         tokenColor(appearance['backgroundColorToken']?.toString()) ??
         tokenColor('colors.navBackground');
     final showLabels = appearance['showLabels'] != false;
-    final iconSize =
-        _d(appearance['iconSize']) ??
+    final iconSize = _d(appearance['iconSize']) ??
         _tokenNumber('typography.pageSubtitle.fontSize');
-    final selectedFontSize =
-        _d(appearance['selectedLabelFontSize']) ??
+    final selectedFontSize = _d(appearance['selectedLabelFontSize']) ??
         _d(appearance['labelFontSize']) ??
         _tokenNumber('typography.cardSubtitle.fontSize');
-    final unselectedFontSize =
-        _d(appearance['unselectedLabelFontSize']) ??
+    final unselectedFontSize = _d(appearance['unselectedLabelFontSize']) ??
         _d(appearance['labelFontSize']) ??
         _tokenNumber('typography.cardSubtitle.fontSize');
 
@@ -3433,8 +3333,7 @@ class HomeSduiRenderer {
 
     final navItems = <Map<String, dynamic>>[
       for (final raw in items)
-        if (raw is Map)
-          Map<String, dynamic>.from(raw.cast<dynamic, dynamic>()),
+        if (raw is Map) Map<String, dynamic>.from(raw.cast<dynamic, dynamic>()),
     ];
     if (navItems.isEmpty) {
       return _error('${c['id']}.itemsSource resolved to an empty list.');
@@ -3518,11 +3417,9 @@ class HomeSduiRenderer {
 
     final marginH = _d(appearance['marginHorizontal']);
     final marginB = _d(appearance['marginBottom']);
-    final margin =
-        _paddingOrNull(appearance['margin']) ??
+    final margin = _paddingOrNull(appearance['margin']) ??
         EdgeInsets.fromLTRB(marginH ?? 0, 0, marginH ?? 0, marginB ?? 0);
-    final radius =
-        _d(appearance['borderRadius']) ??
+    final radius = _d(appearance['borderRadius']) ??
         _tokenNumber(appearance['radiusToken']?.toString());
     final borderWidth = _d(appearance['borderWidth']);
     final borderColor = _color(appearance['borderColor']);
@@ -3538,11 +3435,10 @@ class HomeSduiRenderer {
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(radius ?? 0),
-            border: borderWidth != null &&
-                    borderWidth > 0 &&
-                    borderColor != null
-                ? Border.all(color: borderColor, width: borderWidth)
-                : null,
+            border:
+                borderWidth != null && borderWidth > 0 && borderColor != null
+                    ? Border.all(color: borderColor, width: borderWidth)
+                    : null,
             boxShadow: shadow,
           ),
           child: ClipRRect(
@@ -3570,17 +3466,16 @@ class HomeSduiRenderer {
 
   Widget _floatingAction(BuildContext context, Map<String, dynamic> c) {
     final appearance = _map(c['appearance']) ?? const <String, dynamic>{};
-    final actionId =
-        c['actionId']?.toString() ??
+    final actionId = c['actionId']?.toString() ??
         _map(c['events'])?['tap']?['actionId']?.toString();
 
     return FloatingActionButton(
       backgroundColor:
           tokenColor(appearance['backgroundColorToken']?.toString()) ??
-          tokenColor('colors.accent'),
+              tokenColor('colors.accent'),
       foregroundColor:
           tokenColor(appearance['foregroundColorToken']?.toString()) ??
-          tokenColor('colors.textPrimary'),
+              tokenColor('colors.textPrimary'),
       onPressed: actionId == null ? null : () => state.dispatchAction(actionId),
       child: FaIconAdapter(
         icon: icons.resolve(c['iconToken']?.toString()),
@@ -3792,9 +3687,8 @@ class HomeSduiRenderer {
             if (raw is Map)
               ListTile(
                 title: Text(raw['name']?.toString() ?? ''),
-                subtitle: raw['value'] == null
-                    ? null
-                    : Text(raw['value'].toString()),
+                subtitle:
+                    raw['value'] == null ? null : Text(raw['value'].toString()),
               ),
       ],
     );
@@ -3943,8 +3837,8 @@ class HomeSduiRenderer {
           appearance['rowIconColorToken']?.toString(),
         ) ??
         tokenColor('colors.accent');
-    final background = tokenColor('colors.surfaceElevated') ??
-        accent?.withValues(alpha: 0.12);
+    final background =
+        tokenColor('colors.surfaceElevated') ?? accent?.withValues(alpha: 0.12);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -4031,8 +3925,7 @@ class HomeSduiRenderer {
   }
 
   dynamic _activeThemeTokenValue(String token) {
-    final presetId =
-        state.readState('global.themePreset')?.toString().trim() ??
+    final presetId = state.readState('global.themePreset')?.toString().trim() ??
         state.schema['themes']?['activePreset']?.toString().trim();
 
     if (presetId == null || presetId.isEmpty) return null;
@@ -4083,8 +3976,7 @@ class HomeSduiRenderer {
     Color? fallbackColor,
   }) {
     final map = raw ?? const <String, dynamic>{};
-    final color =
-        _color(map['color']) ??
+    final color = _color(map['color']) ??
         tokenColor(map['colorToken']?.toString()) ??
         fallbackColor;
     return TextStyle(
@@ -4267,7 +4159,8 @@ class HomeSduiRenderer {
       'centerLeft' || 'center left' || 'left center' => Alignment.centerLeft,
       'centerRight' ||
       'center right' ||
-      'right center' => Alignment.centerRight,
+      'right center' =>
+        Alignment.centerRight,
       _ => Alignment.center,
     };
   }
@@ -4394,8 +4287,7 @@ class _RotatingCardState extends State<_RotatingCard>
         widget.schema['state']?['preferences']?['animationsEnabled'] != false;
     final config = _animationConfig();
 
-    _animationsAllowed =
-        !reducedMotion &&
+    _animationsAllowed = !reducedMotion &&
         appPreference &&
         config['enabled'] != false &&
         widget.faces.length > 1 &&
@@ -4476,8 +4368,8 @@ class _RotatingCardState extends State<_RotatingCard>
 
     dynamic rawPreset;
     if (presetId != null && presetId.isNotEmpty) {
-      rawPreset =
-          widget.schema['motionPolicy']?['animationPresets']?[presetId] ??
+      rawPreset = widget.schema['motionPolicy']?['animationPresets']
+              ?[presetId] ??
           widget.schema['animationPresets']?[presetId];
     }
     final preset = rawPreset is Map
@@ -4528,14 +4420,12 @@ class _RotatingCardState extends State<_RotatingCard>
     ];
 
     for (final raw in candidates) {
-      final value = raw is num
-          ? raw.toInt()
-          : int.tryParse(raw?.toString() ?? '');
+      final value =
+          raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
       if (value != null && value > 0) return value;
     }
 
-    final faceDurationRaw =
-        config['faceDurationMs'] ??
+    final faceDurationRaw = config['faceDurationMs'] ??
         config['faceDuration'] ??
         nested['faceDurationMs'] ??
         nested['faceDuration'];
@@ -4570,11 +4460,10 @@ class _RotatingCardState extends State<_RotatingCard>
         : <String, dynamic>{};
     final config = _animationConfig();
     final nested = _nestedAnimationConfig();
-    final semantics =
-        (rotMap['phaseOffsetSemantics'] ??
-                config['phaseOffsetSemantics'] ??
-                nested['phaseOffsetSemantics'])
-            ?.toString();
+    final semantics = (rotMap['phaseOffsetSemantics'] ??
+            config['phaseOffsetSemantics'] ??
+            nested['phaseOffsetSemantics'])
+        ?.toString();
 
     double? fromSeconds(dynamic msRaw, dynamic secRaw) {
       final ms = msRaw is num
@@ -4612,9 +4501,8 @@ class _RotatingCardState extends State<_RotatingCard>
       }
     }
 
-    final normalized = raw is num
-        ? raw.toDouble()
-        : double.tryParse(raw?.toString() ?? '');
+    final normalized =
+        raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
     if (normalized != null && normalized > 0 && normalized < 1) {
       return normalized;
     }
@@ -4629,11 +4517,8 @@ class _RotatingCardState extends State<_RotatingCard>
 
     final stagger = nested['stagger'] ?? config['stagger'];
     final staggerEnabled = stagger is! Map || stagger['enabled'] != false;
-    final staggerSource = stagger is Map
-        ? stagger['source']?.toString()
-        : null;
-    final useHashStagger =
-        staggerEnabled &&
+    final staggerSource = stagger is Map ? stagger['source']?.toString() : null;
+    final useHashStagger = staggerEnabled &&
         (staggerSource == 'card-index-hash-offset' ||
             staggerSource == null ||
             staggerSource.isEmpty) &&
@@ -4659,9 +4544,8 @@ class _RotatingCardState extends State<_RotatingCard>
   double _geometryDegreesPerFace() {
     final geometry = _geometryConfig();
     final raw = geometry['degreesPerFace'];
-    final degrees = raw is num
-        ? raw.toDouble()
-        : double.tryParse(raw?.toString() ?? '');
+    final degrees =
+        raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
     return degrees == null || degrees == 0 ? 90 : degrees.abs();
   }
 
@@ -4675,13 +4559,12 @@ class _RotatingCardState extends State<_RotatingCard>
     final nested = _nestedAnimationConfig();
     final config = _animationConfig();
     final rotation = widget.component['rotation'];
-    final motionPolicyPreset =
-        widget.schema['motionPolicy']?['animationPresets']?['tile-face-rotation'];
+    final motionPolicyPreset = widget.schema['motionPolicy']
+        ?['animationPresets']?['tile-face-rotation'];
     final cubeAnimation = widget.schema['uiRenderContract']?['cubeAnimation'];
     final cubeGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
 
-    final raw =
-        nested['degreesPerFace'] ??
+    final raw = nested['degreesPerFace'] ??
         config['degreesPerFace'] ??
         (rotation is Map ? rotation['degreesPerFace'] : null) ??
         widget.component['degreesPerFace'] ??
@@ -4694,14 +4577,18 @@ class _RotatingCardState extends State<_RotatingCard>
         (cubeAnimation is Map ? cubeAnimation['degreesPerFace'] : null) ??
         (cubeGeometry is Map ? cubeGeometry['degreesPerFace'] : null);
 
-    final degrees = raw is num
-        ? raw.toDouble()
-        : double.tryParse(raw?.toString() ?? '');
+    final degrees =
+        raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
 
-    if (degrees != null && degrees != 0) return degrees;
+    final baseMag = (degrees != null && degrees != 0)
+        ? degrees.abs()
+        : _geometryDegreesPerFace();
 
-    // Backward-compatible fallback for older schemas.
-    return -_rotationSign() * _geometryDegreesPerFace();
+    if (degrees != null && degrees < 0) {
+      return degrees;
+    }
+
+    return _rotationSign() * baseMag;
   }
 
   String _axis() {
@@ -4709,14 +4596,13 @@ class _RotatingCardState extends State<_RotatingCard>
     final config = _animationConfig();
     final rotation = widget.component['rotation'];
     final rotMap = rotation is Map ? rotation : null;
-    final raw =
-        (rotMap?['axis'] ??
-         rotMap?['rotationAxis'] ??
-         geometry['axis'] ??
-         geometry['rotationAxis'] ??
-         config['axis'] ??
-         config['rotationAxis'] ??
-         'y')
+    final raw = (rotMap?['axis'] ??
+            rotMap?['rotationAxis'] ??
+            geometry['axis'] ??
+            geometry['rotationAxis'] ??
+            config['axis'] ??
+            config['rotationAxis'] ??
+            'y')
         .toString()
         .trim()
         .toLowerCase();
@@ -4729,11 +4615,10 @@ class _RotatingCardState extends State<_RotatingCard>
     return 'y';
   }
 
-  double _perspectiveEntry() {
+  double _perspectiveEntry([BuildContext? context]) {
     final geometry = _geometryConfig();
     final cubeGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
-    final raw =
-        geometry['perspectivePx'] ??
+    final raw = geometry['perspectivePx'] ??
         geometry['perspectiveDp'] ??
         (geometry['perspective'] is num ? geometry['perspective'] : null) ??
         widget.component['dimensions']?['perspectivePx'] ??
@@ -4741,9 +4626,9 @@ class _RotatingCardState extends State<_RotatingCard>
         widget.schema['designTokens']?['animation']?['perspectiveDp'] ??
         (cubeGeometry is Map ? cubeGeometry['perspectivePx'] : null) ??
         (cubeGeometry is Map ? cubeGeometry['perspectiveDp'] : null);
-    final perspective = raw is num
-        ? raw.toDouble()
-        : double.tryParse(raw?.toString() ?? '');
+    final perspective =
+        raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
+
     if (perspective == null || perspective <= 0) {
       return 1.0 / 800.0;
     }
@@ -4754,12 +4639,13 @@ class _RotatingCardState extends State<_RotatingCard>
     final geometry = _geometryConfig();
     final config = _animationConfig();
     final contractGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
-    final model =
-        '${geometry['model'] ?? ''} ${geometry['rendererKey'] ?? ''} '
+    final model = '${geometry['model'] ?? ''} ${geometry['rendererKey'] ?? ''} '
         '${config['model'] ?? ''} ${config['rendererKey'] ?? ''} '
         '${contractGeometry is Map ? contractGeometry['model'] ?? '' : ''}';
     final style = (geometry['transformStyle'] ??
-            (contractGeometry is Map ? contractGeometry['transformStyle'] : null))
+            (contractGeometry is Map
+                ? contractGeometry['transformStyle']
+                : null))
         ?.toString()
         .trim()
         .toLowerCase();
@@ -4819,9 +4705,10 @@ class _RotatingCardState extends State<_RotatingCard>
     final dimensions = widget.component['dimensions'];
     final axis = _axis();
     final baseDimension = (axis == 'x' && height > 0) ? height : width;
-    final raw =
-        geometry['halfDepthFormula'] ??
-        (contractGeometry is Map ? contractGeometry['halfDepthFormula'] : null) ??
+    final raw = geometry['halfDepthFormula'] ??
+        (contractGeometry is Map
+            ? contractGeometry['halfDepthFormula']
+            : null) ??
         (dimensions is Map ? dimensions['halfDepthFormula'] : null) ??
         geometry['depthFormula'] ??
         (contractGeometry is Map ? contractGeometry['depthFormula'] : null) ??
@@ -4862,20 +4749,22 @@ class _RotatingCardState extends State<_RotatingCard>
     if (operand == null || operand == 0) {
       return _isFourFaceBox() ? baseDimension / 2 : 0;
     }
-    return match.group(1) == '*' ? baseDimension * operand : baseDimension / operand;
+    return match.group(1) == '*'
+        ? baseDimension * operand
+        : baseDimension / operand;
   }
 
   double _rotationSign() {
     final nested = _nestedAnimationConfig();
     final config = _animationConfig();
     final rotation = widget.component['rotation'];
-    final motionPolicyPreset =
-        widget.schema['motionPolicy']?['animationPresets']?['tile-face-rotation'];
-    final contractAnimation = widget.schema['uiRenderContract']?['cubeAnimation'];
+    final motionPolicyPreset = widget.schema['motionPolicy']
+        ?['animationPresets']?['tile-face-rotation'];
+    final contractAnimation =
+        widget.schema['uiRenderContract']?['cubeAnimation'];
     final contractGeometry = widget.schema['uiRenderContract']?['cubeGeometry'];
 
-    final explicit =
-        nested['rotationDir'] ??
+    final explicit = nested['rotationDir'] ??
         nested['rotationDirection'] ??
         config['rotationDir'] ??
         config['rotationDirection'] ??
@@ -4885,23 +4774,26 @@ class _RotatingCardState extends State<_RotatingCard>
         widget.component['rotationDir'] ??
         widget.component['rotationDirection'] ??
         (motionPolicyPreset is Map
-            ? motionPolicyPreset['rotationDir'] ?? motionPolicyPreset['rotationDirection']
+            ? motionPolicyPreset['rotationDir'] ??
+                motionPolicyPreset['rotationDirection']
             : null) ??
         (contractAnimation is Map
-            ? contractAnimation['rotationDir'] ?? contractAnimation['rotationDirection']
+            ? contractAnimation['rotationDir'] ??
+                contractAnimation['rotationDirection']
             : null) ??
         (contractGeometry is Map
-            ? contractGeometry['rotationDir'] ?? contractGeometry['rotationDirection']
+            ? contractGeometry['rotationDir'] ??
+                contractGeometry['rotationDirection']
             : null);
     final value = explicit?.toString().trim().toLowerCase();
 
-    if (value == 'ltr' ||
-        value == 'left-to-right' ||
-        value == 'counter-clockwise' ||
-        value == 'counterclockwise') {
+    if (value == 'ltr' || value == 'left-to-right' || value == 'clockwise') {
       return -1;
     }
-    if (value == 'rtl' || value == 'right-to-left' || value == 'clockwise') {
+    if (value == 'rtl' ||
+        value == 'right-to-left' ||
+        value == 'counter-clockwise' ||
+        value == 'counterclockwise') {
       return 1;
     }
 
@@ -4909,17 +4801,23 @@ class _RotatingCardState extends State<_RotatingCard>
             config['direction'] ??
             (rotation is Map ? rotation['direction'] : null) ??
             widget.component['direction'] ??
-            (motionPolicyPreset is Map ? motionPolicyPreset['direction'] : null) ??
+            (motionPolicyPreset is Map
+                ? motionPolicyPreset['direction']
+                : null) ??
             (contractGeometry is Map ? contractGeometry['direction'] : null) ??
-            (contractAnimation is Map ? contractAnimation['direction'] : null) ??
+            (contractAnimation is Map
+                ? contractAnimation['direction']
+                : null) ??
             _geometryConfig()['direction'])
         ?.toString()
         .trim()
         .toLowerCase();
     return geometryDirection == 'counter-clockwise' ||
-            geometryDirection == 'counterclockwise'
-        ? -1
-        : 1;
+            geometryDirection == 'counterclockwise' ||
+            geometryDirection == 'rtl' ||
+            geometryDirection == 'right-to-left'
+        ? 1
+        : -1;
   }
 
   Curve _transitionCurve() {
@@ -4927,8 +4825,7 @@ class _RotatingCardState extends State<_RotatingCard>
     final nested = _nestedAnimationConfig();
     final easingRaw = nested['easing'];
     final easing = easingRaw is Map ? easingRaw : null;
-    final raw =
-        config['curve']?.toString() ??
+    final raw = config['curve']?.toString() ??
         easing?['name']?.toString() ??
         nested['curve']?.toString();
 
@@ -4952,8 +4849,7 @@ class _RotatingCardState extends State<_RotatingCard>
     final faceCount = _effectiveFaceCount();
     final faceDuration = cycleMs > 0 ? cycleMs / faceCount : 0.0;
 
-    final holdMsRaw =
-        config['dwellMs'] ??
+    final holdMsRaw = config['dwellMs'] ??
         config['holdMs'] ??
         nested['dwellMs'] ??
         nested['holdMs'];
@@ -4964,8 +4860,7 @@ class _RotatingCardState extends State<_RotatingCard>
       return (holdMs / faceDuration).clamp(0.0, 1.0);
     }
 
-    final transitionMsRaw =
-        config['transitionDuration'] ??
+    final transitionMsRaw = config['transitionDuration'] ??
         config['transitionMs'] ??
         nested['transitionDuration'] ??
         nested['transitionMs'];
@@ -4980,8 +4875,7 @@ class _RotatingCardState extends State<_RotatingCard>
     final contractRatio = cubeGeometry is Map
         ? cubeGeometry['holdRatio'] ?? cubeGeometry['dwellRatio']
         : null;
-    final ratioRaw =
-        config['dwellRatio'] ??
+    final ratioRaw = config['dwellRatio'] ??
         config['holdRatio'] ??
         nested['dwellRatio'] ??
         nested['holdRatio'] ??
@@ -5102,18 +4996,16 @@ class _RotatingCardState extends State<_RotatingCard>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : 0.0;
-        final height = constraints.maxHeight.isFinite
-            ? constraints.maxHeight
-            : width;
+        final width =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 0.0;
+        final height =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : width;
         if (width <= 0 || height <= 0) {
           return widget.buildFace(widget.faces[currentIndex], currentIndex);
         }
 
         final depth = _depthForWidth(width, height);
-        final perspective = _perspectiveEntry();
+        final perspective = _perspectiveEntry(context);
         final axis = _axis();
         final totalSides = _effectiveFaceCount();
 
@@ -5134,9 +5026,8 @@ class _RotatingCardState extends State<_RotatingCard>
         if (radius == null || radius < 0) {
           final presetId = widget.component['presetId']?.toString();
           final presets = widget.schema['componentPresets'];
-          final preset = presetId != null && presets is Map
-              ? presets[presetId]
-              : null;
+          final preset =
+              presetId != null && presets is Map ? presets[presetId] : null;
           final radiusToken = preset is Map && preset['appearance'] is Map
               ? (preset['appearance'] as Map)['radiusToken']
               : null;
@@ -5159,9 +5050,11 @@ class _RotatingCardState extends State<_RotatingCard>
           }
         }
         if (radius == null || radius < 0) {
-          final themeRadius = asDouble(widget.schema['meta']?['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+          final themeRadius = asDouble(widget.schema['meta']?['layoutSnapshot']
+                  ?['theme']?['cardBorderRadius']) ??
               asDouble(widget.schema['theme']?['cardBorderRadius']) ??
-              asDouble(widget.schema['layoutSnapshot']?['theme']?['cardBorderRadius']) ??
+              asDouble(widget.schema['layoutSnapshot']?['theme']
+                  ?['cardBorderRadius']) ??
               asDouble(widget.schema['grid']?['cardBorderRadius']);
           if (themeRadius != null && themeRadius >= 0) {
             radius = themeRadius;
@@ -5179,8 +5072,9 @@ class _RotatingCardState extends State<_RotatingCard>
           }
         }
         if (radius == null || radius < 0) {
-          final themeSquareTiles =
-              widget.schema['meta']?['layoutSnapshot']?['theme']?['squareTiles'] == true ||
+          final themeSquareTiles = widget.schema['meta']?['layoutSnapshot']
+                      ?['theme']?['squareTiles'] ==
+                  true ||
               widget.schema['theme']?['squareTiles'] == true ||
               widget.schema['layoutSnapshot']?['theme']?['squareTiles'] == true;
           if (themeSquareTiles) {
@@ -5190,13 +5084,12 @@ class _RotatingCardState extends State<_RotatingCard>
 
         final sortedSideIndices = List<int>.generate(totalSides, (i) => i)
           ..sort((a, b) {
-            final angleA = parentAngle + _faceBaseDegrees(a % 4) * math.pi / 180;
-            final angleB = parentAngle + _faceBaseDegrees(b % 4) * math.pi / 180;
+            final angleA =
+                parentAngle + _faceBaseDegrees(a % 4) * math.pi / 180;
+            final angleB =
+                parentAngle + _faceBaseDegrees(b % 4) * math.pi / 180;
             return math.cos(angleA).compareTo(math.cos(angleB));
           });
-
-        final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.iOS;
 
         Widget cubeStack = Stack(
           fit: StackFit.expand,
@@ -5212,22 +5105,15 @@ class _RotatingCardState extends State<_RotatingCard>
                   final effectiveAngle = parentAngle + baseAngle;
                   final visible = _faceVisible(effectiveAngle);
 
-                  final double shadeOpacity;
-                  if (!isIOS) {
-                    // 100% UNTOUCHED ANDROID BASELINE (Commit 044f965)
-                    shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
-                        .clamp(0.0, 0.4);
-                  } else {
-                    // iOS IMPELLER DIRECTIONAL LIGHTING CONTRAST
-                    final turnAmount =
-                        (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
-                    final isRecedingFace =
-                        (animationRadiansPerFace < 0 && math.sin(effectiveAngle) < 0) ||
-                        (animationRadiansPerFace > 0 && math.sin(effectiveAngle) > 0);
-                    final directionalFactor = isRecedingFace ? 0.28 : 0.08;
-                    shadeOpacity =
-                        (turnAmount * directionalFactor).clamp(0.0, 0.45);
-                  }
+                  // 100% UNTOUCHED 3D SHADING MATCHING ANDROID BASELINE (044f965)
+                  final shadeOpacity =
+                      ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
+                          .clamp(0.0, 0.4);
+
+                  final faceWidget = widget.buildFace(
+                    widget.faces[faceDataIndex],
+                    faceDataIndex,
+                  );
 
                   return IgnorePointer(
                     ignoring: faceDataIndex != currentIndex,
@@ -5236,8 +5122,7 @@ class _RotatingCardState extends State<_RotatingCard>
                       maintainState: true,
                       child: Transform(
                         alignment: Alignment.center,
-                        filterQuality:
-                            isIOS ? FilterQuality.medium : FilterQuality.low,
+                        filterQuality: FilterQuality.low,
                         transform: _cubeFaceTransform(
                           parentAngle: parentAngle,
                           faceAngle: baseAngle,
@@ -5249,15 +5134,13 @@ class _RotatingCardState extends State<_RotatingCard>
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              widget.buildFace(
-                                widget.faces[faceDataIndex],
-                                faceDataIndex,
-                              ),
+                              faceWidget,
                               if (shadeOpacity > 0.01)
                                 IgnorePointer(
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      color: Color.fromRGBO(0, 0, 0, shadeOpacity),
+                                      color:
+                                          Color.fromRGBO(0, 0, 0, shadeOpacity),
                                       borderRadius: radius != null && radius > 0
                                           ? BorderRadius.circular(radius)
                                           : null,
@@ -5275,18 +5158,16 @@ class _RotatingCardState extends State<_RotatingCard>
           ],
         );
 
-        Widget cube = !isIOS ? RepaintBoundary(child: cubeStack) : cubeStack;
+        Widget cube = RepaintBoundary(child: cubeStack);
 
-        if (!_isFourFaceBox()) {
-          if (radius != null && radius > 0) {
-            cube = ClipRRect(
-              borderRadius: BorderRadius.circular(radius),
-              clipBehavior: Clip.antiAlias,
-              child: cube,
-            );
-          } else {
-            cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
-          }
+        if (radius != null && radius > 0) {
+          cube = ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            clipBehavior: Clip.antiAlias,
+            child: cube,
+          );
+        } else {
+          cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
         }
         return cube;
       },
@@ -5359,8 +5240,7 @@ class _SchemaLoginFormState extends State<_SchemaLoginForm> {
 
   String _labelFromBinding(dynamic binding) {
     if (binding is! Map) return '';
-    final path =
-        binding[r'$state']?.toString() ??
+    final path = binding[r'$state']?.toString() ??
         binding[r'$secureState']?.toString() ??
         '';
     if (path.isEmpty) return '';

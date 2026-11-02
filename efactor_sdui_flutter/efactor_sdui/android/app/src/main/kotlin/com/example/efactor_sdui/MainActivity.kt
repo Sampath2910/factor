@@ -1,9 +1,15 @@
 package com.example.efactor_sdui
 
 import android.app.KeyguardManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
@@ -37,8 +43,27 @@ import io.flutter.plugin.common.MethodChannel
  * Professional Space WebKit cookie synchronization.
  */
 class MainActivity : FlutterActivity() {
+    companion object {
+        private const val REQUEST_CODE_RINGTONE_PICKER = 9921
+        private const val PREFS_NAME = "FlutterSharedPreferences"
+        private const val PREF_CALLS_CHANNEL_ID = "flutter.circle_connect_calls_channel_id"
+        private const val PREF_MESSAGES_CHANNEL_ID = "flutter.circle_connect_messages_channel_id"
+        private const val PREF_RINGTONE_CHOICE = "flutter.circle_connect_ringtone_choice"
+        private const val PREF_RINGTONE_URI = "flutter.circle_connect_ringtone_uri"
+        private const val PREF_RINGTONE_SOUND_ID = "flutter.circle_connect_ringtone_sound_id"
+        private const val PREF_CALLS_CHANNEL_VER = "flutter.circle_connect_calls_channel_version"
+        private const val PREF_NOTIF_CHOICE = "flutter.circle_connect_notification_choice"
+        private const val PREF_NOTIF_URI = "flutter.circle_connect_notification_uri"
+        private const val PREF_NOTIF_SOUND_ID = "flutter.circle_connect_notification_sound_id"
+        private const val PREF_MESSAGES_CHANNEL_VER = "flutter.circle_connect_messages_channel_version"
+    }
+
     private lateinit var wifiNativeBridge: WifiNativeBridge
     private var incomingRingtone: Ringtone? = null
+    private var previewRingtone: Ringtone? = null
+    private var pendingRingtoneResult: MethodChannel.Result? = null
+    private var pendingRingtoneKind: String? = null
+    private var pendingRequestId: String? = null
     private val callWebViewHandler = Handler(Looper.getMainLooper())
     private val resumeCallWebViewRunnable = Runnable {
         if (OngoingCallService.isCallActive) {
@@ -252,6 +277,59 @@ class MainActivity : FlutterActivity() {
                     stopIncomingRing()
                     result.success(true)
                 }
+                "pickSystemSound" -> {
+                    val kind = call.argument<String>("kind") ?: "ringtone"
+                    val requestId = call.argument<String>("requestId") ?: ""
+                    val currentUri = call.argument<String>("currentUri") ?: ""
+
+                    pendingRingtoneResult = result
+                    pendingRingtoneKind = kind
+                    pendingRequestId = requestId
+
+                    val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                        val type = if (kind == "notification") RingtoneManager.TYPE_NOTIFICATION else RingtoneManager.TYPE_RINGTONE
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, type)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                        if (currentUri.isNotBlank()) {
+                            try {
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(currentUri))
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    try {
+                        startActivityForResult(intent, REQUEST_CODE_RINGTONE_PICKER)
+                    } catch (e: Exception) {
+                        pendingRingtoneResult = null
+                        pendingRingtoneKind = null
+                        pendingRequestId = null
+                        result.error("PICKER_ERROR", e.message, null)
+                    }
+                }
+                "setAppSound" -> {
+                    val kind = call.argument<String>("kind") ?: "ringtone"
+                    val choice = call.argument<String>("choice") ?: "phone_default"
+                    val uri = call.argument<String>("uri") ?: ""
+                    val soundId = call.argument<String>("soundId") ?: ""
+                    handleSetAppSound(kind, choice, uri, soundId, result)
+                }
+                "playAppSound" -> {
+                    val kind = call.argument<String>("kind") ?: "ringtone"
+                    handlePlayAppSound(kind, result)
+                }
+                "stopAppSound" -> {
+                    stopPreviewSound()
+                    result.success(true)
+                }
+                "getActiveNotificationChannels" -> {
+                    val prefs = getPrefs()
+                    val callsChannelId = prefs.getString(PREF_CALLS_CHANNEL_ID, "grid_calls_v4") ?: "grid_calls_v4"
+                    val messagesChannelId = prefs.getString(PREF_MESSAGES_CHANNEL_ID, "grid_messages_v4") ?: "grid_messages_v4"
+                    result.success(mapOf(
+                        "callsChannelId" to callsChannelId,
+                        "messagesChannelId" to messagesChannelId
+                    ))
+                }
                 else -> result.notImplemented()
             }
         }
@@ -346,8 +424,229 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_RINGTONE_PICKER) {
+            val res = pendingRingtoneResult
+            val reqId = pendingRequestId ?: ""
+            val kind = pendingRingtoneKind ?: "ringtone"
+            pendingRingtoneResult = null
+            pendingRequestId = null
+            pendingRingtoneKind = null
+
+            if (resultCode == RESULT_OK && data != null) {
+                val uri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                }
+                if (uri != null) {
+                    val title = try {
+                        RingtoneManager.getRingtone(applicationContext, uri)?.getTitle(applicationContext) ?: "Selected Sound"
+                    } catch (_: Exception) {
+                        "Selected Sound"
+                    }
+                    res?.success(mapOf(
+                        "requestId" to reqId,
+                        "kind" to kind,
+                        "uri" to uri.toString(),
+                        "title" to title,
+                        "cancelled" to false
+                    ))
+                    return
+                }
+            }
+            res?.success(mapOf(
+                "requestId" to reqId,
+                "kind" to kind,
+                "cancelled" to true
+            ))
+        }
+    }
+
+    private fun getPrefs(): SharedPreferences {
+        return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    private fun getSavedRingtoneUri(): Uri? {
+        val prefs = getPrefs()
+        val choice = prefs.getString(PREF_RINGTONE_CHOICE, "phone_default") ?: "phone_default"
+        val uriStr = prefs.getString(PREF_RINGTONE_URI, "") ?: ""
+        val soundId = prefs.getString(PREF_RINGTONE_SOUND_ID, "") ?: ""
+        return resolveSoundUri("ringtone", choice, uriStr, soundId)
+    }
+
+    private fun getSavedNotificationUri(): Uri? {
+        val prefs = getPrefs()
+        val choice = prefs.getString(PREF_NOTIF_CHOICE, "phone_default") ?: "phone_default"
+        val uriStr = prefs.getString(PREF_NOTIF_URI, "") ?: ""
+        val soundId = prefs.getString(PREF_NOTIF_SOUND_ID, "") ?: ""
+        return resolveSoundUri("notification", choice, uriStr, soundId)
+    }
+
+    private fun resolveSoundUri(kind: String, choice: String, uriStr: String, soundId: String): Uri? {
+        val isRingtone = (kind == "ringtone")
+        val defaultUri = if (isRingtone) {
+            Settings.System.DEFAULT_RINGTONE_URI
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        } else {
+            Settings.System.DEFAULT_NOTIFICATION_URI
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        }
+
+        return when (choice) {
+            "phone_sound" -> {
+                if (uriStr.isNotBlank()) {
+                    try {
+                        Uri.parse(uriStr)
+                    } catch (_: Exception) {
+                        defaultUri
+                    }
+                } else {
+                    defaultUri
+                }
+            }
+            "app_sound" -> {
+                if (soundId.isNotBlank()) {
+                    val rawName = soundId.replace('-', '_').lowercase()
+                    val resId = resources.getIdentifier(rawName, "raw", packageName)
+                    if (resId != 0) {
+                        Uri.parse("android.resource://$packageName/raw/$rawName")
+                    } else {
+                        defaultUri
+                    }
+                } else {
+                    defaultUri
+                }
+            }
+            "custom", "phone_default" -> defaultUri
+            else -> defaultUri
+        }
+    }
+
+    private fun handleSetAppSound(
+        kind: String,
+        choice: String,
+        uri: String,
+        soundId: String,
+        result: MethodChannel.Result
+    ) {
+        val prefs = getPrefs()
+        val isRingtone = (kind == "ringtone")
+        val choicePref = if (isRingtone) PREF_RINGTONE_CHOICE else PREF_NOTIF_CHOICE
+        val uriPref = if (isRingtone) PREF_RINGTONE_URI else PREF_NOTIF_URI
+        val soundIdPref = if (isRingtone) PREF_RINGTONE_SOUND_ID else PREF_NOTIF_SOUND_ID
+        val channelIdPref = if (isRingtone) PREF_CALLS_CHANNEL_ID else PREF_MESSAGES_CHANNEL_ID
+        val versionPref = if (isRingtone) PREF_CALLS_CHANNEL_VER else PREF_MESSAGES_CHANNEL_VER
+        val defaultChannelId = if (isRingtone) "grid_calls_v4" else "grid_messages_v4"
+
+        val oldChoice = prefs.getString(choicePref, "") ?: ""
+        val oldUri = prefs.getString(uriPref, "") ?: ""
+        val oldSoundId = prefs.getString(soundIdPref, "") ?: ""
+        val currentChannelId = prefs.getString(channelIdPref, defaultChannelId) ?: defaultChannelId
+
+        // If nothing changed, do not recreate channel
+        if (oldChoice == choice && oldUri == uri && oldSoundId == soundId && prefs.contains(channelIdPref)) {
+            result.success(mapOf("changed" to false, "channelId" to currentChannelId))
+            return
+        }
+
+        val currentVer = prefs.getInt(versionPref, 4)
+        val newVer = currentVer + 1
+        val newChannelId = if (isRingtone) "grid_calls_v$newVer" else "grid_messages_v$newVer"
+
+        val resolvedUri = resolveSoundUri(kind, choice, uri, soundId)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            if (notificationManager != null) {
+                try {
+                    notificationManager.deleteNotificationChannel(currentChannelId)
+                } catch (e: Exception) {
+                    Log.w("MainActivity", "Failed to delete old channel $currentChannelId: ${e.message}")
+                }
+
+                val channelName = if (isRingtone) "Incoming calls" else "Messages"
+                val channelDesc = if (isRingtone) "Alerts for incoming Circle Connect calls" else "Circle Connect chat message notifications"
+                val channelUsage = if (isRingtone) AudioAttributes.USAGE_NOTIFICATION_RINGTONE else AudioAttributes.USAGE_NOTIFICATION
+
+                val channel = NotificationChannel(
+                    newChannelId,
+                    channelName,
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = channelDesc
+                    enableVibration(true)
+                    enableLights(true)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    val audioAttributes = AudioAttributes.Builder()
+                        .setUsage(channelUsage)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                    setSound(resolvedUri, audioAttributes)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
+
+        prefs.edit()
+            .putString(choicePref, choice)
+            .putString(uriPref, uri)
+            .putString(soundIdPref, soundId)
+            .putString(channelIdPref, newChannelId)
+            .putInt(versionPref, newVer)
+            .apply()
+
+        Log.i("MainActivity", "[SOUND] Updated $kind sound to choice=$choice, channel=$newChannelId")
+        result.success(mapOf("changed" to true, "channelId" to newChannelId))
+    }
+
+    private fun handlePlayAppSound(kind: String, result: MethodChannel.Result) {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        if (audioManager != null && audioManager.ringerMode != AudioManager.RINGER_MODE_NORMAL) {
+            Log.i("MainActivity", "[SOUND] Skipping playAppSound because ringerMode is ${audioManager.ringerMode}")
+            result.success(false)
+            return
+        }
+
+        stopPreviewSound()
+
+        val isRingtone = (kind == "ringtone")
+        val resolvedUri = if (isRingtone) getSavedRingtoneUri() else getSavedNotificationUri()
+
+        try {
+            val tone = RingtoneManager.getRingtone(applicationContext, resolvedUri)
+            if (tone != null) {
+                val usage = if (isRingtone) AudioAttributes.USAGE_NOTIFICATION_RINGTONE else AudioAttributes.USAGE_NOTIFICATION
+                tone.audioAttributes = AudioAttributes.Builder()
+                    .setUsage(usage)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    tone.isLooping = isRingtone
+                }
+                tone.play()
+                previewRingtone = tone
+                result.success(true)
+                return
+            }
+        } catch (e: Exception) {
+            Log.w("MainActivity", "playAppSound failed: ${e.message}")
+        }
+        result.success(false)
+    }
+
+    private fun stopPreviewSound() {
+        try {
+            previewRingtone?.stop()
+        } catch (_: Exception) {}
+        previewRingtone = null
+    }
+
     override fun onDestroy() {
         stopIncomingRing()
+        stopPreviewSound()
         callWebViewHandler.removeCallbacks(resumeCallWebViewRunnable)
         if (::wifiNativeBridge.isInitialized) {
             wifiNativeBridge.dispose()
@@ -358,9 +657,14 @@ class MainActivity : FlutterActivity() {
     private fun startIncomingRing() {
         stopIncomingRing()
         try {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val uri = getSavedRingtoneUri()
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             val tone = RingtoneManager.getRingtone(applicationContext, uri)
+            tone?.audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 tone?.isLooping = true
             }

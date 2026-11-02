@@ -137,12 +137,29 @@ void main() {
         reason: 'Rotating cube Stack must be Clip.none for 3D extrusion');
   });
 
-  testWidgets('4-face rotating card renders initial face cleanly', (tester) async {
+  testWidgets('4-face rotating card renders initial face cleanly',
+      (tester) async {
     final faces = <Map<String, dynamic>>[
-      <String, dynamic>{'id': 'f0', 'title': 'Alpha', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
-      <String, dynamic>{'id': 'f1', 'title': 'Beta', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
-      <String, dynamic>{'id': 'f2', 'title': 'Gamma', 'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}},
-      <String, dynamic>{'id': 'f3', 'title': 'Delta', 'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}},
+      <String, dynamic>{
+        'id': 'f0',
+        'title': 'Alpha',
+        'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}
+      },
+      <String, dynamic>{
+        'id': 'f1',
+        'title': 'Beta',
+        'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}
+      },
+      <String, dynamic>{
+        'id': 'f2',
+        'title': 'Gamma',
+        'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}
+      },
+      <String, dynamic>{
+        'id': 'f3',
+        'title': 'Delta',
+        'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}
+      },
     ];
 
     final schema = createTestSchema(faces: faces);
@@ -171,10 +188,20 @@ void main() {
     expect(find.text('Alpha'), findsOneWidget);
   });
 
-  testWidgets('Rotating cube transform uses negative perspective entry for convex protrusion', (tester) async {
+  testWidgets(
+      'Rotating cube transform uses negative perspective entry for convex protrusion',
+      (tester) async {
     final faces = <Map<String, dynamic>>[
-      <String, dynamic>{'id': 'f0', 'title': 'Alpha', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
-      <String, dynamic>{'id': 'f1', 'title': 'Beta', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
+      <String, dynamic>{
+        'id': 'f0',
+        'title': 'Alpha',
+        'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}
+      },
+      <String, dynamic>{
+        'id': 'f1',
+        'title': 'Beta',
+        'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}
+      },
     ];
 
     final schema = createTestSchema(faces: faces);
@@ -201,20 +228,42 @@ void main() {
     await tester.pump();
 
     final transforms = tester.widgetList<Transform>(find.byType(Transform));
-    final cubeTransforms = transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
+    final cubeTransforms =
+        transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
     expect(cubeTransforms, isNotEmpty,
-        reason: 'At least one 3D face transform with perspective must be present');
-    final hasConvexFrontTransform = cubeTransforms.any((t) => t.transform.entry(3, 2) < 0);
+        reason:
+            'At least one 3D face transform with perspective must be present');
+    final hasConvexFrontTransform =
+        cubeTransforms.any((t) => t.transform.entry(3, 2) < 0);
     expect(hasConvexFrontTransform, isTrue,
-        reason: 'Front face perspective entry (3, 2) must be negative so near edges expand outward (convex exterior)');
+        reason:
+            'Front face perspective entry (3, 2) must be negative so near edges expand outward (convex exterior)');
   });
 
-  testWidgets('Mid-turn rotation displays both Face 0 and Face 1 simultaneously in true 3D (no 2D flat culling)', (tester) async {
+  testWidgets(
+      'Mid-turn rotation displays both Face 0 and Face 1 simultaneously in true 3D (no 2D flat culling)',
+      (tester) async {
     final faces = <Map<String, dynamic>>[
-      <String, dynamic>{'id': 'f0', 'title': 'Alpha', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
-      <String, dynamic>{'id': 'f1', 'title': 'Beta', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
-      <String, dynamic>{'id': 'f2', 'title': 'Gamma', 'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}},
-      <String, dynamic>{'id': 'f3', 'title': 'Delta', 'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}},
+      <String, dynamic>{
+        'id': 'f0',
+        'title': 'Alpha',
+        'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}
+      },
+      <String, dynamic>{
+        'id': 'f1',
+        'title': 'Beta',
+        'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}
+      },
+      <String, dynamic>{
+        'id': 'f2',
+        'title': 'Gamma',
+        'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}
+      },
+      <String, dynamic>{
+        'id': 'f3',
+        'title': 'Delta',
+        'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}
+      },
     ];
 
     final schema = createTestSchema(faces: faces);
@@ -249,24 +298,52 @@ void main() {
     await tester.pump(const Duration(milliseconds: 3680));
 
     // Both Face 0 (turning out) and Face 1 (turning in) must be simultaneously visible
-    expect(find.text('Alpha'), findsOneWidget, reason: 'Face 0 must remain visible as it rotates left');
-    expect(find.text('Beta'), findsOneWidget, reason: 'Face 1 must be simultaneously visible as it rotates in from right');
+    expect(find.text('Alpha'), findsOneWidget,
+        reason: 'Face 0 must remain visible as it rotates left');
+    expect(find.text('Beta'), findsOneWidget,
+        reason:
+            'Face 1 must be simultaneously visible as it rotates in from right');
   });
 
-  testWidgets('Rotating cards in responsiveGrid are clipped to tile bounds adhering to server overflowPolicy', (tester) async {
+  testWidgets(
+      'Rotating cards in responsiveGrid are clipped to tile bounds adhering to server overflowPolicy',
+      (tester) async {
     final faces = <Map<String, dynamic>>[
-      <String, dynamic>{'id': 'f0', 'title': 'Alpha', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
-      <String, dynamic>{'id': 'f1', 'title': 'Beta', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
+      <String, dynamic>{
+        'id': 'f0',
+        'title': 'Alpha',
+        'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}
+      },
+      <String, dynamic>{
+        'id': 'f1',
+        'title': 'Beta',
+        'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}
+      },
     ];
 
     final schema = <String, dynamic>{
       'designTokens': <String, dynamic>{
-        'colors': <String, dynamic>{'surface': '#151b2e', 'textPrimary': '#ffffff', 'textSecondary': '#94a3b8', 'welcomeText': '#ffffff'},
+        'colors': <String, dynamic>{
+          'surface': '#151b2e',
+          'textPrimary': '#ffffff',
+          'textSecondary': '#94a3b8',
+          'welcomeText': '#ffffff'
+        },
         'radius': <String, dynamic>{'card': 16.0},
         'spacing': <String, dynamic>{'sm': 8.0, 'xs': 4.0, 'xxs': 2.0},
         'typography': <String, dynamic>{
-          'cardTitle': <String, dynamic>{'fontSize': 12.0, 'fontWeight': 800, 'maxLines': 1, 'overflow': 'clip'},
-          'cardSubtitle': <String, dynamic>{'fontSize': 9.0, 'fontWeight': 700, 'maxLines': 1, 'overflow': 'clip'},
+          'cardTitle': <String, dynamic>{
+            'fontSize': 12.0,
+            'fontWeight': 800,
+            'maxLines': 1,
+            'overflow': 'clip'
+          },
+          'cardSubtitle': <String, dynamic>{
+            'fontSize': 9.0,
+            'fontWeight': 700,
+            'maxLines': 1,
+            'overflow': 'clip'
+          },
           'pageTitle': <String, dynamic>{'fontSize': 18.0},
           'statValue': <String, dynamic>{'fontSize': 14.0, 'fontWeight': 700},
         },
@@ -275,7 +352,12 @@ void main() {
         'home-grid': <String, dynamic>{
           'id': 'home-grid',
           'type': 'responsiveGrid',
-          'layout': <String, dynamic>{'columns': 3, 'columnGap': 4.0, 'rowGap': 4.0, 'rowHeight': 120.0},
+          'layout': <String, dynamic>{
+            'columns': 3,
+            'columnGap': 4.0,
+            'rowGap': 4.0,
+            'rowHeight': 120.0
+          },
           'children': <dynamic>['rotating-tile'],
         },
         'rotating-tile': <String, dynamic>{
@@ -306,7 +388,8 @@ void main() {
               width: 360,
               height: 400,
               child: Builder(
-                builder: (context) => renderer.buildComponent(context, 'home-grid'),
+                builder: (context) =>
+                    renderer.buildComponent(context, 'home-grid'),
               ),
             ),
           ),
@@ -324,25 +407,65 @@ void main() {
       return false;
     });
     expect(clipFinder, findsWidgets,
-        reason: 'Rotating tile must be clipped to tile bounds by ClipRRect(16.0) to prevent overflowing into neighbors');
+        reason:
+            'Rotating tile must be clipped to tile bounds by ClipRRect(16.0) to prevent overflowing into neighbors');
+
+    // Verify during mid-turn transition that the rotating cube remains clipped inside its tile bounds
+    await tester.pump(const Duration(milliseconds: 3680));
+    expect(clipFinder, findsWidgets,
+        reason:
+            'Rotating tile must remain strictly clipped by ClipRRect during mid-turn rotation without going out');
   });
 
-  testWidgets('Component-level server-driven degreesPerFace: 90 and rotationDir: ltr rotates Clockwise (positive angle)', (tester) async {
+  testWidgets(
+      'Component-level server-driven degreesPerFace: 90 and rotationDir: ltr rotates Clockwise (positive angle)',
+      (tester) async {
     final faces = <Map<String, dynamic>>[
-      <String, dynamic>{'id': 'f0', 'title': 'Alpha', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
-      <String, dynamic>{'id': 'f1', 'title': 'Beta', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
-      <String, dynamic>{'id': 'f2', 'title': 'Gamma', 'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}},
-      <String, dynamic>{'id': 'f3', 'title': 'Delta', 'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}},
+      <String, dynamic>{
+        'id': 'f0',
+        'title': 'Alpha',
+        'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}
+      },
+      <String, dynamic>{
+        'id': 'f1',
+        'title': 'Beta',
+        'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}
+      },
+      <String, dynamic>{
+        'id': 'f2',
+        'title': 'Gamma',
+        'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}
+      },
+      <String, dynamic>{
+        'id': 'f3',
+        'title': 'Delta',
+        'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}
+      },
     ];
 
     final schema = <String, dynamic>{
       'designTokens': <String, dynamic>{
-        'colors': <String, dynamic>{'surface': '#151b2e', 'textPrimary': '#ffffff', 'textSecondary': '#94a3b8', 'welcomeText': '#ffffff'},
+        'colors': <String, dynamic>{
+          'surface': '#151b2e',
+          'textPrimary': '#ffffff',
+          'textSecondary': '#94a3b8',
+          'welcomeText': '#ffffff'
+        },
         'radius': <String, dynamic>{'card': 16.0},
         'spacing': <String, dynamic>{'sm': 8.0, 'xs': 4.0, 'xxs': 2.0},
         'typography': <String, dynamic>{
-          'cardTitle': <String, dynamic>{'fontSize': 12.0, 'fontWeight': 800, 'maxLines': 1, 'overflow': 'clip'},
-          'cardSubtitle': <String, dynamic>{'fontSize': 9.0, 'fontWeight': 700, 'maxLines': 1, 'overflow': 'clip'},
+          'cardTitle': <String, dynamic>{
+            'fontSize': 12.0,
+            'fontWeight': 800,
+            'maxLines': 1,
+            'overflow': 'clip'
+          },
+          'cardSubtitle': <String, dynamic>{
+            'fontSize': 9.0,
+            'fontWeight': 700,
+            'maxLines': 1,
+            'overflow': 'clip'
+          },
           'pageTitle': <String, dynamic>{'fontSize': 18.0},
           'statValue': <String, dynamic>{'fontSize': 14.0, 'fontWeight': 700},
         },
@@ -385,7 +508,8 @@ void main() {
               width: 120,
               height: 120,
               child: Builder(
-                builder: (context) => renderer.buildComponent(context, 'ltr-cube'),
+                builder: (context) =>
+                    renderer.buildComponent(context, 'ltr-cube'),
               ),
             ),
           ),
@@ -399,19 +523,34 @@ void main() {
     // Mid transition at 2880 + 560 = 3440ms
     await tester.pump(const Duration(milliseconds: 3440));
 
-    // Alpha is visible during 3D turn
-    expect(find.text('Alpha'), findsOneWidget);
+    // Both Face 0 (Alpha) and Face 1 (Beta) must be simultaneously visible during 3D turn
+    expect(find.text('Alpha'), findsOneWidget,
+        reason: 'Face 0 must remain visible as it rotates left');
+    expect(find.text('Beta'), findsOneWidget,
+        reason:
+            'Face 1 must be simultaneously visible as it rotates in from right');
 
     // Verify the face transform has 3D perspective
     final transforms = tester.widgetList<Transform>(find.byType(Transform));
-    final cubeTransforms = transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
+    final cubeTransforms =
+        transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
     expect(cubeTransforms, isNotEmpty);
   });
 
-  testWidgets('Platform isolation: Android retains untouched 044f965 Skia RepaintBoundary while iOS eliminates it for Impeller', (tester) async {
+  testWidgets(
+      'Platform parity: Both Android and iOS retain 044f965 Skia RepaintBoundary and 3D perspective transforms',
+      (tester) async {
     final faces = <Map<String, dynamic>>[
-      <String, dynamic>{'id': 'f0', 'title': 'One', 'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}},
-      <String, dynamic>{'id': 'f1', 'title': 'Two', 'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}},
+      <String, dynamic>{
+        'id': 'f0',
+        'title': 'One',
+        'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}
+      },
+      <String, dynamic>{
+        'id': 'f1',
+        'title': 'Two',
+        'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}
+      },
     ];
 
     final schema = createTestSchema(faces: faces);
@@ -429,7 +568,8 @@ void main() {
               width: 120,
               height: 120,
               child: Builder(
-                builder: (context) => renderer.buildComponent(context, 'test-cube'),
+                builder: (context) =>
+                    renderer.buildComponent(context, 'test-cube'),
               ),
             ),
           ),
@@ -439,8 +579,10 @@ void main() {
     await tester.pump();
 
     // On Android, RepaintBoundary wraps the cube Stack (matching 044f965)
-    final androidBoundaries = tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
-    expect(androidBoundaries, isNotEmpty, reason: 'Android Skia pipeline must wrap cube in RepaintBoundary');
+    final androidBoundaries =
+        tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
+    expect(androidBoundaries, isNotEmpty,
+        reason: 'Android Skia pipeline must wrap cube in RepaintBoundary');
 
     // 2. Test iOS platform
     await tester.pumpWidget(
@@ -452,7 +594,8 @@ void main() {
               width: 120,
               height: 120,
               child: Builder(
-                builder: (context) => renderer.buildComponent(context, 'test-cube'),
+                builder: (context) =>
+                    renderer.buildComponent(context, 'test-cube'),
               ),
             ),
           ),
@@ -461,10 +604,15 @@ void main() {
     );
     await tester.pump();
 
-    // On iOS, cube Stack is directly returned without RepaintBoundary (avoiding Impeller layer flattening)
+    // On iOS, RepaintBoundary wraps the cube Stack matching Android Skia 3D parity
+    final iosBoundaries =
+        tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
+    expect(iosBoundaries, isNotEmpty,
+        reason: 'iOS Skia pipeline wraps cube in RepaintBoundary for parity');
     final iosTransforms = tester.widgetList<Transform>(find.byType(Transform));
-    final iosCubeTransforms = iosTransforms.where((t) => t.transform.entry(3, 2) != 0).toList();
-    expect(iosCubeTransforms, isNotEmpty, reason: 'iOS Impeller pipeline must render 3D perspective transforms');
+    final iosCubeTransforms =
+        iosTransforms.where((t) => t.transform.entry(3, 2) != 0).toList();
+    expect(iosCubeTransforms, isNotEmpty,
+        reason: 'iOS must render 3D perspective transforms');
   });
 }
-

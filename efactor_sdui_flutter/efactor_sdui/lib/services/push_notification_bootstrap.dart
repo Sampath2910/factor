@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'call_lifecycle_tracker.dart';
 import 'grid_chat_message_notification.dart';
@@ -45,78 +46,78 @@ const AndroidNotificationChannel kMessagesChannel = AndroidNotificationChannel(
 /// (Answer/Decline on calls, inline text Reply + Mark as read on messages, and Stop on live location).
 List<DarwinNotificationCategory> get kDarwinNotificationCategories =>
     <DarwinNotificationCategory>[
-  DarwinNotificationCategory(
-    'calls_category',
-    actions: <DarwinNotificationAction>[
-      DarwinNotificationAction.plain(
-        'decline',
-        'Decline',
-        options: <DarwinNotificationActionOption>{
-          DarwinNotificationActionOption.destructive,
+      DarwinNotificationCategory(
+        'calls_category',
+        actions: <DarwinNotificationAction>[
+          DarwinNotificationAction.plain(
+            'decline',
+            'Decline',
+            options: <DarwinNotificationActionOption>{
+              DarwinNotificationActionOption.destructive,
+            },
+          ),
+          DarwinNotificationAction.plain(
+            'answer',
+            'Answer',
+            options: <DarwinNotificationActionOption>{
+              DarwinNotificationActionOption.foreground,
+            },
+          ),
+        ],
+        options: <DarwinNotificationCategoryOption>{
+          DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
         },
       ),
-      DarwinNotificationAction.plain(
-        'answer',
-        'Answer',
-        options: <DarwinNotificationActionOption>{
-          DarwinNotificationActionOption.foreground,
+      DarwinNotificationCategory(
+        'messages_category',
+        actions: <DarwinNotificationAction>[
+          DarwinNotificationAction.text(
+            'reply',
+            'Reply',
+            buttonTitle: 'Send',
+            placeholder: 'Type a reply...',
+          ),
+          DarwinNotificationAction.plain(
+            'mark_as_read',
+            'Mark as read',
+          ),
+        ],
+        options: <DarwinNotificationCategoryOption>{
+          DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
         },
       ),
-    ],
-    options: <DarwinNotificationCategoryOption>{
-      DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
-    },
-  ),
-  DarwinNotificationCategory(
-    'messages_category',
-    actions: <DarwinNotificationAction>[
-      DarwinNotificationAction.text(
-        'reply',
-        'Reply',
-        buttonTitle: 'Send',
-        placeholder: 'Type a reply...',
+      DarwinNotificationCategory(
+        'missed_calls_category',
+        actions: <DarwinNotificationAction>[
+          DarwinNotificationAction.plain(
+            'callback',
+            'Call back',
+            options: <DarwinNotificationActionOption>{
+              DarwinNotificationActionOption.foreground,
+            },
+          ),
+          DarwinNotificationAction.plain(
+            'message',
+            'Message',
+            options: <DarwinNotificationActionOption>{
+              DarwinNotificationActionOption.foreground,
+            },
+          ),
+        ],
       ),
-      DarwinNotificationAction.plain(
-        'mark_as_read',
-        'Mark as read',
+      DarwinNotificationCategory(
+        'live_location_category',
+        actions: <DarwinNotificationAction>[
+          DarwinNotificationAction.plain(
+            'stop_live_location',
+            'Stop Sharing',
+            options: <DarwinNotificationActionOption>{
+              DarwinNotificationActionOption.destructive,
+            },
+          ),
+        ],
       ),
-    ],
-    options: <DarwinNotificationCategoryOption>{
-      DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
-    },
-  ),
-  DarwinNotificationCategory(
-    'missed_calls_category',
-    actions: <DarwinNotificationAction>[
-      DarwinNotificationAction.plain(
-        'callback',
-        'Call back',
-        options: <DarwinNotificationActionOption>{
-          DarwinNotificationActionOption.foreground,
-        },
-      ),
-      DarwinNotificationAction.plain(
-        'message',
-        'Message',
-        options: <DarwinNotificationActionOption>{
-          DarwinNotificationActionOption.foreground,
-        },
-      ),
-    ],
-  ),
-  DarwinNotificationCategory(
-    'live_location_category',
-    actions: <DarwinNotificationAction>[
-      DarwinNotificationAction.plain(
-        'stop_live_location',
-        'Stop Sharing',
-        options: <DarwinNotificationActionOption>{
-          DarwinNotificationActionOption.destructive,
-        },
-      ),
-    ],
-  ),
-];
+    ];
 
 /// Background notification response handler (runs in background isolate).
 @pragma('vm:entry-point')
@@ -162,6 +163,7 @@ void notificationTapBackground(NotificationResponse response) async {
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PushNotificationBootstrap.refreshActiveChannels();
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp();
@@ -225,7 +227,8 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   // and show "Missed call" only for MISSED_CALL.
   if (CallLifecycleTracker.kEndCallTypes.contains(type)) {
     // ignore: avoid_print
-    print('[FCM_DEBUG] End call event ($type) received in background for callId: $callId');
+    print(
+        '[FCM_DEBUG] End call event ($type) received in background for callId: $callId');
     if (callId.isNotEmpty) {
       await CallLifecycleTracker.markCallFinished(callId);
       await plugin.cancel(callId.hashCode.abs());
@@ -237,31 +240,35 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
     return;
   }
 
-  final isChatMessage = type == 'CHAT_MESSAGE' ||
-      type == 'MESSAGE' ||
-      type == 'NEW_MESSAGE';
+  final isChatMessage =
+      type == 'CHAT_MESSAGE' || type == 'MESSAGE' || type == 'NEW_MESSAGE';
 
   // A1. Only ringTypes. Never treat as call merely because of call_id in payload!
-  final isCall = !isChatMessage && CallLifecycleTracker.kRingCallTypes.contains(type);
+  final isCall =
+      !isChatMessage && CallLifecycleTracker.kRingCallTypes.contains(type);
 
   if (isCall) {
     // A2. Never ring again for a call that's already over.
-    if (callId.isNotEmpty && await CallLifecycleTracker.isCallFinished(callId)) {
+    if (callId.isNotEmpty &&
+        await CallLifecycleTracker.isCallFinished(callId)) {
       // ignore: avoid_print
-      print('[FCM_DEBUG] Suppressing background incoming call: callId $callId is already finished.');
+      print(
+          '[FCM_DEBUG] Suppressing background incoming call: callId $callId is already finished.');
       return;
     }
 
     // A2. While OngoingCallService has an active call, don't start the ring and don't post a ringing notification.
     if (await CallLifecycleTracker.isOngoingCallActive()) {
       // ignore: avoid_print
-      print('[FCM_DEBUG] Suppressing background incoming call: an ongoing call is currently active.');
+      print(
+          '[FCM_DEBUG] Suppressing background incoming call: an ongoing call is currently active.');
       return;
     }
 
     final call = IncomingCallData.fromJson(data);
     // ignore: avoid_print
-    print('[FCM_DEBUG] Rendering background incoming call notification for caller: ${call.callerName} (callId: ${call.callId})');
+    print(
+        '[FCM_DEBUG] Rendering background incoming call notification for caller: ${call.callerName} (callId: ${call.callId})');
     if (call.actionToken.isNotEmpty) {
       unawaited(IncomingCallService.postNativeAction(
         action: 'ringing',
@@ -285,7 +292,8 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   // Chat message or notification payload
   // ignore: avoid_print
   print('[FCM_DEBUG] Rendering chat message notification: $data');
-  await showMessageNotificationOnPlugin(plugin, data, notification: message.notification);
+  await showMessageNotificationOnPlugin(plugin, data,
+      notification: message.notification);
 }
 
 /// Posts ringing call notification with FLAG_INSISTENT, 45s timeout, and Answer/Decline buttons.
@@ -294,7 +302,8 @@ Future<void> showIncomingCallNotificationOnPlugin(
   IncomingCallData call, {
   Map<String, dynamic>? rawData,
 }) async {
-  final payload = rawData != null ? jsonEncode(rawData) : jsonEncode(call.toJson());
+  final payload =
+      rawData != null ? jsonEncode(rawData) : jsonEncode(call.toJson());
   final notifId = (call.callId.isNotEmpty
           ? call.callId.hashCode
           : DateTime.now().millisecondsSinceEpoch ~/ 1000)
@@ -309,7 +318,7 @@ Future<void> showIncomingCallNotificationOnPlugin(
     callSubtitle,
     NotificationDetails(
       android: AndroidNotificationDetails(
-        kCallsChannel.id,
+        PushNotificationBootstrap.activeCallsChannelId,
         kCallsChannel.name,
         channelDescription: kCallsChannel.description,
         icon: 'ic_notification',
@@ -323,7 +332,8 @@ Future<void> showIncomingCallNotificationOnPlugin(
         timeoutAfter: 60000,
         color: const Color(0xFF0284C7),
         ticker: 'Incoming call from ${call.callerName}',
-        additionalFlags: Int32List.fromList([4]), // Notification.FLAG_INSISTENT loops ringtone
+        additionalFlags: Int32List.fromList(
+            [4]), // Notification.FLAG_INSISTENT loops ringtone
         styleInformation: BigTextStyleInformation(
           callSubtitle,
           htmlFormatBigText: true,
@@ -376,7 +386,8 @@ Future<void> showMissedCallNotificationOnPlugin(
   await plugin.cancel(notifId);
   await plugin.cancel(call.callId.hashCode.abs());
 
-  final payloadMap = rawData != null ? Map<String, dynamic>.from(rawData) : call.toJson();
+  final payloadMap =
+      rawData != null ? Map<String, dynamic>.from(rawData) : call.toJson();
   payloadMap['type'] = 'MISSED_CALL';
 
   final subtitle = call.body.isNotEmpty
@@ -389,7 +400,7 @@ Future<void> showMissedCallNotificationOnPlugin(
     subtitle,
     NotificationDetails(
       android: AndroidNotificationDetails(
-        kMessagesChannel.id,
+        PushNotificationBootstrap.activeMessagesChannelId,
         kMessagesChannel.name,
         channelDescription: kMessagesChannel.description,
         icon: 'ic_notification',
@@ -447,7 +458,8 @@ Future<void> showMessageNotificationOnPlugin(
   final notifId = rawNotifId.abs();
 
   final isLocked = data['locked'] == true || data['locked'] == 'true';
-  final isGroup = GridChatMessage.isTruthyFlag(data['is_group'] ?? data['isGroup']);
+  final isGroup =
+      GridChatMessage.isTruthyFlag(data['is_group'] ?? data['isGroup']);
   final senderName = (data['sender_name'] ??
           data['senderName'] ??
           data['name'] ??
@@ -505,7 +517,7 @@ Future<void> showMessageNotificationOnPlugin(
       'New message',
       NotificationDetails(
         android: AndroidNotificationDetails(
-          kMessagesChannel.id,
+          PushNotificationBootstrap.activeMessagesChannelId,
           kMessagesChannel.name,
           channelDescription: kMessagesChannel.description,
           icon: 'ic_notification',
@@ -538,7 +550,7 @@ Future<void> showMessageNotificationOnPlugin(
     effectiveBody,
     NotificationDetails(
       android: AndroidNotificationDetails(
-        kMessagesChannel.id,
+        PushNotificationBootstrap.activeMessagesChannelId,
         kMessagesChannel.name,
         channelDescription: kMessagesChannel.description,
         icon: 'ic_notification',
@@ -725,6 +737,27 @@ class PushNotificationBootstrap {
   static final PushNotificationBootstrap instance =
       PushNotificationBootstrap._();
 
+  static String _activeCallsChannelId = kCallsChannel.id;
+  static String _activeMessagesChannelId = kMessagesChannel.id;
+
+  static String get activeCallsChannelId => _activeCallsChannelId;
+  static String get activeMessagesChannelId => _activeMessagesChannelId;
+
+  static Future<void> refreshActiveChannels() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedCalls = prefs.getString('circle_connect_calls_channel_id');
+      if (savedCalls != null && savedCalls.isNotEmpty) {
+        _activeCallsChannelId = savedCalls;
+      }
+      final savedMsgs = prefs.getString('circle_connect_messages_channel_id');
+      if (savedMsgs != null && savedMsgs.isNotEmpty) {
+        _activeMessagesChannelId = savedMsgs;
+        GridChatMessageNotifications.activeChannelId = savedMsgs;
+      }
+    } catch (_) {}
+  }
+
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
 
@@ -740,8 +773,10 @@ class PushNotificationBootstrap {
   /// When set, foreground notification banners for this conversation are suppressed.
   void setActiveConversationId(String? conversationId) {
     final cleanId = conversationId?.trim();
-    _activeConversationId = (cleanId == null || cleanId.isEmpty) ? null : cleanId;
-    debugPrint('[PushBootstrap] Active conversation set to: $_activeConversationId');
+    _activeConversationId =
+        (cleanId == null || cleanId.isEmpty) ? null : cleanId;
+    debugPrint(
+        '[PushBootstrap] Active conversation set to: $_activeConversationId');
     if (_activeConversationId != null) {
       unawaited(clearChatNotifications(_activeConversationId!));
     }
@@ -981,7 +1016,8 @@ curl -X POST "https://fcm.googleapis.com/fcm/send" \\
       if (token != null && token.isNotEmpty) {
         IncomingCallService.instance.setDeviceToken(token);
         // ignore: avoid_print
-        print('[FCM_DEBUG] Startup FCM token captured (${token.length} chars): $token');
+        print(
+            '[FCM_DEBUG] Startup FCM token captured (${token.length} chars): $token');
       }
     } catch (e) {
       // ignore: avoid_print
@@ -1002,6 +1038,7 @@ curl -X POST "https://fcm.googleapis.com/fcm/send" \\
 
   Future<void> _initLocalNotifications() async {
     if (_localNotificationsReady) return;
+    await refreshActiveChannels();
     const android = AndroidInitializationSettings('ic_notification');
     final ios = DarwinInitializationSettings(
       notificationCategories: kDarwinNotificationCategories,
@@ -1046,8 +1083,9 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
 ========================================================================
 ''');
 
-    final callId =
-        (data['call_id'] ?? data['callId'] ?? data['id'] ?? '').toString().trim();
+    final callId = (data['call_id'] ?? data['callId'] ?? data['id'] ?? '')
+        .toString()
+        .trim();
 
     // A1. Check endTypes before treating a push as a call
     if (CallLifecycleTracker.kEndCallTypes.contains(type)) {
@@ -1059,12 +1097,12 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       return;
     }
 
-    final isChatMessage = type == 'CHAT_MESSAGE' ||
-        type == 'MESSAGE' ||
-        type == 'NEW_MESSAGE';
+    final isChatMessage =
+        type == 'CHAT_MESSAGE' || type == 'MESSAGE' || type == 'NEW_MESSAGE';
 
     // A1. Only ringTypes. Never treat as call merely because of call_id!
-    final isCall = !isChatMessage && CallLifecycleTracker.kRingCallTypes.contains(type);
+    final isCall =
+        !isChatMessage && CallLifecycleTracker.kRingCallTypes.contains(type);
 
     if (isCall) {
       // A2. Never ring again for a call that's already over.
@@ -1072,7 +1110,8 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
           (CallLifecycleTracker.isCallFinishedSync(callId) ||
               await CallLifecycleTracker.isCallFinished(callId))) {
         // ignore: avoid_print
-        print('[FCM_DEBUG] Suppressing foreground incoming call: callId $callId is already finished.');
+        print(
+            '[FCM_DEBUG] Suppressing foreground incoming call: callId $callId is already finished.');
         return;
       }
 
@@ -1080,7 +1119,8 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       if (OngoingCallService.instance.isCallActive ||
           await CallLifecycleTracker.isOngoingCallActive()) {
         // ignore: avoid_print
-        print('[FCM_DEBUG] Suppressing foreground incoming call: an ongoing call is currently active.');
+        print(
+            '[FCM_DEBUG] Suppressing foreground incoming call: an ongoing call is currently active.');
         return;
       }
 
@@ -1097,8 +1137,8 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
     }
 
     if (GridChatMessage.isGridChatMessage(data)) {
-      final resumed = WidgetsBinding.instance.lifecycleState ==
-          AppLifecycleState.resumed;
+      final resumed =
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
       unawaited(
         GridChatMessageNotifications.instance.present(
           _local,
@@ -1109,7 +1149,8 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       );
       return;
     }
-    unawaited(showMessageNotificationOnPlugin(_local, data, notification: message.notification));
+    unawaited(showMessageNotificationOnPlugin(_local, data,
+        notification: message.notification));
   }
 
   void _onMessageOpened(RemoteMessage message) {
@@ -1172,18 +1213,14 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       }
       if (actionId == 'mark_as_read') {
         await handleMarkAsReadFromNotification(data);
-        final convId = (data['conversation_id'] ??
-                data['conversationId'] ??
-                '')
+        final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
             .toString();
         final notifId = int.tryParse(convId) ?? convId.hashCode;
         await _local.cancel(notifId);
         return;
       }
       if (actionId == 'reply') {
-        final convId = (data['conversation_id'] ??
-                data['conversationId'] ??
-                '')
+        final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
             .toString();
         if (convId.isNotEmpty) {
           await IncomingCallService.instance.openChatFromNotification(
@@ -1208,9 +1245,7 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         await IncomingCallService.instance.openCallScreenWithoutAction(call);
       } else {
         // Message notification tap
-        final convId = (data['conversation_id'] ??
-                data['conversationId'] ??
-                '')
+        final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
             .toString();
         final url = (data['url'] ?? '').toString();
         await IncomingCallService.instance.openChatFromNotification(
@@ -1224,12 +1259,12 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
   }
 
   void _handlePayloadMap(Map<String, dynamic> data) {
-    final type =
-        (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+    final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
     if (CallLifecycleTracker.kRingCallTypes.contains(type)) {
       final call = IncomingCallData.fromJson(data);
       if (CallLifecycleTracker.isCallFinishedSync(call.callId)) {
-        debugPrint('[PushBootstrap] Suppressing showCallScreen: call is finished ${call.callId}');
+        debugPrint(
+            '[PushBootstrap] Suppressing showCallScreen: call is finished ${call.callId}');
         return;
       }
       unawaited(
@@ -1267,7 +1302,8 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
     if (OngoingCallService.instance.isCallActive ||
         await CallLifecycleTracker.isOngoingCallActive() ||
         (id.isNotEmpty && await CallLifecycleTracker.isCallFinished(id))) {
-      debugPrint('[PushBootstrap] Suppressing showIncomingCallNotification: call is finished or ongoing active: $id');
+      debugPrint(
+          '[PushBootstrap] Suppressing showIncomingCallNotification: call is finished or ongoing active: $id');
       return;
     }
     try {
@@ -1349,7 +1385,8 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         if (channelId != null && channelId != kCallsChannel.id) continue;
         if (channelId == null) {
           final payload = notification.payload ?? '';
-          if (!payload.contains('call_id') && !payload.contains('INCOMING_CALL')) {
+          if (!payload.contains('call_id') &&
+              !payload.contains('INCOMING_CALL')) {
             continue;
           }
         }

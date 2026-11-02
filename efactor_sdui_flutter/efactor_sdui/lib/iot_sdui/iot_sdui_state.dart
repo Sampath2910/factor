@@ -476,6 +476,105 @@ class IotSduiState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Writes a value to a binding path (e.g. `{{device.power}}`, `device.power`, or `power`).
+  ///
+  /// Updates both the local [device] map and any matching device in [devices],
+  /// then notifies listeners so dependent SDUI widgets (labels, toggles) immediately re-render.
+  void writeBinding(
+    dynamic pathOrTemplate,
+    dynamic value, [
+    Map<String, dynamic>? device,
+  ]) {
+    if (pathOrTemplate == null) return;
+    String path = pathOrTemplate.toString().trim();
+    final exact = RegExp(r'^\{\{(.+)\}\}$').firstMatch(path);
+    if (exact != null) {
+      path = exact.group(1)!.trim();
+    }
+
+    if (path.startsWith('runtime.')) {
+      writeRuntime(path.substring(8), value);
+      return;
+    }
+
+    final targetPath = path.startsWith('device.') ? path.substring(7) : path;
+
+    // Ensure _liveDevices is initialized so mutations persist across state.devices reads
+    if (_liveDevices == null) {
+      final root = schema['devices'];
+      if (root is List) {
+        _liveDevices = _mapList(root);
+      } else {
+        final items = deviceGrid?['items'];
+        if (items is List) {
+          _liveDevices = _mapList(items);
+        } else {
+          _liveDevices = <Map<String, dynamic>>[];
+        }
+      }
+    }
+
+    if (device != null) {
+      _writeMapPath(device, targetPath, value);
+      if (targetPath == 'power') {
+        device['powerOn'] = (value == true);
+      }
+    }
+
+    final nodeId = (device?['node_id'] ?? device?['id'])?.toString();
+    if (_liveDevices != null) {
+      for (final d in _liveDevices!) {
+        final dId = (d['node_id'] ?? d['id'])?.toString();
+        if (nodeId == null || dId == nodeId) {
+          _writeMapPath(d, targetPath, value);
+          if (targetPath == 'power') {
+            d['powerOn'] = (value == true);
+          }
+        }
+      }
+    }
+
+    final rawDevices = schema['devices'];
+    if (rawDevices is List) {
+      for (final raw in rawDevices) {
+        if (raw is Map) {
+          final rawId = (raw['node_id'] ?? raw['id'])?.toString();
+          if (nodeId == null || rawId == nodeId) {
+            raw[targetPath] = value;
+            if (targetPath == 'power') {
+              raw['powerOn'] = (value == true);
+            }
+          }
+        }
+      }
+    }
+
+    notifyListeners();
+  }
+
+  void _writeMapPath(Map<String, dynamic> map, String path, dynamic value) {
+    final segments = path.split('.').where((e) => e.isNotEmpty).toList();
+    if (segments.isEmpty) return;
+    Map<String, dynamic> current = map;
+    for (int i = 0; i < segments.length - 1; i++) {
+      final seg = segments[i];
+      final child = current[seg];
+      if (child is Map<String, dynamic>) {
+        current = child;
+      } else if (child is Map) {
+        final converted =
+            Map<String, dynamic>.from(child.cast<dynamic, dynamic>());
+        current[seg] = converted;
+        current = converted;
+      } else {
+        final created = <String, dynamic>{};
+        current[seg] = created;
+        current = created;
+      }
+    }
+    current[segments.last] = value;
+  }
+
   bool canExecuteAction(
     Map<String, dynamic> action, {
     Map<String, dynamic>? device,
