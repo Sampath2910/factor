@@ -497,20 +497,13 @@ class GridChatMessageNotifications {
                 GridChatMessage.lockedLabel,
                 contentTitle: GridChatMessage.lockedLabel,
               ),
-              actions: const <AndroidNotificationAction>[
-                AndroidNotificationAction(
-                  'reply',
-                  'Reply',
-                  showsUserInterface: true,
-                  cancelNotification: true,
-                ),
-              ],
+              actions: const <AndroidNotificationAction>[],
             ),
             iOS: const DarwinNotificationDetails(
               presentAlert: true,
               presentBadge: true,
               presentSound: true,
-              categoryIdentifier: 'messages_category',
+              categoryIdentifier: 'messages_locked_category',
             ),
           )
         : NotificationDetails(
@@ -558,7 +551,26 @@ class GridChatMessageNotifications {
                 AndroidNotificationAction(
                   'reply',
                   'Reply',
-                  showsUserInterface: true,
+                  icon: DrawableResourceAndroidBitmap('ic_notification'),
+                  showsUserInterface: false,
+                  inputs: <AndroidNotificationActionInput>[
+                    AndroidNotificationActionInput(
+                      label: 'Type a reply...',
+                    ),
+                  ],
+                ),
+                AndroidNotificationAction(
+                  'mark_as_read',
+                  'Mark as read',
+                  icon: DrawableResourceAndroidBitmap('ic_notification'),
+                  showsUserInterface: false,
+                  cancelNotification: true,
+                ),
+                AndroidNotificationAction(
+                  'mute',
+                  'Mute',
+                  icon: DrawableResourceAndroidBitmap('ic_notification'),
+                  showsUserInterface: false,
                   cancelNotification: true,
                 ),
               ],

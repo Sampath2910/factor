@@ -17,6 +17,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import '../services/circle_connect_device_key_store.dart';
 import '../services/grid_chat_message_notification.dart';
 import '../services/incoming_call_service.dart';
 import '../services/ongoing_call_service.dart';
@@ -279,8 +280,9 @@ class GridInAppWebViewPage extends StatefulWidget {
   /// GRID Chat has called chatUiReady() on this page.
   static bool get isChatUiReady {
     final state = _activeState;
-    if (state == null || !state.mounted || !state._isCircleConnect)
+    if (state == null || !state.mounted || !state._isCircleConnect) {
       return false;
+    }
     return state._chatUiReady;
   }
 
@@ -602,8 +604,19 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         }
       }
     });
+    CircleConnectDeviceKeyStore.instance
+        .addKeyStatusListener(_onDeviceKeyStatusChanged);
     _initController();
     _setupPermissionsAndLoad();
+  }
+
+  void _onDeviceKeyStatusChanged(bool hasKey) {
+    if (!mounted) return;
+    unawaited(
+      _controller.runJavaScript(
+        'if (window.CircleConnectPush) { window.CircleConnectPush.hasDeviceKey = ${hasKey ? "true" : "false"}; }',
+      ),
+    );
   }
 
   @override
@@ -627,6 +640,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     _connectingCallTimer?.cancel();
     unawaited(OngoingCallService.instance.stopCall());
     PushNotificationBootstrap.instance.setActiveConversationId(null);
+    CircleConnectDeviceKeyStore.instance
+        .removeKeyStatusListener(_onDeviceKeyStatusChanged);
     GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
     _outboxSyncedSub?.cancel();
     _connectivitySub?.cancel();
@@ -954,6 +969,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     }
     final tokenJson = jsonEncode(token);
     final bearerJson = jsonEncode(widget.accessToken ?? '');
+    final hasDeviceKey =
+        await CircleConnectDeviceKeyStore.instance.hasDeviceKey();
+    final hasDeviceKeyJs = hasDeviceKey ? 'true' : 'false';
     final js = '''
 (function() {
   var fcmToken = $tokenJson;
@@ -1360,6 +1378,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     window.CircleConnectPush = {};
   }
   window.CircleConnectPush.systemSoundsSupported = true;
+  window.CircleConnectPush.deviceKeySupported = true;
+  window.CircleConnectPush.hasDeviceKey = $hasDeviceKeyJs;
   window.CircleConnectPush._token = fcmToken;
   window.CircleConnectPush.getToken = function() {
     return window.__efactor_fcm_token || "";
@@ -1367,12 +1387,34 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   window.CircleConnectPush.getTokenPromise = function() {
     return Promise.resolve(window.__efactor_fcm_token || "");
   };
+  window.CircleConnectPush.setDeviceKey = function(deviceKey, installationId) {
+    if (window.CircleConnectPush) {
+      window.CircleConnectPush.hasDeviceKey = true;
+    }
+    if (window.CircleConnectPushBridge) {
+      window.CircleConnectPushBridge.postMessage(JSON.stringify({
+        action: 'setDeviceKey',
+        deviceKey: String(deviceKey || ''),
+        installationId: String(installationId || '')
+      }));
+    }
+  };
   function bindNativeCallBridge() {
     if (!window.CircleConnectPush || typeof window.CircleConnectPush !== 'object') {
       window.CircleConnectPush = {};
     }
     var api = window.CircleConnectPush;
     api.systemSoundsSupported = true;
+    api.deviceKeySupported = true;
+    api.hasDeviceKey = $hasDeviceKeyJs;
+    api.setDeviceKey = function(deviceKey, installationId) {
+      api.hasDeviceKey = true;
+      post({
+        action: 'setDeviceKey',
+        deviceKey: String(deviceKey || ''),
+        installationId: String(installationId || '')
+      });
+    };
     function post(payload) {
       try {
         if (window.CircleConnectPushBridge) {
@@ -1752,6 +1794,23 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           action == 'clearActiveConversation') {
         PushNotificationBootstrap.instance.setActiveConversationId(null);
         _onChatConversationClosed();
+      } else if (action == 'setDeviceKey') {
+        final deviceKey = data['deviceKey']?.toString() ?? '';
+        final installationId = data['installationId']?.toString() ?? '';
+        unawaited(() async {
+          await CircleConnectDeviceKeyStore.instance.setDeviceKey(
+            deviceKey,
+            installationId,
+            baseUrl: widget.uri.toString(),
+          );
+          if (mounted) {
+            unawaited(
+              _controller.runJavaScript(
+                'if (window.CircleConnectPush) { window.CircleConnectPush.hasDeviceKey = true; }',
+              ),
+            );
+          }
+        }());
       } else if (action == 'pickSystemSound') {
         final kind = data['kind']?.toString() ?? 'ringtone';
         final requestId = data['requestId']?.toString() ?? '';

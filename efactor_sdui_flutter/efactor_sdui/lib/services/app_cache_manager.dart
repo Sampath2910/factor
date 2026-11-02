@@ -10,6 +10,7 @@ import '../home_sdui/home_sdui_state.dart';
 import '../iot_sdui/iot_schema_repository.dart';
 import '../iot_sdui/iot_sdui_state.dart';
 import '../sdui/sdui_network_image_cache.dart';
+import 'circle_connect_device_key_store.dart';
 import 'device_parameter_store.dart';
 import 'efactor_cloud_service.dart';
 import 'json_http.dart';
@@ -37,6 +38,13 @@ class AppCacheManager {
     String? accessToken,
   }) async {
     logDebug('[AppCacheManager] Starting comprehensive logout cache cleanup for user=$userId...');
+
+    // 0. Circle Connect device key revocation
+    try {
+      await CircleConnectDeviceKeyStore.instance.revokeOnLogout();
+    } catch (e) {
+      logDebug('[AppCacheManager] CircleConnect device key revoke error: $e');
+    }
 
     // 1. Cloud connections & discovery
     try {

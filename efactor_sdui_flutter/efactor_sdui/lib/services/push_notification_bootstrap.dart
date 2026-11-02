@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'call_lifecycle_tracker.dart';
+import 'circle_connect_device_key_store.dart';
 import 'grid_chat_message_notification.dart';
 import 'incoming_call_service.dart';
 import 'json_http.dart';
@@ -81,7 +82,18 @@ List<DarwinNotificationCategory> get kDarwinNotificationCategories =>
             'mark_as_read',
             'Mark as read',
           ),
+          DarwinNotificationAction.plain(
+            'mute',
+            'Mute',
+          ),
         ],
+        options: <DarwinNotificationCategoryOption>{
+          DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
+        },
+      ),
+      const DarwinNotificationCategory(
+        'messages_locked_category',
+        actions: <DarwinNotificationAction>[],
         options: <DarwinNotificationCategoryOption>{
           DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
         },
@@ -149,9 +161,52 @@ void notificationTapBackground(NotificationResponse response) async {
     } else if (actionId == 'mark_as_read') {
       await handleMarkAsReadFromNotification(data);
     } else if (actionId == 'reply') {
-      final input = response.input ?? '';
-      if (input.isNotEmpty) {
-        await handleSendReplyFromNotification(data, input);
+      final replyText = (response.input ?? '').trim();
+      final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
+          .toString()
+          .trim();
+      final msgId =
+          (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
+      if (replyText.isNotEmpty && convId.isNotEmpty) {
+        final notifPlugin = FlutterLocalNotificationsPlugin();
+        final result = await CircleConnectDeviceKeyStore.instance.sendReply(
+          conversationId: convId,
+          messageId: msgId,
+          text: replyText,
+          targetUrl: data['url']?.toString(),
+        );
+        if (result.statusCode == 403) {
+          await showReplyErrorNotification(
+            notifPlugin,
+            conversationId: convId,
+            errorMessage:
+                result.errorMessage ?? 'Action not allowed or contact blocked.',
+          );
+        } else {
+          final notifId = (int.tryParse(convId) ?? convId.hashCode).abs();
+          await notifPlugin.cancel(notifId);
+        }
+      } else if (convId.isNotEmpty) {
+        await GridChatMessageNotifications.instance.storePendingOpen(
+          conversationId: convId,
+          compose: true,
+          needsJs: false,
+        );
+      }
+    } else if (actionId == 'mute') {
+      final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
+          .toString()
+          .trim();
+      if (convId.isNotEmpty) {
+        final notifPlugin = FlutterLocalNotificationsPlugin();
+        await CircleConnectDeviceKeyStore.instance.muteChat(
+          conversationId: convId,
+          targetUrl: data['url']?.toString(),
+        );
+        await GridChatMessageNotifications.instance.clearConversation(
+          convId,
+          notifPlugin,
+        );
       }
     }
   } catch (e) {
@@ -281,6 +336,20 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   }
 
   if (GridChatMessage.isGridChatMessage(data)) {
+    final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
+        .toString()
+        .trim();
+    final msgId =
+        (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
+    if (convId.isNotEmpty && msgId.isNotEmpty) {
+      unawaited(
+        CircleConnectDeviceKeyStore.instance.sendDelivered(
+          conversationId: convId,
+          messageId: msgId,
+          targetUrl: data['url']?.toString(),
+        ),
+      );
+    }
     await GridChatMessageNotifications.instance.present(
       plugin,
       data,
@@ -536,7 +605,7 @@ Future<void> showMessageNotificationOnPlugin(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
-          categoryIdentifier: 'messages_category',
+          categoryIdentifier: 'messages_locked_category',
         ),
       ),
       payload: jsonEncode(data),
@@ -582,6 +651,12 @@ Future<void> showMessageNotificationOnPlugin(
             showsUserInterface: false,
             cancelNotification: true,
           ),
+          AndroidNotificationAction(
+            'mute',
+            'Mute',
+            icon: DrawableResourceAndroidBitmap('ic_notification'),
+            showsUserInterface: false,
+          ),
         ],
       ),
       iOS: const DarwinNotificationDetails(
@@ -614,11 +689,12 @@ String _defaultBodyForMessageType(String type) {
   }
 }
 
-/// Sends Mark as read request to server with WebView cookies.
+/// Sends background Mark as read request using CircleConnect device key,
+/// with fallback to legacy cookie auth if no device key is stored yet.
 Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
   final convId =
-      (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
-  final msgId = (data['message_id'] ?? data['messageId'] ?? '').toString();
+      (data['conversation_id'] ?? data['conversationId'] ?? '').toString().trim();
+  final msgId = (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
   var targetUrl =
       (data['url'] ?? IncomingCallData.defaultCallUrl).toString().trim();
   if (targetUrl.isNotEmpty &&
@@ -626,6 +702,26 @@ Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
       !targetUrl.startsWith('https://')) {
     targetUrl =
         'https://efactor.tech/${targetUrl.replaceAll(RegExp(r'^/+'), '')}';
+  }
+
+  // 1. Immediately cancel all notifications for this conversation
+  if (convId.isNotEmpty) {
+    unawaited(PushNotificationBootstrap.instance.clearChatNotifications(convId));
+  }
+
+  // 2. Perform authenticated background Mark as Read via CircleConnectDeviceKeyStore
+  final handledByDeviceKey = await CircleConnectDeviceKeyStore.instance.markAsRead(
+    conversationId: convId,
+    messageId: msgId,
+    targetUrl: targetUrl,
+  );
+
+  if (handledByDeviceKey) return;
+
+  // 3. Fallback to legacy cookie-based read only if no device key is stored
+  final existingKey = await CircleConnectDeviceKeyStore.instance.getDeviceKey();
+  if (existingKey != null && existingKey.isNotEmpty) {
+    return;
   }
 
   final cookies =
@@ -663,7 +759,7 @@ Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
           .timeout(const Duration(seconds: 10));
     }
   } catch (e) {
-    debugPrint('[PushBootstrap] markAsRead error: $e');
+    debugPrint('[PushBootstrap] legacy markAsRead error: $e');
   }
 }
 
@@ -725,6 +821,37 @@ Future<void> handleSendReplyFromNotification(
   } catch (e) {
     debugPrint('[PushBootstrap] sendReply error: $e');
   }
+}
+
+/// Displays an error alert notification when an inline reply fails (e.g., 403 blocked contact).
+Future<void> showReplyErrorNotification(
+  FlutterLocalNotificationsPlugin plugin, {
+  required String conversationId,
+  required String errorMessage,
+}) async {
+  final notifId =
+      (int.tryParse(conversationId) ?? conversationId.hashCode).abs();
+  final androidDetails = AndroidNotificationDetails(
+    PushNotificationBootstrap.activeMessagesChannelId,
+    kMessagesChannel.name,
+    channelDescription: kMessagesChannel.description,
+    icon: 'ic_notification',
+    importance: Importance.high,
+    priority: Priority.high,
+    autoCancel: true,
+    color: const Color(0xFFEF4444),
+  );
+  const iosDetails = DarwinNotificationDetails(
+    presentAlert: true,
+    presentBadge: true,
+    presentSound: true,
+  );
+  await plugin.show(
+    notifId,
+    'GRID Chat',
+    errorMessage,
+    NotificationDetails(android: androidDetails, iOS: iosDetails),
+  );
 }
 
 /// Wires FCM + local notifications into [IncomingCallService].
@@ -1137,6 +1264,20 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
     }
 
     if (GridChatMessage.isGridChatMessage(data)) {
+      final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
+          .toString()
+          .trim();
+      final msgId =
+          (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
+      if (convId.isNotEmpty && msgId.isNotEmpty) {
+        unawaited(
+          CircleConnectDeviceKeyStore.instance.sendDelivered(
+            conversationId: convId,
+            messageId: msgId,
+            targetUrl: data['url']?.toString(),
+          ),
+        );
+      }
       final resumed =
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
       unawaited(
@@ -1220,13 +1361,51 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         return;
       }
       if (actionId == 'reply') {
+        final replyText = (response.input ?? '').trim();
         final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
-            .toString();
-        if (convId.isNotEmpty) {
+            .toString()
+            .trim();
+        final msgId =
+            (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
+        if (replyText.isNotEmpty && convId.isNotEmpty) {
+          final result = await CircleConnectDeviceKeyStore.instance.sendReply(
+            conversationId: convId,
+            messageId: msgId,
+            text: replyText,
+            targetUrl: data['url']?.toString(),
+          );
+          if (result.statusCode == 403) {
+            await showReplyErrorNotification(
+              _local,
+              conversationId: convId,
+              errorMessage:
+                  result.errorMessage ?? 'Action not allowed or contact blocked.',
+            );
+          } else {
+            final notifId = (int.tryParse(convId) ?? convId.hashCode).abs();
+            await _local.cancel(notifId);
+          }
+        } else if (convId.isNotEmpty) {
           await IncomingCallService.instance.openChatFromNotification(
             conversationId: convId,
             url: '',
             compose: true,
+          );
+          await GridChatMessageNotifications.instance.clearConversation(
+            convId,
+            _local,
+          );
+        }
+        return;
+      }
+      if (actionId == 'mute') {
+        final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
+            .toString()
+            .trim();
+        if (convId.isNotEmpty) {
+          await CircleConnectDeviceKeyStore.instance.muteChat(
+            conversationId: convId,
+            targetUrl: data['url']?.toString(),
           );
           await GridChatMessageNotifications.instance.clearConversation(
             convId,
