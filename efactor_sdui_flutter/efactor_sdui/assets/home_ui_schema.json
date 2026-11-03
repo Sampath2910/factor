@@ -800,8 +800,8 @@
           }
         },
         "animation": {
-          "holdRatio": 0.84,
-          "transitionRatio": 0.16,
+          "holdRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "globalFaceSec": 4
         }
       },
@@ -1200,16 +1200,16 @@
           }
         ],
         "faceCount": 4,
-        "durationMs": 16000,
-        "faceDurationMs": 4000,
+        "durationMs": 17600,
+        "faceDurationMs": 4400,
         "phaseOffsetSec": 0,
         "phaseOffsetMs": 0,
         "phaseOffsetNormalized": 0,
         "phaseOffsetSemantics": "elapsed-phase-shift",
-        "holdRatio": 0.84,
-        "transitionRatio": 0.16,
-        "holdMs": 3360,
-        "transitionMs": 640,
+        "holdRatio": 0.6363636,
+        "transitionRatio": 0.3636364,
+        "holdMs": 2800,
+        "transitionMs": 1600,
         "faceSwapAtFlipProgress": null,
         "stepExpression": "-90",
         "rotateSequence": [
@@ -1228,7 +1228,7 @@
         ],
         "easing": {
           "name": "ease-in-out-cubic",
-          "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+          "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
         },
         "angleCalculation": {
           "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -1372,16 +1372,16 @@
             }
           ],
           "faceCount": 4,
-          "durationMs": 16000,
-          "faceDurationMs": 4000,
+          "durationMs": 17600,
+          "faceDurationMs": 4400,
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetNormalized": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "holdRatio": 0.84,
-          "transitionRatio": 0.16,
-          "holdMs": 3360,
-          "transitionMs": 640,
+          "holdRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
+          "holdMs": 2800,
+          "transitionMs": 1600,
           "faceSwapAtFlipProgress": null,
           "stepExpression": "-90",
           "rotateSequence": [
@@ -1400,7 +1400,7 @@
           ],
           "easing": {
             "name": "ease-in-out-cubic",
-            "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+            "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
           },
           "angleCalculation": {
             "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -1771,14 +1771,14 @@
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
           "degreesPerFace": -90,
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
           "repeat": true,
           "curve": "ease-in-out-cubic",
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "speedLabel": "natural",
           "pauseWhenOffscreen": true,
           "pauseWhenAppInactive": true,
@@ -1910,16 +1910,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -1938,7 +1938,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -1965,14 +1965,14 @@
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
           "degreesPerFace": -90,
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
           "repeat": true,
           "curve": "ease-in-out-cubic",
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "speedLabel": "natural",
           "pauseWhenOffscreen": true,
           "pauseWhenAppInactive": true,
@@ -2104,16 +2104,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -2132,7 +2132,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -2162,14 +2162,14 @@
         "rotationDir": "rtl",
         "rotationDirection": "right-to-left",
         "degreesPerFace": -90,
-        "durationMs": 16000,
+        "durationMs": 17600,
         "faceCount": 4,
         "repeat": true,
         "curve": "ease-in-out-cubic",
-        "dwellMs": 3360,
-        "transitionMs": 640,
-        "dwellRatio": 0.84,
-        "transitionRatio": 0.16,
+        "dwellMs": 2800,
+        "transitionMs": 1600,
+        "dwellRatio": 0.6363636,
+        "transitionRatio": 0.3636364,
         "speedLabel": "natural",
         "pauseWhenOffscreen": true,
         "pauseWhenAppInactive": true,
@@ -2301,16 +2301,16 @@
             }
           ],
           "faceCount": 4,
-          "durationMs": 16000,
-          "faceDurationMs": 4000,
+          "durationMs": 17600,
+          "faceDurationMs": 4400,
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetNormalized": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "holdRatio": 0.84,
-          "transitionRatio": 0.16,
-          "holdMs": 3360,
-          "transitionMs": 640,
+          "holdRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
+          "holdMs": 2800,
+          "transitionMs": 1600,
           "faceSwapAtFlipProgress": null,
           "stepExpression": "-90",
           "rotateSequence": [
@@ -2329,7 +2329,7 @@
           ],
           "easing": {
             "name": "ease-in-out-cubic",
-            "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+            "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
           },
           "angleCalculation": {
             "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -2356,14 +2356,14 @@
         "rotationDir": "rtl",
         "rotationDirection": "right-to-left",
         "degreesPerFace": -90,
-        "durationMs": 16000,
+        "durationMs": 17600,
         "faceCount": 4,
         "repeat": true,
         "curve": "ease-in-out-cubic",
-        "dwellMs": 3360,
-        "transitionMs": 640,
-        "dwellRatio": 0.84,
-        "transitionRatio": 0.16,
+        "dwellMs": 2800,
+        "transitionMs": 1600,
+        "dwellRatio": 0.6363636,
+        "transitionRatio": 0.3636364,
         "speedLabel": "natural",
         "pauseWhenOffscreen": true,
         "pauseWhenAppInactive": true,
@@ -2495,16 +2495,16 @@
             }
           ],
           "faceCount": 4,
-          "durationMs": 16000,
-          "faceDurationMs": 4000,
+          "durationMs": 17600,
+          "faceDurationMs": 4400,
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetNormalized": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "holdRatio": 0.84,
-          "transitionRatio": 0.16,
-          "holdMs": 3360,
-          "transitionMs": 640,
+          "holdRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
+          "holdMs": 2800,
+          "transitionMs": 1600,
           "faceSwapAtFlipProgress": null,
           "stepExpression": "-90",
           "rotateSequence": [
@@ -2523,7 +2523,7 @@
           ],
           "easing": {
             "name": "ease-in-out-cubic",
-            "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+            "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
           },
           "angleCalculation": {
             "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -2865,13 +2865,13 @@
         }
       },
       "animation": {
-        "cardRotationDurationMs": 16000,
+        "cardRotationDurationMs": 17600,
         "cardRotationFaceCount": 4,
-        "cardRotationFaceDurationMs": 4000,
-        "cardRotationDwellRatio": 0.84,
-        "cardRotationTransitionRatio": 0.16,
-        "cardRotationDwellMs": 3360,
-        "cardRotationTransitionMs": 640,
+        "cardRotationFaceDurationMs": 4400,
+        "cardRotationDwellRatio": 0.6363636,
+        "cardRotationTransitionRatio": 0.3636364,
+        "cardRotationDwellMs": 2800,
+        "cardRotationTransitionMs": 1600,
         "tileRotationModel": "fourFaceBoxRotation",
         "transformStyle": "preserve-3d",
         "faceSwapAtFlipProgress": null
@@ -5176,16 +5176,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -5204,7 +5204,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -5362,16 +5362,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -5390,7 +5390,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -5479,8 +5479,8 @@
           "rendererKey": "fourFaceBoxRotation",
           "axis": "y",
           "loop": true,
-          "faceDuration": 4000,
-          "transitionDuration": 640,
+          "faceDuration": 4400,
+          "transitionDuration": 1600,
           "startDelay": 0,
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
@@ -5516,13 +5516,13 @@
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
-          "faceDurationMs": 4000,
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "faceDurationMs": 4400,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "geometry": {
             "model": "fourFaceBoxRotation",
             "rendererKey": "fourFaceBoxRotation",
@@ -5649,16 +5649,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -5677,7 +5677,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -6370,8 +6370,8 @@
           "rendererKey": "fourFaceBoxRotation",
           "axis": "y",
           "loop": true,
-          "faceDuration": 4000,
-          "transitionDuration": 640,
+          "faceDuration": 4400,
+          "transitionDuration": 1600,
           "startDelay": 0,
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
@@ -6407,13 +6407,13 @@
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
-          "faceDurationMs": 4000,
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "faceDurationMs": 4400,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "geometry": {
             "model": "fourFaceBoxRotation",
             "rendererKey": "fourFaceBoxRotation",
@@ -6540,16 +6540,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -6568,7 +6568,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -7177,8 +7177,8 @@
           "rendererKey": "fourFaceBoxRotation",
           "axis": "y",
           "loop": true,
-          "faceDuration": 4000,
-          "transitionDuration": 640,
+          "faceDuration": 4400,
+          "transitionDuration": 1600,
           "startDelay": 0,
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
@@ -7214,13 +7214,13 @@
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
-          "faceDurationMs": 4000,
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "faceDurationMs": 4400,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "geometry": {
             "model": "fourFaceBoxRotation",
             "rendererKey": "fourFaceBoxRotation",
@@ -7347,16 +7347,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -7375,7 +7375,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -7984,8 +7984,8 @@
           "rendererKey": "fourFaceBoxRotation",
           "axis": "y",
           "loop": true,
-          "faceDuration": 4000,
-          "transitionDuration": 640,
+          "faceDuration": 4400,
+          "transitionDuration": 1600,
           "startDelay": 0,
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
@@ -8021,13 +8021,13 @@
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
-          "faceDurationMs": 4000,
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "faceDurationMs": 4400,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "geometry": {
             "model": "fourFaceBoxRotation",
             "rendererKey": "fourFaceBoxRotation",
@@ -8154,16 +8154,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -8182,7 +8182,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -8791,8 +8791,8 @@
           "rendererKey": "fourFaceBoxRotation",
           "axis": "y",
           "loop": true,
-          "faceDuration": 4000,
-          "transitionDuration": 640,
+          "faceDuration": 4400,
+          "transitionDuration": 1600,
           "startDelay": 0,
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
@@ -8828,13 +8828,13 @@
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
-          "faceDurationMs": 4000,
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "faceDurationMs": 4400,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "geometry": {
             "model": "fourFaceBoxRotation",
             "rendererKey": "fourFaceBoxRotation",
@@ -8961,16 +8961,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -8989,7 +8989,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -9598,8 +9598,8 @@
           "rendererKey": "fourFaceBoxRotation",
           "axis": "y",
           "loop": true,
-          "faceDuration": 4000,
-          "transitionDuration": 640,
+          "faceDuration": 4400,
+          "transitionDuration": 1600,
           "startDelay": 0,
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
@@ -9635,13 +9635,13 @@
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
-          "faceDurationMs": 4000,
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "faceDurationMs": 4400,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "geometry": {
             "model": "fourFaceBoxRotation",
             "rendererKey": "fourFaceBoxRotation",
@@ -9768,16 +9768,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -9796,7 +9796,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -10489,8 +10489,8 @@
           "rendererKey": "fourFaceBoxRotation",
           "axis": "y",
           "loop": true,
-          "faceDuration": 4000,
-          "transitionDuration": 640,
+          "faceDuration": 4400,
+          "transitionDuration": 1600,
           "startDelay": 0,
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
@@ -10526,13 +10526,13 @@
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
-          "faceDurationMs": 4000,
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "faceDurationMs": 4400,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "geometry": {
             "model": "fourFaceBoxRotation",
             "rendererKey": "fourFaceBoxRotation",
@@ -10659,16 +10659,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -10687,7 +10687,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -11380,8 +11380,8 @@
           "rendererKey": "fourFaceBoxRotation",
           "axis": "y",
           "loop": true,
-          "faceDuration": 4000,
-          "transitionDuration": 640,
+          "faceDuration": 4400,
+          "transitionDuration": 1600,
           "startDelay": 0,
           "rotationDir": "rtl",
           "rotationDirection": "right-to-left",
@@ -11417,13 +11417,13 @@
           "phaseOffsetSec": 0,
           "phaseOffsetMs": 0,
           "phaseOffsetSemantics": "elapsed-phase-shift",
-          "durationMs": 16000,
+          "durationMs": 17600,
           "faceCount": 4,
-          "faceDurationMs": 4000,
-          "dwellMs": 3360,
-          "transitionMs": 640,
-          "dwellRatio": 0.84,
-          "transitionRatio": 0.16,
+          "faceDurationMs": 4400,
+          "dwellMs": 2800,
+          "transitionMs": 1600,
+          "dwellRatio": 0.6363636,
+          "transitionRatio": 0.3636364,
           "geometry": {
             "model": "fourFaceBoxRotation",
             "rendererKey": "fourFaceBoxRotation",
@@ -11550,16 +11550,16 @@
               }
             ],
             "faceCount": 4,
-            "durationMs": 16000,
-            "faceDurationMs": 4000,
+            "durationMs": 17600,
+            "faceDurationMs": 4400,
             "phaseOffsetSec": 0,
             "phaseOffsetMs": 0,
             "phaseOffsetNormalized": 0,
             "phaseOffsetSemantics": "elapsed-phase-shift",
-            "holdRatio": 0.84,
-            "transitionRatio": 0.16,
-            "holdMs": 3360,
-            "transitionMs": 640,
+            "holdRatio": 0.6363636,
+            "transitionRatio": 0.3636364,
+            "holdMs": 2800,
+            "transitionMs": 1600,
             "faceSwapAtFlipProgress": null,
             "stepExpression": "-90",
             "rotateSequence": [
@@ -11578,7 +11578,7 @@
             ],
             "easing": {
               "name": "ease-in-out-cubic",
-              "implementation": "t \u003C 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
+              "implementation": "t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2"
             },
             "angleCalculation": {
               "segmentIndex": "floor(elapsed / segmentSec) % 4",
@@ -12177,7 +12177,8 @@
             {
               "$state": "preferences.showBottomNav"
             },
-            true]
+            true
+          ]
         }
       },
       "home-page": {
@@ -12296,14 +12297,16 @@
                 {
                   "$state": "session.authenticated"
                 },
-                true]
+                true
+              ]
             },
             {
               "equals": [
                 {
                   "$state": "preferences.showWelcome"
                 },
-                true]
+                true
+              ]
             }
           ]
         },
@@ -12406,14 +12409,16 @@
                 {
                   "$state": "session.authenticated"
                 },
-                true]
+                true
+              ]
             },
             {
               "equals": [
                 {
                   "$state": "preferences.showAlerts"
                 },
-                true]
+                true
+              ]
             }
           ]
         },
@@ -12448,7 +12453,8 @@
             {
               "$state": "session.authenticated"
             },
-            true]
+            true
+          ]
         }
       },
       "home-grid": {
@@ -12678,7 +12684,8 @@
                   {
                     "$item": "online"
                   },
-                  true]
+                  true
+                ]
               },
               {
                 "includes": [
@@ -16027,7 +16034,8 @@
           {
             "$state": "preferences.showBottomNav"
           },
-          true]
+          true
+        ]
       }
     },
     "navigation": {

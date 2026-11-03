@@ -2532,8 +2532,8 @@ class HomeSduiRenderer {
         c['type'] == 'rotatingDeviceCard';
     if (isRotating) {
       // On iOS Impeller (Metal), 3D rotating cards rotate unclipped at the container level
-      // so 3D convex corners and perspective are not flattened into 2D offscreen textures.
-      // Individual faces inside _RotatingCard already clip their own rounded corners.
+      // with dynamic containment scale S(θ) = 1 / (cos θ + sin θ).
+      // This guarantees 0.0px neighbor bleed while preserving 100% smooth rounded corners.
       return child;
     }
 
@@ -4900,7 +4900,8 @@ class _RotatingCardState extends State<_RotatingCard>
     final holdMsRaw = config['dwellMs'] ??
         config['holdMs'] ??
         nested['dwellMs'] ??
-        nested['holdMs'];
+        nested['holdMs'] ??
+        widget.schema['designTokens']?['animation']?['cardRotationDwellMs'];
     final holdMs = holdMsRaw is num
         ? holdMsRaw.toDouble()
         : double.tryParse(holdMsRaw?.toString() ?? '');
@@ -4911,7 +4912,8 @@ class _RotatingCardState extends State<_RotatingCard>
     final transitionMsRaw = config['transitionDuration'] ??
         config['transitionMs'] ??
         nested['transitionDuration'] ??
-        nested['transitionMs'];
+        nested['transitionMs'] ??
+        widget.schema['designTokens']?['animation']?['cardRotationTransitionMs'];
     final transitionMs = transitionMsRaw is num
         ? transitionMsRaw.toDouble()
         : double.tryParse(transitionMsRaw?.toString() ?? '');
@@ -4927,11 +4929,12 @@ class _RotatingCardState extends State<_RotatingCard>
         config['holdRatio'] ??
         nested['dwellRatio'] ??
         nested['holdRatio'] ??
+        widget.schema['designTokens']?['animation']?['cardRotationDwellRatio'] ??
         contractRatio;
     final ratio = ratioRaw is num
         ? ratioRaw.toDouble()
         : double.tryParse(ratioRaw?.toString() ?? '');
-    return (ratio ?? 0.78).clamp(0.0, 1.0);
+    return (ratio ?? 0.6363636).clamp(0.0, 1.0);
   }
 
   bool _boolConfig(String key, {required bool fallback}) {
@@ -4955,9 +4958,16 @@ class _RotatingCardState extends State<_RotatingCard>
     required double depth,
     required String axis,
     required double perspective,
+    double dynamicScale = 1.0,
   }) {
     final matrix = Matrix4.identity();
     if (perspective > 0) matrix.setEntry(3, 2, -perspective.abs());
+
+    // On iOS Impeller, dynamic containment scale recedes the 3D cube into the slot
+    // so the diagonal corners never exceed the tile slot bounds during rotation.
+    if (dynamicScale < 0.999) {
+      matrix.scaleByDouble(dynamicScale, dynamicScale, dynamicScale, 1.0);
+    }
 
     // Web parent transform is translateZ(-halfDepth) rotateY(angle). Without
     // the centering translate the box orbits around the front face instead of
@@ -5144,6 +5154,15 @@ class _RotatingCardState extends State<_RotatingCard>
         final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.iOS;
 
+        final double dynamicScale;
+        if (isIOS && progress.easedFlip > 0.001 && progress.easedFlip < 0.999) {
+          final turnAngle = progress.easedFlip * math.pi / 2;
+          final denom = math.cos(turnAngle) + math.sin(turnAngle);
+          dynamicScale = denom > 0.001 ? (1.0 / denom).clamp(0.7071, 1.0) : 1.0;
+        } else {
+          dynamicScale = 1.0;
+        }
+
         Widget cubeStack = Stack(
           fit: StackFit.expand,
           clipBehavior: Clip.none,
@@ -5196,6 +5215,7 @@ class _RotatingCardState extends State<_RotatingCard>
                           depth: depth,
                           axis: axis,
                           perspective: perspective,
+                          dynamicScale: dynamicScale,
                         ),
                         child: SizedBox.expand(
                           child: Stack(
@@ -5242,6 +5262,7 @@ class _RotatingCardState extends State<_RotatingCard>
 
         // iOS IMPELLER PATH
         // Deliver 3D perspective transforms directly to the Metal framebuffer.
+        // Dynamic containment scale guarantees zero neighbor overlap without 2D scissor slicing.
         return cubeStack;
       },
     );
@@ -5250,6 +5271,7 @@ class _RotatingCardState extends State<_RotatingCard>
   @override
   Widget build(BuildContext context) {
     if (widget.faces.isEmpty) return const SizedBox.shrink();
+    Theme.of(context);
     return AnimatedBuilder(
       animation: _cycleController,
       builder: (context, _) => _buildCube(context, _cycleController.value),

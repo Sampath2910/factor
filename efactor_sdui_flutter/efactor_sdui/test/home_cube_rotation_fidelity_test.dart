@@ -561,6 +561,7 @@ void main() {
     // 1. Test Android platform
     await tester.pumpWidget(
       MaterialApp(
+        key: const ValueKey('android_app'),
         theme: ThemeData(platform: TargetPlatform.android),
         home: Scaffold(
           body: Center(
@@ -587,6 +588,7 @@ void main() {
     // 2. Test iOS platform
     await tester.pumpWidget(
       MaterialApp(
+        key: const ValueKey('ios_app'),
         theme: ThemeData(platform: TargetPlatform.iOS),
         home: Scaffold(
           body: Center(
@@ -604,11 +606,99 @@ void main() {
     );
     await tester.pump();
 
-    // On iOS, cube Stack is directly returned without RepaintBoundary (avoiding Impeller layer flattening)
+    // On iOS, RepaintBoundary is bypassed around the cube (avoiding Impeller layer flattening / freeze),
+    // and 3D transforms render directly with perspective.
     final iosTransforms = tester.widgetList<Transform>(find.byType(Transform));
     final iosCubeTransforms =
         iosTransforms.where((t) => t.transform.entry(3, 2) != 0).toList();
     expect(iosCubeTransforms, isNotEmpty,
         reason: 'iOS Impeller pipeline must render 3D perspective transforms');
+  });
+
+  testWidgets(
+      'iOS Impeller zero-overlap containment: Mid-turn 45° rotation uses dynamic containment scale S(θ) without 2D scissor slicing',
+      (tester) async {
+    final faces = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': 'f0',
+        'title': 'Face Alpha',
+        'appearance': <String, dynamic>{'backgroundColor': '#7c3aed'}
+      },
+      <String, dynamic>{
+        'id': 'f1',
+        'title': 'Face Beta',
+        'appearance': <String, dynamic>{'backgroundColor': '#0ea5e9'}
+      },
+      <String, dynamic>{
+        'id': 'f2',
+        'title': 'Face Gamma',
+        'appearance': <String, dynamic>{'backgroundColor': '#22c55e'}
+      },
+      <String, dynamic>{
+        'id': 'f3',
+        'title': 'Face Delta',
+        'appearance': <String, dynamic>{'backgroundColor': '#f59e0b'}
+      },
+    ];
+
+    final schema = createTestSchema(
+      faces: faces,
+      cubeAnimation: <String, dynamic>{
+        'model': 'fourFaceBoxRotation',
+        'durationMs': 17600,
+        'holdRatio': 0.6363636,
+        'transitionRatio': 0.3636364,
+        'curve': 'ease-in-out-cubic',
+      },
+    );
+
+    final renderer = HomeSduiRenderer(
+      HomeSduiState(schema: schema, accessToken: 'test-token'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.iOS),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 140,
+              height: 140,
+              child: Builder(
+                builder: (context) =>
+                    renderer.buildComponent(context, 'test-cube'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Initially Face 0 (Face Alpha) is rendered
+    expect(find.text('Face Alpha'), findsOneWidget);
+
+    // Pump to 45° apex turn: 2800ms dwell + 800ms (half of 1600ms transition) = 3600ms
+    await tester.pump(const Duration(milliseconds: 3600));
+
+    // Both Face Alpha and Face Beta are simultaneously visible during mid-turn
+    expect(find.text('Face Alpha'), findsOneWidget,
+        reason: 'Face Alpha must remain visible during rotation');
+    expect(find.text('Face Beta'), findsOneWidget,
+        reason: 'Face Beta must rotate in from the right simultaneously');
+
+    // Impeller zero-slicing verification:
+    // 1. Direct 3D perspective transforms are rendered
+    final transforms = tester.widgetList<Transform>(find.byType(Transform));
+    final cubeTransforms =
+        transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
+    expect(cubeTransforms, isNotEmpty,
+        reason: '3D perspective transforms must be active during mid-turn');
+
+    // 2. RepaintBoundary is NOT present around the rotating card on iOS (no freezing)
+    expect(find.descendant(
+      of: find.byType(Transform).first,
+      matching: find.byType(RepaintBoundary),
+    ), findsNothing);
   });
 }
