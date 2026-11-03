@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Authentication SDUI Schema (Canonical Specification)",
+  "description": "Standard structure for Login, Registration, OTP, and Profile flows returned by /v8/api_auth_schema.php",
+  "type": "object",
+  "required": ["schema"],
+  "properties": {
+    "status": { "type": "boolean" },
+    "success": { "type": "boolean" },
+    "message": { "type": "string" },
+    "data": {
+      "type": "object",
+      "properties": {
+        "schema_key": { "type": "string" },
+        "schema_version": { "type": "string" },
+        "schema_hash": { "type": "string" }
+      }
+    },
+    "schema": {
+      "type": "object",
+      "required": [
+        "schemaType",
+        "schemaVersion",
+        "contractVersion",
+        "pages",
+        "forms",
+        "validationRules",
+        "actions"
+      ],
+      "properties": {
+        "schemaType": {
+          "type": "string",
+          "const": "auth_flow"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "contractVersion": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "revision": { "type": ["string", "integer"] },
+        "contentHash": { "type": "string" },
+        "cachePolicy": {
+          "type": "object",
+          "properties": {
+            "allowPersistentCache": { "type": "boolean" },
+            "maxAgeMinutes": { "type": "integer" }
+          }
+        },
+        "pages": {
+          "type": "object",
+          "description": "Screens in auth flow: login, signup, otpVerify, forgotPassword",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["id", "title", "layout"],
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "layout": { "type": "object" },
+              "components": { "type": "array" }
+            }
+          }
+        },
+        "forms": {
+          "type": "object",
+          "description": "Form state fields and default values"
+        },
+        "validationRules": {
+          "type": "object",
+          "description": "Field validation rules (email regex, phone 10-digit, password length)"
+        },
+        "actions": {
+          "type": "object",
+          "description": "Auth API dispatchers (loginSubmit, sendOtp, verifyOtp)"
+        }
+      }
+    }
+  }
+}
+

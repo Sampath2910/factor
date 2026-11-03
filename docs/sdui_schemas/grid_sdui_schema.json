@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Grid & Professional Space SDUI Schema (Canonical Specification)",
+  "description": "Standard structure for Grid & Circle Connect shell returned by /v8/grid_api_creation.php",
+  "type": "object",
+  "required": ["success", "user_id", "schema_version", "schema"],
+  "properties": {
+    "success": { "type": "boolean", "const": true },
+    "user_id": { "type": ["integer", "string"] },
+    "pageId": { "type": "string" },
+    "routeId": { "type": "string" },
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "gridApiUrl": { "type": "string", "format": "uri" },
+    "schema": {
+      "type": "object",
+      "required": ["schemaType", "schemaVersion", "components", "actions"],
+      "properties": {
+        "schemaType": { "type": "string", "const": "grid_layout" },
+        "schemaVersion": { "type": "string", "const": "1.0.0" },
+        "pageId": { "type": "string" },
+        "routeId": { "type": "string" },
+        "rootComponentId": { "type": "string" },
+        "replaceAppShell": { "type": "boolean" },
+        "reuseHostAppShell": { "type": "boolean" },
+        "keepHostBottomNavigation": { "type": "boolean" },
+        "page": { "type": "object" },
+        "components": {
+          "type": "object",
+          "description": "Component definitions for Grid header, webview shell, and feature tiles"
+        },
+        "actions": {
+          "type": "object",
+          "description": "Actions for web bridge, chat navigation, and camera"
+        },
+        "dataSources": { "type": "object" },
+        "theme": { "type": "object" }
+      }
+    }
+  }
+}
+

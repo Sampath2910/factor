@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Canonical SDUI Component & Action Registry Specification",
+  "description": "Property definitions, data types, and validation rules for all 30+ components and actions in eFactor SDUI",
+  "components": {
+    "switch": {
+      "type": "object",
+      "required": ["binding"],
+      "properties": {
+        "binding": { "type": "string", "description": "State binding key" },
+        "onColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "offColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "thumbColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "disabled": { "type": "boolean" },
+        "debounceMs": { "type": "integer", "minimum": 0, "maximum": 3000 }
+      }
+    },
+    "slider": {
+      "type": "object",
+      "required": ["binding", "min", "max"],
+      "properties": {
+        "binding": { "type": "string" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "divisions": { "type": "integer", "minimum": 1 },
+        "activeTrackColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "inactiveTrackColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "showValueLabel": { "type": "boolean" },
+        "throttleMs": { "type": "integer", "minimum": 0, "maximum": 1000 }
+      }
+    },
+    "AnimatedRadialGauge": {
+      "type": "object",
+      "required": ["binding", "min", "max"],
+      "properties": {
+        "binding": { "type": "string" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "unit": { "type": "string" },
+        "needleColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["start", "end", "color"],
+            "properties": {
+              "start": { "type": "number" },
+              "end": { "type": "number" },
+              "color": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" }
+            }
+          }
+        }
+      }
+    },
+    "ParameterCard": {
+      "type": "object",
+      "required": ["parameterKey", "label"],
+      "properties": {
+        "parameterKey": { "type": "string" },
+        "label": { "type": "string" },
+        "telemetryKey": { "type": "string" },
+        "icon": { "type": ["string", "object"] },
+        "readOnly": { "type": "boolean" }
+      }
+    },
+    "elevatedbutton": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "label": { "type": "string" },
+        "backgroundColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "textColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "elevation": { "type": "number", "minimum": 0 }
+      }
+    },
+    "column": {
+      "type": "object",
+      "properties": {
+        "mainAxisAlignment": {
+          "type": "string",
+          "enum": ["start", "center", "end", "spaceBetween", "spaceAround", "spaceEvenly"]
+        },
+        "crossAxisAlignment": {
+          "type": "string",
+          "enum": ["start", "center", "end", "stretch"]
+        },
+        "spacing": { "type": "number", "minimum": 0 }
+      }
+    },
+    "row": {
+      "type": "object",
+      "properties": {
+        "mainAxisAlignment": {
+          "type": "string",
+          "enum": ["start", "center", "end", "spaceBetween", "spaceAround", "spaceEvenly"]
+        },
+        "crossAxisAlignment": {
+          "type": "string",
+          "enum": ["start", "center", "end", "stretch"]
+        },
+        "spacing": { "type": "number", "minimum": 0 }
+      }
+    },
+    "container": {
+      "type": "object",
+      "properties": {
+        "width": { "type": ["number", "string"] },
+        "height": { "type": ["number", "string"] },
+        "backgroundColor": { "type": "string", "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$" },
+        "borderRadius": { "type": ["number", "array"] },
+        "padding": { "type": "array", "items": { "type": "number" } },
+        "margin": { "type": "array", "items": { "type": "number" } }
+      }
+    }
+  },
+  "actions": {
+    "api": {
+      "type": "object",
+      "required": ["url", "method"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE"] },
+        "params": { "type": "object" },
+        "headers": { "type": "object" }
+      }
+    },
+    "setParameter": {
+      "type": "object",
+      "required": ["parameter", "value"],
+      "properties": {
+        "parameter": { "type": "string" },
+        "value": {},
+        "nodeId": { "type": "string" },
+        "optimistic": { "type": "boolean" }
+      }
+    },
+    "navigate": {
+      "type": "object",
+      "required": ["route"],
+      "properties": {
+        "route": { "type": "string" },
+        "arguments": { "type": "object" }
+      }
+    },
+    "openScanner": {
+      "type": "object",
+      "properties": {
+        "target": { "type": "string" }
+      }
+    },
+    "openWifiConfig": {
+      "type": "object",
+      "properties": {
+        "ssid": { "type": "string" }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Device Multi-Page SDUI Schema (Canonical Specification)",
+  "description": "Standard structure for multi-page IoT device control schemas returned by /v8/api_schema.php",
+  "type": "object",
+  "required": ["status", "data", "paging"],
+  "properties": {
+    "status": {
+      "type": "boolean",
+      "description": "API execution status. Must be true for valid response."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable status or diagnostic message."
+    },
+    "part": {
+      "type": "string",
+      "enum": ["page", "meta", "full"],
+      "description": "Document partition type."
+    },
+    "data": {
+      "type": "object",
+      "required": ["model_name", "node_id", "version", "schema_json"],
+      "properties": {
+        "id": { "type": ["integer", "string"] },
+        "model_name": { "type": "string", "example": "EF001-CEILING_ROSE_6A_01" },
+        "node_id": { "type": "string", "example": "FFFFFFFFFFFFFFFF7EC200000003DB00" },
+        "app_id": { "type": ["string", "null"] },
+        "version": { "type": "string", "example": "4.0.0" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "schema_json": {
+          "type": "object",
+          "required": ["schemaVersion", "schemaType", "controls", "theme"],
+          "properties": {
+            "schemaVersion": { "type": "string", "enum": ["4.0.0", "4.1.0"] },
+            "schemaType": { "type": "string", "const": "server-driven-device-schema" },
+            "generatedAt": { "type": "string" },
+            "node_id": { "type": "string" },
+            "theme": {
+              "type": "object",
+              "properties": {
+                "colors": { "type": "object" },
+                "borders": { "type": "object" },
+                "radius": { "type": "object" }
+              }
+            },
+            "controls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "parameterKey", "parameterName", "componentType", "renderAs"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "parameterKey": { "type": "string" },
+                  "parameterName": { "type": "string" },
+                  "telemetryKey": { "type": "string" },
+                  "pageNo": { "type": ["string", "integer"] },
+                  "pageName": { "type": "string" },
+                  "sequence": { "type": "integer" },
+                  "componentType": {
+                    "type": "string",
+                    "enum": [
+                      "switch",
+                      "slider",
+                      "schemaslider",
+                      "gauge",
+                      "AnimatedRadialGauge",
+                      "NeedleGauge",
+                      "elevatedButton",
+                      "powerbutton",
+                      "dropdown",
+                      "value",
+                      "segmented"
+                    ]
+                  },
+                  "renderAs": { "type": "string", "const": "ParameterCard" },
+                  "binding": { "type": "string" },
+                  "initialValue": {},
+                  "readOnly": { "type": "boolean" },
+                  "writable": { "type": "boolean" },
+                  "props": { "type": "object" },
+                  "component": {
+                    "type": "object",
+                    "properties": {
+                      "widgetTree": { "type": "object" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "paging": {
+      "type": "object",
+      "required": ["mode", "pageNo", "pageCount", "pages"],
+      "properties": {
+        "mode": { "type": "string", "const": "page" },
+        "pageNo": { "type": ["string", "integer"] },
+        "pageCount": { "type": "integer" },
+        "pageApi": { "type": "string", "format": "uri" },
+        "nextPageApi": { "type": ["string", "null"] },
+        "prevPageApi": { "type": ["string", "null"] },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "pageNo", "title", "pageApi"],
+            "properties": {
+              "id": { "type": "string" },
+              "pageNo": { "type": ["string", "integer"] },
+              "title": { "type": "string" },
+              "subtitle": { "type": "string" },
+              "controlCount": { "type": "integer" },
+              "pageApi": { "type": "string", "format": "uri" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Home Metro Grid & 3D Cube SDUI Schema (Canonical Specification)",
+  "description": "Standard structure for Home screens returned by /v8/api_creation.php?action=get_schema",
+  "type": "object",
+  "required": ["success", "user_id", "schema_version", "schema"],
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "const": true
+    },
+    "user_id": {
+      "type": ["integer", "string"]
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "contentHash": {
+      "type": "string"
+    },
+    "schema": {
+      "type": "object",
+      "required": [
+        "schemaType",
+        "schemaVersion",
+        "schemaId",
+        "components",
+        "pages",
+        "routes",
+        "actionRegistry"
+      ],
+      "properties": {
+        "schemaType": {
+          "type": "string",
+          "const": "server-driven-mobile-app"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "schemaId": {
+          "type": "string"
+        },
+        "meta": { "type": "object" },
+        "rendererRequirements": {
+          "type": "object",
+          "properties": {
+            "engine": { "type": "string", "const": "efactor-sdui" },
+            "minVersion": { "type": "string" }
+          }
+        },
+        "security": {
+          "type": "object",
+          "properties": {
+            "maximumSchemaSizeKb": { "type": "integer" },
+            "maximumComponents": { "type": "integer" },
+            "allowedComponentTypes": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "allowedActionTypes": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "motionPolicy": {
+          "type": "object",
+          "description": "3D Cube rotation physics and animation parameters"
+        },
+        "designTokens": { "type": "object" },
+        "themes": { "type": "object" },
+        "components": {
+          "type": "object",
+          "description": "Dictionary of component definitions indexed by component ID",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string" },
+              "properties": { "type": "object" },
+              "style": { "type": "object" },
+              "children": { "type": "array" }
+            }
+          }
+        },
+        "pages": {
+          "type": "object",
+          "description": "Registered screen definitions indexed by page ID"
+        },
+        "routes": {
+          "type": "object",
+          "description": "Registered in-app routes"
+        },
+        "actionRegistry": {
+          "type": "object",
+          "description": "Registered action triggers and API endpoints"
+        },
+        "models": {
+          "type": "array",
+          "description": "Active IoT device cards displayed in Metro Grid"
+        }
+      }
+    }
+  }
+}
+

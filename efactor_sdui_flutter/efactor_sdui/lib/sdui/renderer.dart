@@ -12,6 +12,7 @@ import 'sdui_network_image_cache.dart';
 import 'style.dart';
 import 'schema_guard.dart';
 import 'schema_runtime.dart';
+import 'tap_diagnostic_inspector.dart';
 import 'efactor_device_loader.dart';
 
 /// Signature for custom component builders in the SDUI renderer.
@@ -2104,48 +2105,63 @@ class SduiRenderer {
     String? nodeId,
   }) async {
     final actionRef = props['action'];
-    if (actionRef is String && actionRef.trim().isNotEmpty) {
-      await ActionRegistry.instance.dispatch(
-        context: context,
-        state: state,
-        action: {'type': actionRef.trim(), 'value': actionRef.trim()},
-        parameters: {'actionValue': actionValue},
-      );
-      return;
-    }
-    if (actionRef is Map) {
-      await ActionRegistry.instance.dispatch(
-        context: context,
-        state: state,
-        action: Map<String, dynamic>.from(actionRef),
-        parameters: {'actionValue': actionValue},
-      );
-      return;
-    }
+    final eventsRef = props['events'];
 
-    if (props['events'] != null) {
-      await _fireEvents(context, props['events'], actionValue);
-      return;
-    }
+    TapDiagnosticInspector.instance.inspectTap(
+      context: context,
+      componentType: 'button',
+      controlId: nodeId ?? '',
+      binding: (props['binding'] ?? '').toString(),
+      currentValue: null,
+      attemptedValue: actionRef ?? eventsRef ?? 'button_tap',
+      state: state,
+      props: props,
+      action: actionRef ?? eventsRef,
+      onDispatched: () async {
+        if (actionRef is String && actionRef.trim().isNotEmpty) {
+          await ActionRegistry.instance.dispatch(
+            context: context,
+            state: state,
+            action: {'type': actionRef.trim(), 'value': actionRef.trim()},
+            parameters: {'actionValue': actionValue},
+          );
+          return;
+        }
+        if (actionRef is Map) {
+          await ActionRegistry.instance.dispatch(
+            context: context,
+            state: state,
+            action: Map<String, dynamic>.from(actionRef),
+            parameters: {'actionValue': actionValue},
+          );
+          return;
+        }
 
-    final hint =
-        '${nodeId ?? ''} ${props['semanticLabel'] ?? ''} ${props['label'] ?? ''}'
-            .toLowerCase();
-    if (hint.contains('scan')) {
-      await ActionRegistry.instance.dispatch(
-        context: context,
-        state: state,
-        action: const {'type': 'openScanner', 'value': 'openScanner'},
-      );
-      return;
-    }
-    if (hint.contains('info')) {
-      await ActionRegistry.instance.dispatch(
-        context: context,
-        state: state,
-        action: const {'type': 'openDeviceInfo', 'value': 'openDeviceInfo'},
-      );
-    }
+        if (props['events'] != null) {
+          await _fireEvents(context, props['events'], actionValue);
+          return;
+        }
+
+        final hint =
+            '${nodeId ?? ''} ${props['semanticLabel'] ?? ''} ${props['label'] ?? ''}'
+                .toLowerCase();
+        if (hint.contains('scan')) {
+          await ActionRegistry.instance.dispatch(
+            context: context,
+            state: state,
+            action: const {'type': 'openScanner', 'value': 'openScanner'},
+          );
+          return;
+        }
+        if (hint.contains('info')) {
+          await ActionRegistry.instance.dispatch(
+            context: context,
+            state: state,
+            action: const {'type': 'openDeviceInfo', 'value': 'openDeviceInfo'},
+          );
+        }
+      },
+    );
   }
 
   Future<void> _fireEvents(

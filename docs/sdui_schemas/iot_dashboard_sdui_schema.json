@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "IoT Hub Dashboard SDUI Schema (Canonical Specification)",
+  "description": "Standard structure for IoT Hub dashboards returned by /v8/iot_api_creation.php",
+  "type": "object",
+  "required": ["success", "schema_version", "schema"],
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "const": true,
+      "description": "API status. Must be true."
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "2.0.0"
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "schema": {
+      "type": "object",
+      "required": ["schemaVersion", "kind", "layout", "components", "devices"],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "2.0.0"
+        },
+        "kind": {
+          "type": "string",
+          "const": "iot_dashboard"
+        },
+        "userId": { "type": ["integer", "string"] },
+        "deviceCount": { "type": "integer" },
+        "theme": { "type": "object" },
+        "typography": { "type": "object" },
+        "icons": { "type": "object" },
+        "layout": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["column", "listview", "grid"] },
+            "spacing": { "type": "number" },
+            "padding": { "type": "array", "items": { "type": "number" } }
+          }
+        },
+        "components": {
+          "type": "object",
+          "description": "Reusable UI components and card templates",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "devices": {
+          "type": "array",
+          "description": "Discovered and registered IoT devices for the current user",
+          "items": {
+            "type": "object",
+            "required": ["node_id", "device_name", "type"],
+            "properties": {
+              "node_id": { "type": "string" },
+              "device_name": { "type": "string" },
+              "type": { "type": "string" },
+              "model_no": { "type": "string" },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "online": { "type": "boolean" },
+                  "connected": { "type": ["boolean", "string"] }
+                }
+              },
+              "parameters": {
+                "type": "object",
+                "description": "Flat dictionary of current parameter values"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

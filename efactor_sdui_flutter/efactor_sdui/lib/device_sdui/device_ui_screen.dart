@@ -14,6 +14,7 @@ import '../sdui/schema_guard.dart';
 import '../sdui/schema_pull_to_refresh.dart';
 import '../sdui/schema_runtime.dart';
 import '../sdui/style.dart';
+import '../sdui/tap_diagnostic_inspector.dart';
 import '../sdui/wifi_provisioning_action.dart';
 import '../services/device_info_cache_manager.dart';
 import '../services/device_live_connectivity.dart';
@@ -1175,70 +1176,75 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
               backgroundColor: background,
               body: SafeArea(
                 bottom: true,
-                child: SchemaPullToRefresh(
-            fillViewport: true,
-            onRefresh: () async {
-              await widget.onRefresh();
-            },
-            child: AnimatedBuilder(
-              animation: _state,
-              builder: (context, _) {
-                if (rootTree == null) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: SchemaIssueWidget(
-                        title: 'Schema entry missing',
-                        details: [
-                          'None of the server-declared render entry points '
-                              'resolved to a widget tree.',
-                          'Check meta.flutterEntry and rendering.layout.',
-                        ],
+                child: Stack(
+                  children: [
+                    SchemaPullToRefresh(
+                      fillViewport: true,
+                      onRefresh: () async {
+                        await widget.onRefresh();
+                      },
+                      child: AnimatedBuilder(
+                        animation: _state,
+                        builder: (context, _) {
+                          if (rootTree == null) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(24),
+                                child: SchemaIssueWidget(
+                                  title: 'Schema entry missing',
+                                  details: [
+                                    'None of the server-declared render entry points '
+                                        'resolved to a widget tree.',
+                                    'Check meta.flutterEntry and rendering.layout.',
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              final runtime = SchemaRuntime(widget.schema);
+                              final responsiveLayout = runtime.resolveResponsiveLayout(
+                                constraints.maxWidth,
+                                logicalHeight: constraints.maxHeight,
+                                orientation: screenMetrics.orientation,
+                              );
+
+                              _logScreenMetricsIfChanged(screenMetrics, responsiveLayout);
+
+                              // Use the schema-selected maximum width when it exists.
+                              // If the schema has no responsive contract, use the actual
+                              // available Flutter width instead of inventing a device
+                              // width or a component-specific fallback.
+                              final schemaMaxWidth = responsiveLayout?.maxContentWidth;
+                              final effectiveMaxWidth = schemaMaxWidth == null
+                                  ? constraints.maxWidth
+                                  : schemaMaxWidth
+                                      .clamp(0.0, constraints.maxWidth)
+                                      .toDouble();
+
+                              // Host pull-to-refresh uses a viewport-sized ListView so
+                              // nested page-mode ListViews still receive a bounded height.
+                              return Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: effectiveMaxWidth,
+                                    maxHeight: constraints.maxHeight,
+                                  ),
+                                  child: _renderer.build(context, rootTree),
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
                     ),
-                  );
-                }
-
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final runtime = SchemaRuntime(widget.schema);
-                    final responsiveLayout = runtime.resolveResponsiveLayout(
-                      constraints.maxWidth,
-                      logicalHeight: constraints.maxHeight,
-                      orientation: screenMetrics.orientation,
-                    );
-
-                    _logScreenMetricsIfChanged(screenMetrics, responsiveLayout);
-
-                    // Use the schema-selected maximum width when it exists.
-                    // If the schema has no responsive contract, use the actual
-                    // available Flutter width instead of inventing a device
-                    // width or a component-specific fallback.
-                    final schemaMaxWidth = responsiveLayout?.maxContentWidth;
-                    final effectiveMaxWidth = schemaMaxWidth == null
-                        ? constraints.maxWidth
-                        : schemaMaxWidth
-                            .clamp(0.0, constraints.maxWidth)
-                            .toDouble();
-
-                    // Host pull-to-refresh uses a viewport-sized ListView so
-                    // nested page-mode ListViews still receive a bounded height.
-                    return Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: effectiveMaxWidth,
-                          maxHeight: constraints.maxHeight,
-                        ),
-                        child: _renderer.build(context, rootTree),
-                      ),
-                    );
-                  },
-                );
-              },
+                    const TapDiagnosticFab(),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
         },
       ),

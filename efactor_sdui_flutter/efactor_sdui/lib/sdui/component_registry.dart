@@ -6,6 +6,7 @@ import 'action_registry.dart';
 import 'renderer.dart';
 import 'style.dart';
 import 'schema_guard.dart';
+import 'tap_diagnostic_inspector.dart';
 
 /// Signature for component builders in the SDUI framework.
 typedef SduiComponentBuilder =
@@ -132,6 +133,7 @@ class ComponentRegistry {
           binding ?? groupBinding,
         );
         return _wrapTemplateInteraction(
+          context: context,
           child: result,
           binding: binding ?? '',
           events: invocationEvents,
@@ -176,6 +178,7 @@ class ComponentRegistry {
   }
 
   static Widget _wrapTemplateInteraction({
+    required BuildContext context,
     required Widget child,
     required String binding,
     required dynamic events,
@@ -191,35 +194,47 @@ class ComponentRegistry {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () async {
-        final current = state.resolveBinding(binding);
-        for (final event in eventMaps) {
-          final action = event['action'];
-          if (action is! Map) continue;
-          final type = action['type']?.toString().toLowerCase() ?? '';
-          if (type == 'update') {
-            final targetBinding = (action['binding']?.toString().trim().isNotEmpty ?? false)
-                ? action['binding']!.toString().trim()
-                : binding;
-            final isToggle = action['toggle'] == true ||
-                action['toggle']?.toString().toLowerCase() == 'true';
-            final explicit = action['value'];
-            if (isToggle) {
-              final targetCurrent = state.resolveBinding(targetBinding);
-              final targetOn = AppState.telemetryIsOn(targetCurrent);
-              state.setBinding(targetBinding, !targetOn);
-            } else if (explicit != null) {
-              state.setBinding(targetBinding, explicit);
-            } else if (current is bool) {
-              state.setBinding(targetBinding, !current);
-            } else {
-              final currentOn = AppState.telemetryIsOn(current);
-              state.setBinding(targetBinding, !currentOn);
+      onTap: () {
+        TapDiagnosticInspector.instance.inspectTap(
+          context: context,
+          componentType: 'TemplateInteraction',
+          controlId: binding,
+          binding: binding,
+          currentValue: state.resolveBinding(binding),
+          attemptedValue: 'event_trigger',
+          state: state,
+          props: {'events': events},
+          onDispatched: () async {
+            final current = state.resolveBinding(binding);
+            for (final event in eventMaps) {
+              final action = event['action'];
+              if (action is! Map) continue;
+              final type = action['type']?.toString().toLowerCase() ?? '';
+              if (type == 'update') {
+                final targetBinding = (action['binding']?.toString().trim().isNotEmpty ?? false)
+                    ? action['binding']!.toString().trim()
+                    : binding;
+                final isToggle = action['toggle'] == true ||
+                    action['toggle']?.toString().toLowerCase() == 'true';
+                final explicit = action['value'];
+                if (isToggle) {
+                  final targetCurrent = state.resolveBinding(targetBinding);
+                  final targetOn = AppState.telemetryIsOn(targetCurrent);
+                  state.setBinding(targetBinding, !targetOn);
+                } else if (explicit != null) {
+                  state.setBinding(targetBinding, explicit);
+                } else if (current is bool) {
+                  state.setBinding(targetBinding, !current);
+                } else {
+                  final currentOn = AppState.telemetryIsOn(current);
+                  state.setBinding(targetBinding, !currentOn);
+                }
+              } else if (type == 'send') {
+                await state.sendBinding(binding);
+              }
             }
-          } else if (type == 'send') {
-            await state.sendBinding(binding);
-          }
-        }
+          },
+        );
       },
       child: child,
     );
@@ -526,9 +541,23 @@ class ComponentRegistry {
         toggled: isOn,
         button: true,
         child: GestureDetector(
-          onTap: state.isBindingWritable(binding)
-              ? () => state.setBinding(binding, !isOn)
-              : null,
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            TapDiagnosticInspector.instance.inspectTap(
+              context: context,
+              componentType: 'switch',
+              controlId: (node['id'] ?? props['id'])?.toString() ?? '',
+              binding: binding,
+              currentValue: isOn,
+              attemptedValue: !isOn,
+              state: state,
+              node: node,
+              props: props,
+              onDispatched: () {
+                state.setBinding(binding, !isOn);
+              },
+            );
+          },
           child: SizedBox(
             width: trackWidth,
             height: trackHeight > thumbSize ? trackHeight : thumbSize,
@@ -987,36 +1016,47 @@ class ComponentRegistry {
             side: BorderSide(color: borderColor, width: borderWidth),
           ),
         ),
-        onPressed: !state.isBindingWritable(binding)
-            ? null
-            : () async {
-          // Triggers that declare schema options: cycle to the next option
-          // value, then send via setBinding dispatch.
-          if (triggerOptions.length >= 2) {
-            var currentIndex = -1;
-            for (var i = 0; i < triggerOptions.length; i++) {
-              if (AppState.enumOptionEntryMatches(triggerOptions[i], value)) {
-                currentIndex = i;
-                break;
+        onPressed: () {
+          TapDiagnosticInspector.instance.inspectTap(
+            context: context,
+            componentType: 'elevatedbutton',
+            controlId: (node['id'] ?? props['id'])?.toString() ?? '',
+            binding: binding,
+            currentValue: value,
+            attemptedValue: 'trigger',
+            state: state,
+            node: node,
+            props: props,
+            onDispatched: () async {
+              // Triggers that declare schema options: cycle to the next option
+              // value, then send via setBinding dispatch.
+              if (triggerOptions.length >= 2) {
+                var currentIndex = -1;
+                for (var i = 0; i < triggerOptions.length; i++) {
+                  if (AppState.enumOptionEntryMatches(triggerOptions[i], value)) {
+                    currentIndex = i;
+                    break;
+                  }
+                }
+                final next =
+                    triggerOptions[(currentIndex + 1) % triggerOptions.length];
+                state.setBinding(binding, next['value']);
+                return;
               }
-            }
-            final next =
-                triggerOptions[(currentIndex + 1) % triggerOptions.length];
-            state.setBinding(binding, next['value']);
-            return;
-          }
-          final events = (props['events'] as List? ?? const [])
-              .whereType<Map>();
-          final hasSend = events.any(
-            (event) =>
-                event['action'] is Map &&
-                (event['action'] as Map)['type']?.toString() == 'send',
+              final events = (props['events'] as List? ?? const [])
+                  .whereType<Map>();
+              final hasSend = events.any(
+                (event) =>
+                    event['action'] is Map &&
+                    (event['action'] as Map)['type']?.toString() == 'send',
+              );
+              if (hasSend) {
+                await state.sendBinding(binding);
+              } else {
+                state.setBinding(binding, value);
+              }
+            },
           );
-          if (hasSend) {
-            await state.sendBinding(binding);
-          } else {
-            state.setBinding(binding, value);
-          }
         },
         child: FittedBox(
           fit: BoxFit.scaleDown,
@@ -1115,7 +1155,22 @@ class ComponentRegistry {
 
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => state.setBinding(binding, !isOn),
+        onTap: () {
+          TapDiagnosticInspector.instance.inspectTap(
+            context: context,
+            componentType: 'powerbutton',
+            controlId: (node['id'] ?? props['id'])?.toString() ?? '',
+            binding: binding,
+            currentValue: isOn,
+            attemptedValue: !isOn,
+            state: state,
+            node: node,
+            props: props,
+            onDispatched: () {
+              state.setBinding(binding, !isOn);
+            },
+          );
+        },
         child: SizedBox.square(
           dimension: size!,
           child: CustomPaint(
@@ -1801,7 +1856,22 @@ class ComponentRegistry {
       final foregroundColor = isSelected ? selectedText : unselectedText;
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => state.setBinding(binding, value),
+        onTap: () {
+          TapDiagnosticInspector.instance.inspectTap(
+            context: context,
+            componentType: 'ButtonGroup',
+            controlId: (node['id'] ?? props['id'])?.toString() ?? '',
+            binding: binding,
+            currentValue: selected,
+            attemptedValue: value,
+            state: state,
+            node: node,
+            props: props,
+            onDispatched: () {
+              state.setBinding(binding, value);
+            },
+          );
+        },
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
@@ -2188,7 +2258,7 @@ class ComponentRegistry {
     final clampedValue = (numericValue ?? safeMin).clamp(safeMin, safeMax);
     final divisions = ((safeMax - safeMin) / step!).round();
 
-    final slider = SliderTheme(
+    final rawSliderTheme = SliderTheme(
       data: SliderThemeData(
         activeTrackColor: activeColor,
         inactiveTrackColor: inactiveColor,
@@ -2233,10 +2303,42 @@ class ComponentRegistry {
                 // Schema onValueCommitted must still emit the device frame.
                 state.setBinding(binding, committed, dispatch: false);
                 state.sendBinding(binding);
+                TapDiagnosticInspector.instance.inspectTap(
+                  context: context,
+                  componentType: 'slider',
+                  controlId: (node['id'] ?? props['id'])?.toString() ?? '',
+                  binding: binding,
+                  currentValue: value,
+                  attemptedValue: committed,
+                  state: state,
+                  node: node,
+                  props: props,
+                );
               }
             : null,
       ),
     );
+
+    final isSliderWritable = state.isBindingWritable(binding);
+    final slider = isSliderWritable
+        ? rawSliderTheme
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              TapDiagnosticInspector.instance.inspectTap(
+                context: context,
+                componentType: 'slider',
+                controlId: (node['id'] ?? props['id'])?.toString() ?? '',
+                binding: binding,
+                currentValue: value,
+                attemptedValue: clampedValue,
+                state: state,
+                node: node,
+                props: props,
+              );
+            },
+            child: AbsorbPointer(child: rawSliderTheme),
+          );
 
     String displayNumber(num number) =>
         '${_formatSchemaNumber(number)}$valueSuffix';
