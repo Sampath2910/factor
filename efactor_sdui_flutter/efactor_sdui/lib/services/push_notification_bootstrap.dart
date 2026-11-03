@@ -1063,10 +1063,14 @@ class PushNotificationBootstrap {
         provisional: false,
       );
       if (Platform.isIOS) {
+        // Prevent Firebase from auto-popping raw, unstacked alert banners in the foreground.
+        // Instead, GridChatMessageNotifications / showMessageNotificationOnPlugin controls
+        // the rich foreground presentation with deduplication, active-chat suppression,
+        // message stacking, and interactive action buttons.
         await messaging.setForegroundNotificationPresentationOptions(
-          alert: true,
+          alert: false,
           badge: true,
-          sound: true,
+          sound: false,
         );
       }
       final android = _local.resolvePlatformSpecificImplementation<
