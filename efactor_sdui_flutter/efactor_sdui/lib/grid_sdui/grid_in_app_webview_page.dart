@@ -257,6 +257,69 @@ class GridInAppWebViewPage extends StatefulWidget {
     return null;
   }
 
+  /// Evaluates whether the given DOM / state attributes correspond to an actual
+  /// GRID exit action rather than a sub-page header like "Live • 0 LIVE" or "Channels".
+  static bool isGridExitTrigger({
+    String? activeTab,
+    String? headerText,
+    String? topElementText,
+    String? topElementClass,
+    String? url,
+  }) {
+    final tab = (activeTab ?? '').toLowerCase();
+    if (tab.contains('live') ||
+        tab.contains('channel') ||
+        tab.contains('moment') ||
+        tab.contains('call')) {
+      return false;
+    }
+
+    final hText = (headerText ?? '').toLowerCase();
+    if (hText.contains('live') ||
+        hText.contains('0 live') ||
+        hText.contains('channel') ||
+        hText.contains('moment') ||
+        hText.contains('call')) {
+      return false;
+    }
+
+    final u = (url ?? '').toLowerCase();
+    if (u.contains('tab=live') ||
+        u.contains('tab=channel') ||
+        u.contains('tab=moment') ||
+        u.contains('tab=call') ||
+        u.contains('#live') ||
+        u.contains('#channel')) {
+      return false;
+    }
+
+    final elText = (topElementText ?? '').trim();
+    final lowerElText = elText.toLowerCase();
+    if (lowerElText.startsWith('live') ||
+        lowerElText.startsWith('channel') ||
+        lowerElText.startsWith('moment') ||
+        lowerElText.startsWith('call')) {
+      return false;
+    }
+
+    final elClass = (topElementClass ?? '').toLowerCase();
+    if (elClass.contains('live') || elClass.contains('channel')) {
+      return false;
+    }
+
+    final hasGridText = elText == 'GRID' ||
+        elText == '::: GRID' ||
+        RegExp(r'^:::?\s*GRID', caseSensitive: false).hasMatch(elText);
+    final hasGridClass =
+        elClass.contains('grid-logo') || elClass.contains('grid_logo');
+
+    if (hasGridText || hasGridClass) {
+      return true;
+    }
+
+    return true;
+  }
+
   /// Currently visible/active WebView instance for Circle Connect & Professional Space.
   static _GridInAppWebViewPageState? _activeState;
 
@@ -698,7 +761,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         onMessageReceived: (JavaScriptMessage msg) {
           final message = msg.message;
           if (message == 'go_back_to_grid') {
-            _backToGrid();
+            unawaited(_backToGrid());
           } else if (message == 'go_to_chats') {
             unawaited(_goToChatsPage());
           } else if (message == 'chat_swipe:moments') {
@@ -810,15 +873,16 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               return NavigationDecision.prevent;
             }
 
-            final isChatOrGrid = initialIsChat || initialIsGrid;
-            if (isChatOrGrid &&
+            // Defensively intercept unwanted dashboard redirects only in Circle Connect chat
+            // Do NOT intercept GRID's own internal address changes or home routes
+            if (initialIsChat &&
                 (targetPath.endsWith('/dashboard') ||
                     targetPath.endsWith('/dashboard/') ||
                     targetPath.contains('/index.php/dashboard') ||
                     targetPath.endsWith('/home') ||
                     targetPath.endsWith('/home/'))) {
               debugPrint(
-                '[GridInAppWebView] Intercepting unwanted dashboard redirect -> re-routing to initial target: ${widget.uri}',
+                '[GridInAppWebView] Intercepting unwanted dashboard redirect in chat -> re-routing to initial target: ${widget.uri}',
               );
               unawaited(_controller.loadRequest(_effectiveUri));
               return NavigationDecision.prevent;
@@ -2358,6 +2422,10 @@ Error: $error
     }
 
     final canGoBack = await _controller.canGoBack();
+    final currentUrl = await _controller.currentUrl();
+    debugPrint(
+      '[GridInAppWebView][BACK] canGoBack: $canGoBack, url: $currentUrl',
+    );
     if (canGoBack) {
       await _controller.goBack();
       return;
@@ -2403,6 +2471,10 @@ Error: $error
     }
 
     final canGoBack = await _controller.canGoBack();
+    final currentUrl = await _controller.currentUrl();
+    debugPrint(
+      '[GridInAppWebView][BACK] canGoBack: $canGoBack, url: $currentUrl',
+    );
     if (canGoBack) {
       await _controller.goBack();
       return;
@@ -3021,7 +3093,7 @@ Error: $error
                 _buildOfflineState(context),
               if (_loading && _error == null)
                 const LinearProgressIndicator(minHeight: 2),
-              if (!widget.showAppBar)
+              if (!widget.showAppBar && _isCircleConnect)
                 Positioned(
                   top: 0,
                   left: 0,
@@ -3211,14 +3283,83 @@ Error: $error
           _onChatConversationClosed();
           return;
         }
+        final isGridExit = await _isGridExitTriggerAtTopLeft();
+        if (!isGridExit) {
+          debugPrint(
+            '[GridInAppWebView] Top-left tap ignored: current view is not Grid home',
+          );
+          return;
+        }
       } catch (_) {}
     }
     if (!mounted || _isPopping) return;
     _safeExitToGrid();
   }
 
-  void _backToGrid() {
+  Future<void> _backToGrid() async {
+    if (_isCircleConnect) {
+      try {
+        final isGridExit = await _isGridExitTriggerAtTopLeft();
+        if (!isGridExit) {
+          debugPrint(
+            '[GridInAppWebView] Ignoring go_back_to_grid: current view is not Grid home',
+          );
+          return;
+        }
+      } catch (_) {}
+    }
     _safeExitToGrid();
+  }
+
+  Future<bool> _isGridExitTriggerAtTopLeft() async {
+    try {
+      const js = '''
+(function() {
+  try {
+    var activeTab = document.querySelector('.bottom-nav [class*="active"], [data-tab].active, .nav-item.active');
+    var activeTabText = (activeTab ? (activeTab.innerText || activeTab.textContent || '') : '').toLowerCase();
+    if (activeTabText.includes('live') || activeTabText.includes('channel') || activeTabText.includes('moment') || activeTabText.includes('call')) {
+      return false;
+    }
+
+    var header = document.querySelector('header, .top-bar, .topbar, [class*="header"]');
+    var headerText = (header ? (header.innerText || header.textContent || '') : '').toLowerCase();
+    if (headerText.includes('live') || headerText.includes('0 live') || headerText.includes('channel') || headerText.includes('moment') || headerText.includes('call')) {
+      return false;
+    }
+
+    var search = (window.location.search || '').toLowerCase();
+    var hash = (window.location.hash || '').toLowerCase();
+    if (search.includes('tab=live') || search.includes('tab=channel') || search.includes('tab=moment') || search.includes('tab=call') ||
+        hash.includes('live') || hash.includes('channel') || hash.includes('moment') || hash.includes('call')) {
+      return false;
+    }
+
+    var el = document.elementFromPoint(35, 35);
+    var curr = el;
+    while (curr && curr !== document.body && curr !== document.documentElement) {
+      var t = (curr.innerText || curr.textContent || '').trim();
+      var cls = (typeof curr.className === 'string') ? curr.className.toLowerCase() : '';
+      if (/^live/i.test(t) || cls.includes('live') || /^channel/i.test(t) || cls.includes('channel') || /^moment/i.test(t) || /^call/i.test(t)) {
+        return false;
+      }
+      if (/^:::?\\s*GRID/i.test(t) || t === 'GRID' || t === '::: GRID' || cls.includes('grid-logo') || cls.includes('grid_logo')) {
+        return true;
+      }
+      curr = curr.parentElement;
+    }
+
+    return true;
+  } catch(_) {
+    return false;
+  }
+})();
+''';
+      final result = await _controller.runJavaScriptReturningResult(js);
+      return _isJsTruthy(result);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _injectGridBackButton() async {
@@ -3251,11 +3392,14 @@ Error: $error
     }
 
     var txt = (el.innerText || el.textContent || '').trim();
+    if (/^live/i.test(txt) || /^channels?/i.test(txt) || /^moments?/i.test(txt) || /^calls?/i.test(txt) || className.includes('live') || className.includes('channel')) {
+      return false;
+    }
     var hasGridText = /^:::?\\s*GRID/i.test(txt) || txt === 'GRID' || txt === '::: GRID' || (/GRID/i.test(txt) && txt.length <= 15);
     var isGridImg = tag === 'img' && ((el.getAttribute('src') || '').toLowerCase().includes('grid') || (el.getAttribute('alt') || '').toLowerCase().includes('grid'));
-    var hasGridClass = className.includes('grid-logo') || className.includes('grid_logo') || className.includes('logo') || className.includes('brand');
+    var hasGridClass = className.includes('grid-logo') || className.includes('grid_logo');
     var href = (el.getAttribute && el.getAttribute('href')) ? el.getAttribute('href').toLowerCase() : '';
-    var hasGridHref = href.endsWith('/grid') || href.endsWith('/grid/') || href.includes('/index.php/grid') || href === '/' || href === '#';
+    var hasGridHref = href.endsWith('/grid') || href.endsWith('/grid/') || href.includes('/index.php/grid');
 
     if (hasGridText || isGridImg || hasGridClass || hasGridHref) {
       try {
@@ -3313,6 +3457,17 @@ Error: $error
     var hasVideo = !!document.querySelector('video');
     var isReels = href.includes('reel') || (hasVideo && !!document.querySelector('[class*="reel" i], [data-tab="reels"].active'));
     if (isReels) {
+      return;
+    }
+
+    // In Circle Connect, if on Live, Channels, Moments, or Calls view, never intercept as a GRID exit trigger
+    var activeTab = document.querySelector('.bottom-nav [class*="active"], [data-tab].active, .nav-item.active');
+    var activeTabText = (activeTab ? (activeTab.innerText || activeTab.textContent || '') : '').toLowerCase();
+    var isSubTab = activeTabText.includes('live') || activeTabText.includes('channel') || activeTabText.includes('moment') || activeTabText.includes('call');
+    var headerEl = document.querySelector('header, .top-bar, .topbar, [class*="header"]');
+    var headerText = (headerEl ? (headerEl.innerText || headerEl.textContent || '') : '').toLowerCase();
+    var isNonGridHeader = headerText.includes('live') || headerText.includes('0 live') || headerText.includes('channel');
+    if (isSubTab || isNonGridHeader) {
       return;
     }
 
@@ -3408,6 +3563,9 @@ Error: $error
           var curProf = curPath.includes('/grid') && !curPath.includes('/grid-chat');
           var curSubpage = curProf && (curPath.includes('/team') || curPath.includes('/profile') || curPath.includes('/settings') || curPath.includes('/jobs') || curPath.includes('/post') || curPath.includes('/resume'));
           if (curSubpage) return;
+          var actTab = document.querySelector('.bottom-nav [class*="active"], [data-tab].active, .nav-item.active');
+          var actText = (actTab ? (actTab.innerText || actTab.textContent || '') : '').toLowerCase();
+          if (actText.includes('live') || actText.includes('channel') || actText.includes('moment') || actText.includes('call')) return;
           e.preventDefault();
           e.stopPropagation();
           postBackToGrid();

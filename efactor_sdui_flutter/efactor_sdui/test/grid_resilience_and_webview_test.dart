@@ -490,6 +490,75 @@ void main() {
         isFalse,
       );
     });
+
+    test('isGridExitTrigger ignores Live, Channels, Moments, Calls subtabs and permits Grid exit on Chats/Root', () {
+      // 1. Live tab and Live header variations must NOT trigger exit
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(activeTab: 'live'),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(headerText: 'Live • 0 LIVE'),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(topElementText: 'Live'),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(topElementClass: 'live-title'),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(url: 'https://efactor.tech/index.php/grid-chat?tab=live'),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(url: 'https://efactor.tech/index.php/grid-chat#live'),
+        isFalse,
+      );
+
+      // 2. Channels, Moments, Calls subtabs must NOT trigger exit
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(activeTab: 'channels', headerText: 'Channels'),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(activeTab: 'moments'),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(activeTab: 'calls'),
+        isFalse,
+      );
+
+      // 3. Actual GRID logo / text on Chats root page MUST trigger exit
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          activeTab: 'chats',
+          topElementText: 'GRID',
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementText: '::: GRID',
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementClass: 'grid-logo',
+        ),
+        isTrue,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementClass: 'grid_logo',
+        ),
+        isTrue,
+      );
+    });
   });
 
   group('Grid SSO Token Extraction & Navigation Resolution', () {
