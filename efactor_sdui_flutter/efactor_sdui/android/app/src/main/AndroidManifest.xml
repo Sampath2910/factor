@@ -99,10 +99,10 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Default FCM tray channel (must match PushNotificationBootstrap). -->
+        <!-- Default FCM tray channel for system notifications (Professional Space / GRID) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="grid_messages_v4" />
+            android:value="grid_activity" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />

@@ -9,6 +9,8 @@ import 'package:efactor_sdui/grid_sdui/grid_in_app_webview_page.dart';
 import 'package:efactor_sdui/grid_sdui/grid_schema_repository.dart';
 import 'package:efactor_sdui/grid_sdui/grid_sdui_state.dart';
 import 'package:efactor_sdui/grid_sdui/grid_web_snapshot.dart';
+import 'package:efactor_sdui/services/grid_unread_counts_service.dart';
+import 'package:efactor_sdui/services/push_notification_bootstrap.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -770,6 +772,39 @@ void main() {
         GridInAppWebViewPage.resolveChatSwipeTarget(dx: 0),
         isNull,
       );
+    });
+
+    test('isSafeEfactorUrl accepts efactor.tech hosts and rejects untrusted origins', () {
+      expect(isSafeEfactorUrl('https://efactor.tech/index.php/grid/post/123'), isTrue);
+      expect(isSafeEfactorUrl('https://app.efactor.tech/notifications'), isTrue);
+      expect(isSafeEfactorUrl('http://efactor.tech/grid'), isTrue);
+      expect(isSafeEfactorUrl('https://evil.com/hack'), isFalse);
+      expect(isSafeEfactorUrl('https://efactor.tech.attacker.com/post'), isFalse);
+      expect(isSafeEfactorUrl('javascript:alert(1)'), isFalse);
+      expect(isSafeEfactorUrl(''), isFalse);
+    });
+
+    test('GridInAppWebViewPage.loadTargetUrl blocks untrusted hosts', () async {
+      expect(
+        await GridInAppWebViewPage.loadTargetUrl('https://malicious.com/phish'),
+        isFalse,
+      );
+      expect(
+        await GridInAppWebViewPage.loadTargetUrl('https://efactor.tech/index.php/grid/post/99'),
+        isTrue,
+      );
+    });
+
+    test('GridUnreadCountsService updates totalUnread and parses badge updates', () {
+      final service = GridUnreadCountsService.instance;
+      service.updateUnreadCount(5);
+      expect(service.totalUnread.value, equals(5));
+
+      service.updateUnreadCount('12');
+      expect(service.totalUnread.value, equals(12));
+
+      service.updateUnreadCount('invalid');
+      expect(service.totalUnread.value, equals(0));
     });
   });
 }

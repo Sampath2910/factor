@@ -18,6 +18,7 @@ import 'incoming_call_service.dart';
 import 'json_http.dart';
 import 'ongoing_call_service.dart';
 import '../auth_sdui/auth_secure_storage.dart';
+import '../grid_sdui/grid_in_app_webview_page.dart';
 import '../grid_sdui/grid_live_location_service.dart';
 
 /// Call notification channel configured with system default ringtone and USAGE_NOTIFICATION_RINGTONE.
@@ -42,6 +43,26 @@ const AndroidNotificationChannel kMessagesChannel = AndroidNotificationChannel(
   enableVibration: true,
   enableLights: true,
 );
+
+/// Notification channel for Professional Space (GRID) social activity, posts, comments, connections.
+const AndroidNotificationChannel kGridActivityChannel = AndroidNotificationChannel(
+  'grid_activity',
+  'Professional Space',
+  description: 'Notifications for posts, comments, connections, and activity in Professional Space',
+  importance: Importance.high,
+  playSound: true,
+  enableVibration: true,
+);
+
+/// Safely validates that a target URL belongs to the efactor.tech domain.
+bool isSafeEfactorUrl(String url) {
+  final clean = url.trim();
+  if (clean.isEmpty) return false;
+  final uri = Uri.tryParse(clean);
+  if (uri == null) return false;
+  final host = uri.host.toLowerCase();
+  return host == 'efactor.tech' || host.endsWith('.efactor.tech');
+}
 
 /// Darwin notification categories providing interactive action buttons on iOS
 /// (Answer/Decline on calls, inline text Reply + Mark as read on messages, and Stop on live location).
@@ -298,6 +319,19 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   }
   await android?.createNotificationChannel(kMessagesChannel);
   await android?.createNotificationChannel(kCallsChannel);
+  await android?.createNotificationChannel(kGridActivityChannel);
+
+  if (type == 'PROFESSIONAL_SPACE_EVENT') {
+    // Professional Space (GRID) sends both notification and data blocks.
+    // When the app is in background or closed, Android's system notification manager
+    // automatically displays the notification using the notification block.
+    // Do NOT build a duplicate notification in onBackgroundMessage.
+    // ignore: avoid_print
+    print(
+      '[FCM_DEBUG] PROFESSIONAL_SPACE_EVENT received in background; handled by system notification tray.',
+    );
+    return;
+  }
 
   final callId =
       (data['call_id'] ?? data['callId'] ?? data['id'] ?? '').toString().trim();
@@ -531,6 +565,59 @@ Future<void> showMissedCallNotificationOnPlugin(
         presentBadge: true,
         presentSound: true,
         categoryIdentifier: 'missed_calls_category',
+      ),
+    ),
+    payload: jsonEncode(payloadMap),
+  );
+}
+
+/// Posts Professional Space (GRID) social activity notification on grid_activity channel.
+Future<void> showProfessionalSpaceNotification(
+  FlutterLocalNotificationsPlugin plugin, {
+  required Map<String, dynamic> data,
+  RemoteNotification? notification,
+}) async {
+  final rawTitle = (notification?.title ?? data['title'] ?? 'Professional Space')
+      .toString()
+      .trim();
+  final title = rawTitle.isNotEmpty ? rawTitle : 'Professional Space';
+  final body = (notification?.body ?? data['body'] ?? data['message'] ?? '')
+      .toString()
+      .trim();
+  final targetUrl =
+      (data['target_url'] ?? data['targetUrl'] ?? data['url'] ?? '')
+          .toString()
+          .trim();
+  final postId = (data['post_id'] ?? data['postId'] ?? '').toString().trim();
+  final notifId = postId.isNotEmpty
+      ? postId.hashCode.abs()
+      : DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+  final payloadMap = <String, dynamic>{
+    'type': 'PROFESSIONAL_SPACE_EVENT',
+    'target_url': targetUrl,
+    'url': targetUrl,
+    ...data,
+  };
+
+  await plugin.show(
+    notifId,
+    title,
+    body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        kGridActivityChannel.id,
+        kGridActivityChannel.name,
+        channelDescription: kGridActivityChannel.description,
+        icon: 'ic_notification',
+        importance: Importance.high,
+        priority: Priority.high,
+        tag: 'grid_activity',
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
       ),
     ),
     payload: jsonEncode(payloadMap),
@@ -1134,12 +1221,6 @@ class PushNotificationBootstrap {
 ========================================================================
 [FCM_DEBUG] DEVICE FCM TOKEN ACQUIRED FOR USER: $userId
 Token: $token
-------------------------------------------------------------------------
-To test incoming call notification directly from terminal on Mac:
-curl -X POST "https://fcm.googleapis.com/fcm/send" \\
-  -H "Authorization: key=YOUR_FIREBASE_SERVER_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"to":"$token","priority":"high","data":{"type":"INCOMING_CALL","caller_name":"Direct Terminal Test","call_id":"test_${DateTime.now().millisecondsSinceEpoch}","call_type":"video"}}'
 ========================================================================
 ''');
         await IncomingCallService.instance.syncDeviceTokenOnLogin(
@@ -1221,6 +1302,7 @@ curl -X POST "https://fcm.googleapis.com/fcm/send" \\
     }
     await androidPlugin?.createNotificationChannel(kMessagesChannel);
     await androidPlugin?.createNotificationChannel(kCallsChannel);
+    await androidPlugin?.createNotificationChannel(kGridActivityChannel);
     _localNotificationsReady = true;
   }
 
@@ -1315,6 +1397,16 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
           data,
           appResumed: resumed,
           activeConversationId: _activeConversationId,
+        ),
+      );
+      return;
+    }
+    if (type == 'PROFESSIONAL_SPACE_EVENT') {
+      unawaited(
+        showProfessionalSpaceNotification(
+          _local,
+          data: data,
+          notification: message.notification,
         ),
       );
       return;
@@ -1471,6 +1563,19 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         final call = IncomingCallData.fromJson(data);
         await IncomingCallService.instance.openCallScreenWithoutAction(call);
       } else {
+        // Professional Space event or target_url tap
+        final targetUrl =
+            (data['target_url'] ?? data['targetUrl'] ?? '').toString().trim();
+        if (type == 'PROFESSIONAL_SPACE_EVENT' || targetUrl.isNotEmpty) {
+          final effectiveUrl = targetUrl.isNotEmpty
+              ? targetUrl
+              : (data['url'] ?? '').toString().trim();
+          if (effectiveUrl.isNotEmpty && isSafeEfactorUrl(effectiveUrl)) {
+            unawaited(GridInAppWebViewPage.loadTargetUrl(effectiveUrl));
+            return;
+          }
+        }
+
         // Message notification tap
         final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
             .toString();
@@ -1506,6 +1611,20 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       );
       return;
     }
+
+    // Professional Space event or target_url tap
+    final targetUrl =
+        (data['target_url'] ?? data['targetUrl'] ?? '').toString().trim();
+    if (type == 'PROFESSIONAL_SPACE_EVENT' || targetUrl.isNotEmpty) {
+      final effectiveUrl = targetUrl.isNotEmpty
+          ? targetUrl
+          : (data['url'] ?? '').toString().trim();
+      if (effectiveUrl.isNotEmpty && isSafeEfactorUrl(effectiveUrl)) {
+        unawaited(GridInAppWebViewPage.loadTargetUrl(effectiveUrl));
+        return;
+      }
+    }
+
     final convId =
         (data['conversation_id'] ?? data['conversationId'] ?? '').toString();
     final url = (data['url'] ?? '').toString();
@@ -1644,6 +1763,41 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       conversationId,
       _local,
     );
+  }
+
+  /// Clears Professional Space (GRID) social activity notifications from the system tray.
+  Future<void> clearGridActivityNotifications() async {
+    try {
+      final active = await _local.getActiveNotifications();
+      for (final notification in active) {
+        final id = notification.id;
+        if (id == null) continue;
+        if (notification.channelId == kGridActivityChannel.id ||
+            notification.tag == 'grid_activity') {
+          await _local.cancel(id, tag: notification.tag);
+        }
+      }
+    } catch (e) {
+      debugPrint('[PushBootstrap] clearGridActivityNotifications error: $e');
+    }
+  }
+
+  /// Clears all chat message notifications from the system tray.
+  Future<void> clearAllChatMessageNotifications() async {
+    try {
+      final active = await _local.getActiveNotifications();
+      for (final notification in active) {
+        final id = notification.id;
+        if (id == null) continue;
+        if (notification.channelId == kMessagesChannel.id ||
+            (notification.tag != null &&
+                notification.tag!.startsWith('conv-'))) {
+          await _local.cancel(id, tag: notification.tag);
+        }
+      }
+    } catch (e) {
+      debugPrint('[PushBootstrap] clearAllChatMessageNotifications error: $e');
+    }
   }
 
   Future<void> dispose() async {

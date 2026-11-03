@@ -22,6 +22,7 @@ import '../services/grid_chat_message_notification.dart';
 import '../services/incoming_call_service.dart';
 import '../services/ongoing_call_service.dart';
 import '../services/push_notification_bootstrap.dart';
+import '../services/grid_unread_counts_service.dart';
 import 'dynamic_grid_sdui_page.dart';
 import 'grid_live_location_service.dart';
 import 'grid_media_cache_service.dart';
@@ -515,6 +516,33 @@ class GridInAppWebViewPage extends StatefulWidget {
     }
   }
 
+  static String? _pendingTargetUrl;
+
+  /// Safely navigates or loads a target URL inside the active WebView if host is efactor.tech
+  static Future<bool> loadTargetUrl(String targetUrl) async {
+    final cleanUrl = targetUrl.trim();
+    if (cleanUrl.isEmpty) return false;
+    final uri = Uri.tryParse(cleanUrl);
+    if (uri == null) return false;
+    final host = uri.host.toLowerCase();
+    if (host != 'efactor.tech' && !host.endsWith('.efactor.tech')) {
+      debugPrint('[GridInAppWebView] Blocked non-efactor host: ${uri.host}');
+      return false;
+    }
+    if (_activeState != null && _activeState!.mounted) {
+      try {
+        await _activeState!._controller.loadRequest(Uri.parse(cleanUrl));
+        return true;
+      } catch (e) {
+        debugPrint('[GridInAppWebView] loadTargetUrl failed: $e');
+        return false;
+      }
+    } else {
+      _pendingTargetUrl = cleanUrl;
+      return true;
+    }
+  }
+
   /// Refreshes FCM token in the active web page bridge
   static Future<void> updatePushTokenInWeb(String token) async {
     if (!isPageOpen) return;
@@ -523,6 +551,9 @@ class GridInAppWebViewPage extends StatefulWidget {
 (function() {
   var t = $tokenJson;
   window.__efactor_fcm_token = t;
+  if (typeof window.gridNativePushTokenRefresh === 'function') {
+    try { window.gridNativePushTokenRefresh(t); } catch(e) { console.error(e); }
+  }
   if (window.CircleConnectPush) {
     window.CircleConnectPush._token = t;
     if (typeof window.CircleConnectPush.onTokenRefresh === 'function') {
@@ -555,6 +586,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   Completer<void>? _navigationCompleter;
   StreamSubscription<OfflineOutboxAction>? _outboxSyncedSub;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  StreamSubscription<String>? _tokenRefreshSub;
   bool _isPopping = false;
   bool _isConnectingCall = false;
   Timer? _connectingCallTimer;
@@ -669,6 +701,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     });
     CircleConnectDeviceKeyStore.instance
         .addKeyStatusListener(_onDeviceKeyStatusChanged);
+    _tokenRefreshSub =
+        FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+      if (newToken.isNotEmpty && mounted) {
+        GridInAppWebViewPage.updatePushTokenInWeb(newToken);
+      }
+    });
     _initController();
     _setupPermissionsAndLoad();
   }
@@ -708,6 +746,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
     _outboxSyncedSub?.cancel();
     _connectivitySub?.cancel();
+    _tokenRefreshSub?.cancel();
     if (!_showingSnapshot && _error == null) {
       unawaited(_persistSnapshot());
     }
@@ -912,6 +951,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             });
             IncomingCallService.instance.onCircleConnectReadinessChanged();
             _completeNavigation();
+            if (GridInAppWebViewPage._pendingTargetUrl != null) {
+              final pendingUrl = GridInAppWebViewPage._pendingTargetUrl!;
+              GridInAppWebViewPage._pendingTargetUrl = null;
+              unawaited(_controller.loadRequest(Uri.parse(pendingUrl)));
+            }
             unawaited(_injectCircleConnectPushBridge());
             unawaited(_injectGridBackButton());
             unawaited(_injectChatSwipeBridge());
@@ -1040,6 +1084,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
 (function() {
   var fcmToken = $tokenJson;
   window.__efactor_fcm_token = fcmToken;
+  if (typeof window.gridNativePushTokenRefresh === 'function') {
+    try { window.gridNativePushTokenRefresh(fcmToken); } catch(e) { console.error(e); }
+  }
   var bearerToken = $bearerJson;
   if (bearerToken) {
     window.__efactor_access_token = bearerToken;
@@ -1833,6 +1880,20 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         IncomingCallService.instance.stopRingingFromWeb(callId);
         if (_isConnectingCall && mounted) {
           setState(() => _isConnectingCall = false);
+        }
+      } else if (action == 'badgeUpdate') {
+        final unread = data['unreadCount'];
+        debugPrint('[GridInAppWebView] badgeUpdate unreadCount=$unread');
+        GridUnreadCountsService.instance.updateUnreadCount(unread);
+      } else if (action == 'clearNotifications') {
+        final category = (data['category'] ?? '').toString().toLowerCase();
+        debugPrint('[GridInAppWebView] clearNotifications category=$category');
+        if (category == 'posts') {
+          unawaited(PushNotificationBootstrap.instance
+              .clearGridActivityNotifications());
+        } else if (category == 'messages') {
+          unawaited(PushNotificationBootstrap.instance
+              .clearAllChatMessageNotifications());
         }
       } else if (action == 'clearChatNotifications') {
         final conversationId = data['conversationId']?.toString() ?? '';
