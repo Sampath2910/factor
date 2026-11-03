@@ -134,6 +134,7 @@ List<DarwinNotificationCategory> get kDarwinNotificationCategories =>
 /// Background notification response handler (runs in background isolate).
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) async {
+  WidgetsFlutterBinding.ensureInitialized();
   final actionId = response.actionId ?? '';
   if (actionId == 'stop_live_location') {
     await GridLiveLocationService.instance.stopAll(postStop: true);
@@ -160,6 +161,20 @@ void notificationTapBackground(NotificationResponse response) async {
       }
     } else if (actionId == 'mark_as_read') {
       await handleMarkAsReadFromNotification(data);
+      final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
+          .toString()
+          .trim();
+      if (convId.isNotEmpty) {
+        final notifPlugin = FlutterLocalNotificationsPlugin();
+        final notifId = GridChatMessage.notificationIdForConversation(convId);
+        final tag = (data['tag'] ?? 'conv-$convId').toString().trim();
+        await notifPlugin.cancel(notifId, tag: tag);
+        await notifPlugin.cancel(notifId);
+        await GridChatMessageNotifications.instance.clearConversation(
+          convId,
+          notifPlugin,
+        );
+      }
     } else if (actionId == 'reply') {
       final replyText = (response.input ?? '').trim();
       final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
@@ -183,8 +198,14 @@ void notificationTapBackground(NotificationResponse response) async {
                 result.errorMessage ?? 'Action not allowed or contact blocked.',
           );
         } else {
-          final notifId = (int.tryParse(convId) ?? convId.hashCode).abs();
+          final notifId = GridChatMessage.notificationIdForConversation(convId);
+          final tag = (data['tag'] ?? 'conv-$convId').toString().trim();
+          await notifPlugin.cancel(notifId, tag: tag);
           await notifPlugin.cancel(notifId);
+          await GridChatMessageNotifications.instance.clearConversation(
+            convId,
+            notifPlugin,
+          );
         }
       } else if (convId.isNotEmpty) {
         await GridChatMessageNotifications.instance.storePendingOpen(
@@ -203,6 +224,10 @@ void notificationTapBackground(NotificationResponse response) async {
           conversationId: convId,
           targetUrl: data['url']?.toString(),
         );
+        final notifId = GridChatMessage.notificationIdForConversation(convId);
+        final tag = (data['tag'] ?? 'conv-$convId').toString().trim();
+        await notifPlugin.cancel(notifId, tag: tag);
+        await notifPlugin.cancel(notifId);
         await GridChatMessageNotifications.instance.clearConversation(
           convId,
           notifPlugin,
@@ -1359,9 +1384,18 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       if (actionId == 'mark_as_read') {
         await handleMarkAsReadFromNotification(data);
         final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
-            .toString();
-        final notifId = int.tryParse(convId) ?? convId.hashCode;
-        await _local.cancel(notifId);
+            .toString()
+            .trim();
+        if (convId.isNotEmpty) {
+          final notifId = GridChatMessage.notificationIdForConversation(convId);
+          final tag = (data['tag'] ?? 'conv-$convId').toString().trim();
+          await _local.cancel(notifId, tag: tag);
+          await _local.cancel(notifId);
+          await GridChatMessageNotifications.instance.clearConversation(
+            convId,
+            _local,
+          );
+        }
         return;
       }
       if (actionId == 'reply') {
@@ -1386,8 +1420,14 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
                   result.errorMessage ?? 'Action not allowed or contact blocked.',
             );
           } else {
-            final notifId = (int.tryParse(convId) ?? convId.hashCode).abs();
+            final notifId = GridChatMessage.notificationIdForConversation(convId);
+            final tag = (data['tag'] ?? 'conv-$convId').toString().trim();
+            await _local.cancel(notifId, tag: tag);
             await _local.cancel(notifId);
+            await GridChatMessageNotifications.instance.clearConversation(
+              convId,
+              _local,
+            );
           }
         } else if (convId.isNotEmpty) {
           await IncomingCallService.instance.openChatFromNotification(
@@ -1411,6 +1451,10 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
             conversationId: convId,
             targetUrl: data['url']?.toString(),
           );
+          final notifId = GridChatMessage.notificationIdForConversation(convId);
+          final tag = (data['tag'] ?? 'conv-$convId').toString().trim();
+          await _local.cancel(notifId, tag: tag);
+          await _local.cancel(notifId);
           await GridChatMessageNotifications.instance.clearConversation(
             convId,
             _local,
