@@ -2225,10 +2225,30 @@ class HomeSduiRenderer {
                                   },
                           );
 
+                          final isIOS =
+                              Theme.of(context).platform == TargetPlatform.iOS ||
+                              defaultTargetPlatform == TargetPlatform.iOS;
+                          if (!isIOS) {
+                            // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
+                            return _clipToTileBounds(
+                              p.item.component,
+                              RepaintBoundary(
+                                  child: SizedBox.expand(child: child)),
+                              context,
+                            );
+                          }
+
+                          // iOS IMPELLER PATH
+                          final faces = p.item.component['faces'];
+                          final isRotating = (faces is List && faces.length > 1) ||
+                              p.item.component['type'] == 'rotatingFaceCard' ||
+                              p.item.component['type'] == 'rotatingDeviceCard';
+                          final body = isRotating
+                              ? child
+                              : RepaintBoundary(child: SizedBox.expand(child: child));
                           return _clipToTileBounds(
                             p.item.component,
-                            RepaintBoundary(
-                                child: SizedBox.expand(child: child)),
+                            body,
                             context,
                           );
                         },
@@ -2484,8 +2504,36 @@ class HomeSduiRenderer {
     Widget child, [
     BuildContext? context,
   ]) {
+    final isIOS = (context != null &&
+            Theme.of(context).platform == TargetPlatform.iOS) ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+    if (!isIOS) {
+      // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
+      final radius = _metroTileRadius(c);
+      if (radius > 0) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          clipBehavior: Clip.antiAlias,
+          child: child,
+        );
+      }
+      return ClipRect(clipBehavior: Clip.antiAlias, child: child);
+    }
+
+    // iOS IMPELLER PATH
     final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
     if (overflow == 'visible' || overflow == 'none') {
+      return child;
+    }
+
+    final faces = c['faces'];
+    final isRotating = (faces is List && faces.length > 1) ||
+        c['type'] == 'rotatingFaceCard' ||
+        c['type'] == 'rotatingDeviceCard';
+    if (isRotating) {
+      // On iOS Impeller (Metal), 3D rotating cards rotate unclipped at the container level
+      // so 3D convex corners and perspective are not flattened into 2D offscreen textures.
+      // Individual faces inside _RotatingCard already clip their own rounded corners.
       return child;
     }
 
@@ -4934,7 +4982,9 @@ class _RotatingCardState extends State<_RotatingCard>
 
   bool _faceVisible(double angle) {
     if (!_hideBackFaces()) return true;
-    return math.cos(angle) > 0.0001;
+    // Allow slight negative cosine (-0.05) to ensure both faces remain visible
+    // throughout the complete 90-degree 3D rotational handoff.
+    return math.cos(angle) > -0.05;
   }
 
   double _webDelaySeconds() {
@@ -5091,6 +5141,9 @@ class _RotatingCardState extends State<_RotatingCard>
             return math.cos(angleA).compareTo(math.cos(angleB));
           });
 
+        final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.iOS;
+
         Widget cubeStack = Stack(
           fit: StackFit.expand,
           clipBehavior: Clip.none,
@@ -5105,10 +5158,23 @@ class _RotatingCardState extends State<_RotatingCard>
                   final effectiveAngle = parentAngle + baseAngle;
                   final visible = _faceVisible(effectiveAngle);
 
-                  // 100% UNTOUCHED 3D SHADING MATCHING ANDROID BASELINE (044f965)
-                  final shadeOpacity =
-                      ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
-                          .clamp(0.0, 0.4);
+                  final double shadeOpacity;
+                  if (!isIOS) {
+                    // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
+                    shadeOpacity =
+                        ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
+                            .clamp(0.0, 0.4);
+                  } else {
+                    // iOS IMPELLER DIRECTIONAL LIGHTING CONTRAST
+                    final turnAmount =
+                        (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
+                    final isRecedingFace =
+                        (animationRadiansPerFace < 0 && math.sin(effectiveAngle) < 0) ||
+                        (animationRadiansPerFace > 0 && math.sin(effectiveAngle) > 0);
+                    final directionalFactor = isRecedingFace ? 0.28 : 0.08;
+                    shadeOpacity =
+                        (turnAmount * directionalFactor).clamp(0.0, 0.45);
+                  }
 
                   final faceWidget = widget.buildFace(
                     widget.faces[faceDataIndex],
@@ -5122,7 +5188,8 @@ class _RotatingCardState extends State<_RotatingCard>
                       maintainState: true,
                       child: Transform(
                         alignment: Alignment.center,
-                        filterQuality: FilterQuality.low,
+                        filterQuality:
+                            isIOS ? FilterQuality.medium : FilterQuality.low,
                         transform: _cubeFaceTransform(
                           parentAngle: parentAngle,
                           faceAngle: baseAngle,
@@ -5158,18 +5225,24 @@ class _RotatingCardState extends State<_RotatingCard>
           ],
         );
 
-        Widget cube = RepaintBoundary(child: cubeStack);
-
-        if (radius != null && radius > 0) {
-          cube = ClipRRect(
-            borderRadius: BorderRadius.circular(radius),
-            clipBehavior: Clip.antiAlias,
-            child: cube,
-          );
-        } else {
-          cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
+        if (!isIOS) {
+          // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
+          Widget cube = RepaintBoundary(child: cubeStack);
+          if (radius != null && radius > 0) {
+            cube = ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              clipBehavior: Clip.antiAlias,
+              child: cube,
+            );
+          } else {
+            cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
+          }
+          return cube;
         }
-        return cube;
+
+        // iOS IMPELLER PATH
+        // Deliver 3D perspective transforms directly to the Metal framebuffer.
+        return cubeStack;
       },
     );
   }

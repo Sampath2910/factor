@@ -604,15 +604,11 @@ void main() {
     );
     await tester.pump();
 
-    // On iOS, RepaintBoundary wraps the cube Stack matching Android Skia 3D parity
-    final iosBoundaries =
-        tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
-    expect(iosBoundaries, isNotEmpty,
-        reason: 'iOS Skia pipeline wraps cube in RepaintBoundary for parity');
+    // On iOS, cube Stack is directly returned without RepaintBoundary (avoiding Impeller layer flattening)
     final iosTransforms = tester.widgetList<Transform>(find.byType(Transform));
     final iosCubeTransforms =
         iosTransforms.where((t) => t.transform.entry(3, 2) != 0).toList();
     expect(iosCubeTransforms, isNotEmpty,
-        reason: 'iOS must render 3D perspective transforms');
+        reason: 'iOS Impeller pipeline must render 3D perspective transforms');
   });
 }
