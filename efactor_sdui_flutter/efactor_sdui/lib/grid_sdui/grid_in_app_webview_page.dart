@@ -275,7 +275,7 @@ class GridInAppWebViewPage extends StatefulWidget {
     double? elementWidth,
   }) {
     // 1. Strict coordinate boundary: clicks outside top-left logo zone are never exit triggers
-    if (clientX != null && (clientX > 185 || (clientY != null && clientY > 75))) {
+    if (clientX != null && (clientX > 150 || (clientY != null && clientY > 70))) {
       return false;
     }
 
@@ -313,8 +313,8 @@ class GridInAppWebViewPage extends StatefulWidget {
     }
 
     // 4. Bounding box constraints: must be compact and confined to top-left
-    if (elementRight != null && elementRight > 190) return false;
-    if (elementWidth != null && elementWidth > 180) return false;
+    if (elementRight != null && elementRight > 160) return false;
+    if (elementWidth != null && elementWidth > 150) return false;
 
     final tab = (activeTab ?? '').toLowerCase();
     if (tab.contains('live') ||
@@ -1833,8 +1833,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         });
       },
       downloadFile: function(remoteUrl, fileName, mimeType, downloadId) {
-        return new Promise(function(resolve, reject) {
-          var id = downloadId ? String(downloadId) : ('dl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+        var id = downloadId ? String(downloadId) : ('dl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+        var p = new Promise(function(resolve, reject) {
           pendingPromises[id] = { resolve: resolve, reject: reject };
           if (window.CircleConnectFileBridge) {
             window.CircleConnectFileBridge.postMessage(JSON.stringify({
@@ -1849,6 +1849,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             reject({ success: false, error: 'CircleConnectFileBridge not available' });
           }
         });
+        p.downloadId = id;
+        return p;
       },
       cancelDownload: function(downloadId) {
         if (window.CircleConnectFileBridge) {
@@ -1936,6 +1938,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         }
         try {
           window.dispatchEvent(new CustomEvent(event, { detail: data }));
+        } catch(e) {}
+        try {
+          var unifiedDetail = Object.assign({ event: event, data: data }, data);
+          window.dispatchEvent(new CustomEvent('circleConnectFileEvent', { detail: unifiedDetail }));
         } catch(e) {}
       },
       _resolvePromise: function(callId, result, isError) {
@@ -2546,18 +2552,29 @@ Error: $error
             'dl_${DateTime.now().millisecondsSinceEpoch}';
         final fileName = data['fileName']?.toString();
         final mimeType = data['mimeType']?.toString();
-        final headers = data['headers'] is Map
-            ? Map<String, String>.from((data['headers'] as Map).map(
-                (k, v) => MapEntry(k.toString(), v.toString()),
-              ))
-            : null;
+        final requestHeaders = <String, String>{};
+        if (data['headers'] is Map) {
+          (data['headers'] as Map).forEach((k, v) {
+            requestHeaders[k.toString()] = v.toString();
+          });
+        }
+        if (!requestHeaders.containsKey('Cookie')) {
+          final cookies = await _getCookiesForEndpoint(remoteUrl);
+          if (cookies.isNotEmpty) {
+            requestHeaders['Cookie'] = cookies;
+          }
+        }
+        if (!requestHeaders.containsKey('Authorization') &&
+            (widget.accessToken ?? '').isNotEmpty) {
+          requestHeaders['Authorization'] = 'Bearer ${widget.accessToken}';
+        }
 
         final result = await CircleConnectFileService.instance.downloadFile(
           remoteUrl: remoteUrl,
           downloadId: downloadId,
           fileName: fileName,
           mimeType: mimeType,
-          headers: headers,
+          headers: requestHeaders.isNotEmpty ? requestHeaders : null,
         );
         resolve(result, isError: result['success'] != true);
       } else if (action == 'cancelDownload') {
@@ -2578,12 +2595,29 @@ Error: $error
         final remoteUrl = data['remoteUrl']?.toString() ?? '';
         final fileName = data['fileName']?.toString();
         final mimeType = data['mimeType']?.toString();
+        final requestHeaders = <String, String>{};
+        if (data['headers'] is Map) {
+          (data['headers'] as Map).forEach((k, v) {
+            requestHeaders[k.toString()] = v.toString();
+          });
+        }
+        if (!requestHeaders.containsKey('Cookie')) {
+          final cookies = await _getCookiesForEndpoint(remoteUrl);
+          if (cookies.isNotEmpty) {
+            requestHeaders['Cookie'] = cookies;
+          }
+        }
+        if (!requestHeaders.containsKey('Authorization') &&
+            (widget.accessToken ?? '').isNotEmpty) {
+          requestHeaders['Authorization'] = 'Bearer ${widget.accessToken}';
+        }
 
         final result =
             await CircleConnectFileService.instance.saveFileToDownloads(
           remoteUrl: remoteUrl,
           fileName: fileName,
           mimeType: mimeType,
+          headers: requestHeaders.isNotEmpty ? requestHeaders : null,
         );
         resolve(result, isError: result['success'] != true);
       } else if (action == 'uploadFile') {
@@ -2592,11 +2626,22 @@ Error: $error
             'up_${DateTime.now().millisecondsSinceEpoch}';
         final localPath = data['localPath']?.toString() ?? '';
         final uploadUrl = data['uploadUrl']?.toString() ?? '';
-        final headers = data['headers'] is Map
-            ? Map<String, String>.from((data['headers'] as Map).map(
-                (k, v) => MapEntry(k.toString(), v.toString()),
-              ))
-            : null;
+        final requestHeaders = <String, String>{};
+        if (data['headers'] is Map) {
+          (data['headers'] as Map).forEach((k, v) {
+            requestHeaders[k.toString()] = v.toString();
+          });
+        }
+        if (!requestHeaders.containsKey('Cookie')) {
+          final cookies = await _getCookiesForEndpoint(uploadUrl);
+          if (cookies.isNotEmpty) {
+            requestHeaders['Cookie'] = cookies;
+          }
+        }
+        if (!requestHeaders.containsKey('Authorization') &&
+            (widget.accessToken ?? '').isNotEmpty) {
+          requestHeaders['Authorization'] = 'Bearer ${widget.accessToken}';
+        }
         final fields = data['fields'] is Map
             ? Map<String, String>.from((data['fields'] as Map).map(
                 (k, v) => MapEntry(k.toString(), v.toString()),
@@ -2607,7 +2652,7 @@ Error: $error
           uploadId: uploadId,
           localPath: localPath,
           uploadUrl: uploadUrl,
-          headers: headers,
+          headers: requestHeaders.isNotEmpty ? requestHeaders : null,
           fields: fields,
         );
         resolve(result, isError: result['success'] != true);
@@ -3799,6 +3844,17 @@ Error: $error
   }
 
   Future<void> _backToGrid() async {
+    if (_isCircleConnect) {
+      try {
+        final isGridExit = await _isGridExitTriggerAtTopLeft();
+        if (!isGridExit) {
+          debugPrint(
+            '[GridInAppWebView] Ignoring go_back_to_grid: current view is not Grid home',
+          );
+          return;
+        }
+      } catch (_) {}
+    }
     _safeExitToGrid();
   }
 
@@ -3813,11 +3869,31 @@ Error: $error
       return false;
     }
 
+    var header = document.querySelector('header, .top-bar, .topbar, [class*="header"]');
+    var headerText = (header ? (header.innerText || header.textContent || '') : '').toLowerCase();
+    if (headerText.includes('live') || headerText.includes('0 live') || headerText.includes('channel') || headerText.includes('moment') || headerText.includes('call')) {
+      return false;
+    }
+
     var search = (window.location.search || '').toLowerCase();
     var hash = (window.location.hash || '').toLowerCase();
     if (search.includes('tab=live') || search.includes('tab=channel') || search.includes('tab=moment') || search.includes('tab=call') ||
         hash.includes('live') || hash.includes('channel') || hash.includes('moment') || hash.includes('call')) {
       return false;
+    }
+
+    var el = document.elementFromPoint(35, 35);
+    var curr = el;
+    while (curr && curr !== document.body && curr !== document.documentElement) {
+      var t = (curr.innerText || curr.textContent || '').trim();
+      var cls = (typeof curr.className === 'string') ? curr.className.toLowerCase() : '';
+      if (/^live/i.test(t) || cls.includes('live') || /^channel/i.test(t) || cls.includes('channel') || /^moment/i.test(t) || /^call/i.test(t)) {
+        return false;
+      }
+      if (/^:::?\\s*GRID/i.test(t) || t === 'GRID' || t === '::: GRID' || cls.includes('grid-logo') || cls.includes('grid_logo')) {
+        return true;
+      }
+      curr = curr.parentElement;
     }
 
     return true;
@@ -3863,10 +3939,10 @@ Error: $error
       return false;
     }
 
-    // 2. Explicitly exclude any back button or back arrow (avoid matching 'background')
+    // 2. Explicitly exclude any back button or back arrow
     var ariaLabel = (el.getAttribute && el.getAttribute('aria-label')) ? el.getAttribute('aria-label').toLowerCase() : '';
     var title = (el.getAttribute && el.getAttribute('title')) ? el.getAttribute('title').toLowerCase() : '';
-    if (className.includes('back-btn') || className.includes('btn-back') || className.includes('back-arrow') || className.includes('arrow-back') || className.includes('back-button') || className.includes('back_button') || ariaLabel === 'back' || title === 'back' || ariaLabel === 'go back') {
+    if (className.includes('back') || className.includes('arrow') || ariaLabel.includes('back') || title.includes('back')) {
       return false;
     }
 
@@ -3880,20 +3956,20 @@ Error: $error
     }
 
     var txt = (el.innerText || el.textContent || '').trim();
-    if (/^live/i.test(txt) || /^channels?/i.test(txt) || /^moments?/i.test(txt) || /^calls?/i.test(txt)) {
+    if (/^live/i.test(txt) || /^channels?/i.test(txt) || /^moments?/i.test(txt) || /^calls?/i.test(txt) || className.includes('live') || className.includes('channel')) {
       return false;
     }
-    var hasGridText = /^:::?\\s*GRID/i.test(txt) || txt === 'GRID' || txt === '::: GRID' || (/GRID/i.test(txt) && txt.length <= 25);
-    var isGridImg = tag === 'img' && ((el.getAttribute('src') || '').toLowerCase().includes('grid') || (el.getAttribute('alt') || '').toLowerCase().includes('grid') || (el.getAttribute('src') || '').toLowerCase().includes('efactor'));
-    var hasGridClass = className.includes('grid-logo') || className.includes('grid_logo') || className.includes('logo') || className.includes('brand');
+    var hasGridText = /^:::?\\s*GRID/i.test(txt) || txt === 'GRID' || txt === '::: GRID' || (/GRID/i.test(txt) && txt.length <= 15);
+    var isGridImg = tag === 'img' && ((el.getAttribute('src') || '').toLowerCase().includes('grid') || (el.getAttribute('alt') || '').toLowerCase().includes('grid'));
+    var hasGridClass = className.includes('grid-logo') || className.includes('grid_logo');
     var href = (el.getAttribute && el.getAttribute('href')) ? el.getAttribute('href').toLowerCase() : '';
-    var hasGridHref = href.endsWith('/grid') || href.endsWith('/grid/') || href.includes('/index.php/grid') || href.includes('grid-chat');
+    var hasGridHref = href.endsWith('/grid') || href.endsWith('/grid/') || href.includes('/index.php/grid');
 
     if (hasGridText || isGridImg || hasGridClass || hasGridHref) {
       try {
         var rect = el.getBoundingClientRect();
         // Logo must be compact and strictly confined to top-left corner
-        if (rect.right > 190 || rect.width > 180 || rect.left > 130 || rect.top > 75 || rect.width === 0 || rect.height === 0 || rect.top < 0) {
+        if (rect.right > 160 || rect.width > 150 || rect.left > 120 || rect.top > 70 || rect.width === 0 || rect.height === 0 || rect.top < 0) {
           return false;
         }
         return true;
@@ -3923,7 +3999,7 @@ Error: $error
         return false;
       }
       var backBtn = document.querySelector(
-        'header [class*="back-btn" i], header [class*="btn-back" i], header [class*="back-arrow" i], header [class*="arrow-back" i], header [class*="back-button" i], header [class*="back_button" i], header [aria-label="Back" i], header [title="Back" i], .back-arrow'
+        'header [class*="back" i], header [aria-label*="back" i], header [title*="back" i], .back-arrow, [class*="back-button" i], [class*="back_button" i], [class*="arrow-back" i], [class*="arrow_back" i]'
       );
       if (backBtn && !isGridElement(backBtn) && isVisible(backBtn)) {
         var r = backBtn.getBoundingClientRect();
@@ -3942,10 +4018,10 @@ Error: $error
   }
 
   function handleGridTrigger(e) {
-    // 1. Strict Coordinate Boundary: if tap is outside top-left logo zone (X > 185px or Y > 75px),
+    // 1. Strict Coordinate Boundary: if tap is outside top-left logo zone (X > 150px or Y > 70px),
     // NEVER intercept as a Grid exit trigger. Let the browser handle buttons natively!
     if (e.clientX !== undefined && e.clientY !== undefined) {
-      if (e.clientX > 185 || e.clientY > 75) {
+      if (e.clientX > 150 || e.clientY > 70) {
         return;
       }
     }
@@ -3961,7 +4037,12 @@ Error: $error
       if (isRightAction) return;
     }
 
-    // 3. If watching reels, never intercept as a GRID exit trigger
+    // 3. If inside a conversation, NEVER intercept. Let web app handle the back arrow natively!
+    if (isInsideConversation()) {
+      return;
+    }
+
+    // 4. If watching reels, never intercept as a GRID exit trigger
     var href = (window.location.href || '').toLowerCase();
     var hasVideo = !!document.querySelector('video');
     var isReels = href.includes('reel') || (hasVideo && !!document.querySelector('[class*="reel" i], [data-tab="reels"].active'));
@@ -3969,15 +4050,18 @@ Error: $error
       return;
     }
 
-    // 4. In Circle Connect, if on Live, Channels, Moments, or Calls view, never intercept as a GRID exit trigger
+    // 5. In Circle Connect, if on Live, Channels, Moments, or Calls view, never intercept as a GRID exit trigger
     var activeTab = document.querySelector('.bottom-nav [class*="active"], [data-tab].active, .nav-item.active');
     var activeTabText = (activeTab ? (activeTab.innerText || activeTab.textContent || '') : '').toLowerCase();
     var isSubTab = activeTabText.includes('live') || activeTabText.includes('channel') || activeTabText.includes('moment') || activeTabText.includes('call');
-    if (isSubTab) {
+    var headerEl = document.querySelector('header, .top-bar, .topbar, [class*="header"]');
+    var headerText = (headerEl ? (headerEl.innerText || headerEl.textContent || '') : '').toLowerCase();
+    var isNonGridHeader = headerText.includes('live') || headerText.includes('0 live') || headerText.includes('channel');
+    if (isSubTab || isNonGridHeader) {
       return;
     }
 
-    // 5. In Professional Space (/grid), subpages navigate back to root feed inside WebView.
+    // 6. In Professional Space (/grid), subpages navigate back to root feed inside WebView.
     // On the root feed (/grid or /index.php/grid), the GRID logo exits back to native Grid SDUI.
     var path = (window.location.pathname || '').toLowerCase();
     var isProfSpace = path.includes('/grid') && !path.includes('/grid-chat');
@@ -3997,7 +4081,7 @@ Error: $error
     }
 
     if (!matched && e.clientX !== undefined && e.clientY !== undefined) {
-      if (e.clientX <= 185 && e.clientY <= 70) {
+      if (e.clientX <= 150 && e.clientY <= 65) {
         var elAtPoint = document.elementFromPoint(e.clientX, e.clientY);
         var checkEl = elAtPoint;
         while (checkEl && checkEl !== document.body) {
@@ -4014,11 +4098,6 @@ Error: $error
       e.preventDefault();
       e.stopPropagation();
       postBackToGrid();
-      return;
-    }
-
-    // 6. If inside an active conversation, NEVER intercept. Let web app handle the back arrow natively!
-    if (isInsideConversation()) {
       return;
     }
   }
@@ -4055,14 +4134,14 @@ Error: $error
   }
 
   function attachGridDirect() {
-    var all = document.querySelectorAll('.grid-logo, [class*="grid-logo"], [class*="grid_logo"], a[href\$="/grid"], a[href\$="/grid/"], a[href*="/index.php/grid"], a[href*="grid-chat"], .brand, [class*="brand"], .logo, [class*="logo"]');
+    var all = document.querySelectorAll('.grid-logo, [class*="grid-logo"], [class*="grid_logo"], a[href\$="/grid"], a[href\$="/grid/"], a[href*="/index.php/grid"]');
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
       if (isGridElement(el) && !el.__gridDirectAttached) {
         el.__gridDirectAttached = true;
         el.style.cursor = 'pointer';
         el.addEventListener('click', function(e) {
-          if (e.clientX !== undefined && (e.clientX > 185 || e.clientY > 75)) return;
+          if (e.clientX !== undefined && (e.clientX > 150 || e.clientY > 70)) return;
           var curPath = (window.location.pathname || '').toLowerCase();
           var curProf = curPath.includes('/grid') && !curPath.includes('/grid-chat');
           var curSubpage = curProf && (curPath.includes('/team') || curPath.includes('/profile') || curPath.includes('/settings') || curPath.includes('/jobs') || curPath.includes('/post') || curPath.includes('/resume'));

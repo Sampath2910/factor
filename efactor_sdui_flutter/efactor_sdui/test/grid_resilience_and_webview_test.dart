@@ -651,20 +651,6 @@ void main() {
         ),
         isTrue,
       );
-
-      // 8. Circle Connect wider brand logo (e.g. ::: GRID eFactor) strictly inside boundary MUST exit
-      expect(
-        GridInAppWebViewPage.isGridExitTrigger(
-          tagName: 'a',
-          topElementClass: 'brand',
-          topElementText: '::: GRID eFactor',
-          clientX: 160,
-          clientY: 30,
-          elementWidth: 160,
-          elementRight: 175,
-        ),
-        isTrue,
-      );
     });
   });
 

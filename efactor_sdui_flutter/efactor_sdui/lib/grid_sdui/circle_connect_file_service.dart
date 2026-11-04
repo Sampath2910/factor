@@ -485,12 +485,14 @@ class CircleConnectFileService {
     required String remoteUrl,
     String? fileName,
     String? mimeType,
+    Map<String, String>? headers,
   }) async {
     final downloadResult = await downloadFile(
       remoteUrl: remoteUrl,
       downloadId: 'save_${DateTime.now().millisecondsSinceEpoch}',
       fileName: fileName,
       mimeType: mimeType,
+      headers: headers,
     );
 
     if (downloadResult['success'] != true) {
