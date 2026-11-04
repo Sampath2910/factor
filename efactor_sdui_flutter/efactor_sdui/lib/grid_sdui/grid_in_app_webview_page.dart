@@ -268,7 +268,54 @@ class GridInAppWebViewPage extends StatefulWidget {
     String? topElementText,
     String? topElementClass,
     String? url,
+    String? tagName,
+    double? clientX,
+    double? clientY,
+    double? elementRight,
+    double? elementWidth,
   }) {
+    // 1. Strict coordinate boundary: clicks outside top-left logo zone are never exit triggers
+    if (clientX != null && (clientX > 150 || (clientY != null && clientY > 70))) {
+      return false;
+    }
+
+    // 2. Structural layout containers (header, nav, topbar) are disqualified
+    final tag = (tagName ?? '').toLowerCase();
+    if (tag == 'header' ||
+        tag == 'nav' ||
+        tag == 'form' ||
+        tag == 'section' ||
+        tag == 'main') {
+      return false;
+    }
+
+    final elClass = (topElementClass ?? '').toLowerCase();
+    if (elClass.contains('header') ||
+        elClass.contains('topbar') ||
+        elClass.contains('top-bar') ||
+        elClass.contains('nav-bar') ||
+        elClass.contains('navbar')) {
+      return false;
+    }
+
+    // 3. Right-side action components (Menu, Bell, Avatar, 3-dots, Dropdown) are disqualified
+    if (elClass.contains('bell') ||
+        elClass.contains('notif') ||
+        elClass.contains('avatar') ||
+        elClass.contains('profile') ||
+        elClass.contains('menu') ||
+        elClass.contains('drawer') ||
+        elClass.contains('more') ||
+        elClass.contains('dots') ||
+        elClass.contains('kebab') ||
+        elClass.contains('dropdown')) {
+      return false;
+    }
+
+    // 4. Bounding box constraints: must be compact and confined to top-left
+    if (elementRight != null && elementRight > 160) return false;
+    if (elementWidth != null && elementWidth > 150) return false;
+
     final tab = (activeTab ?? '').toLowerCase();
     if (tab.contains('live') ||
         tab.contains('channel') ||
@@ -305,7 +352,6 @@ class GridInAppWebViewPage extends StatefulWidget {
       return false;
     }
 
-    final elClass = (topElementClass ?? '').toLowerCase();
     if (elClass.contains('live') || elClass.contains('channel')) {
       return false;
     }
@@ -3838,12 +3884,29 @@ Error: $error
   function isGridElement(el) {
     if (!el || el === document.body || el === document.documentElement) return false;
 
-    // Explicitly exclude any back button or back arrow
+    // 1. Explicitly exclude structural layout containers
     var tag = el.tagName ? el.tagName.toLowerCase() : '';
+    if (tag === 'header' || tag === 'nav' || tag === 'form' || tag === 'section' || tag === 'main') {
+      return false;
+    }
     var className = (typeof el.className === 'string') ? el.className.toLowerCase() : '';
+    if (className.includes('header') || className.includes('topbar') || className.includes('top-bar') || className.includes('nav-bar') || className.includes('navbar')) {
+      return false;
+    }
+
+    // 2. Explicitly exclude any back button or back arrow
     var ariaLabel = (el.getAttribute && el.getAttribute('aria-label')) ? el.getAttribute('aria-label').toLowerCase() : '';
     var title = (el.getAttribute && el.getAttribute('title')) ? el.getAttribute('title').toLowerCase() : '';
     if (className.includes('back') || className.includes('arrow') || ariaLabel.includes('back') || title.includes('back')) {
+      return false;
+    }
+
+    // 3. Explicitly exclude right-side action components (Menu, Bell, Avatar, 3-dots, Dropdown)
+    if (className.includes('bell') || className.includes('notif') || ariaLabel.includes('notif') || title.includes('notif') ||
+        className.includes('avatar') || className.includes('profile') || (tag === 'img' && (el.getAttribute('src') || '').toLowerCase().includes('avatar')) ||
+        className.includes('menu') || className.includes('drawer') || ariaLabel.includes('menu') || title.includes('menu') ||
+        className.includes('more') || className.includes('dots') || className.includes('kebab') || ariaLabel.includes('more') || title.includes('more') ||
+        className.includes('dropdown')) {
       return false;
     }
 
@@ -3860,9 +3923,11 @@ Error: $error
     if (hasGridText || isGridImg || hasGridClass || hasGridHref) {
       try {
         var rect = el.getBoundingClientRect();
-        if (rect.top >= 0 && rect.top < 110 && rect.left >= 0 && rect.left < 200 && rect.width > 0 && rect.height > 0) {
-          return true;
+        // Logo must be compact and strictly confined to top-left corner
+        if (rect.right > 160 || rect.width > 150 || rect.left > 120 || rect.top > 70 || rect.width === 0 || rect.height === 0 || rect.top < 0) {
+          return false;
         }
+        return true;
       } catch (_) {}
     }
     return false;
@@ -3908,7 +3973,31 @@ Error: $error
   }
 
   function handleGridTrigger(e) {
-    // If watching reels, never intercept as a GRID exit trigger
+    // 1. Strict Coordinate Boundary: if tap is outside top-left logo zone (X > 150px or Y > 70px),
+    // NEVER intercept as a Grid exit trigger. Let the browser handle buttons natively!
+    if (e.clientX !== undefined && e.clientY !== undefined) {
+      if (e.clientX > 150 || e.clientY > 70) {
+        return;
+      }
+    }
+
+    // 2. Explicitly guard right-side action components (Menu, Bell, Avatar, 3-dots, Dropdown)
+    if (e.target && e.target.closest) {
+      var isRightAction = e.target.closest(
+        '[class*="bell" i], [class*="notif" i], [aria-label*="notif" i], ' +
+        '[class*="avatar" i], [class*="profile" i], img[src*="avatar" i], ' +
+        '[class*="menu" i], [aria-label*="menu" i], [class*="drawer" i], ' +
+        '[class*="more" i], [class*="dots" i], [class*="kebab" i], [aria-label*="more" i], [class*="dropdown" i]'
+      );
+      if (isRightAction) return;
+    }
+
+    // 3. If inside a conversation, NEVER intercept. Let web app handle the back arrow natively!
+    if (isInsideConversation()) {
+      return;
+    }
+
+    // 4. If watching reels, never intercept as a GRID exit trigger
     var href = (window.location.href || '').toLowerCase();
     var hasVideo = !!document.querySelector('video');
     var isReels = href.includes('reel') || (hasVideo && !!document.querySelector('[class*="reel" i], [data-tab="reels"].active'));
@@ -3916,7 +4005,7 @@ Error: $error
       return;
     }
 
-    // In Circle Connect, if on Live, Channels, Moments, or Calls view, never intercept as a GRID exit trigger
+    // 5. In Circle Connect, if on Live, Channels, Moments, or Calls view, never intercept as a GRID exit trigger
     var activeTab = document.querySelector('.bottom-nav [class*="active"], [data-tab].active, .nav-item.active');
     var activeTabText = (activeTab ? (activeTab.innerText || activeTab.textContent || '') : '').toLowerCase();
     var isSubTab = activeTabText.includes('live') || activeTabText.includes('channel') || activeTabText.includes('moment') || activeTabText.includes('call');
@@ -3927,7 +4016,7 @@ Error: $error
       return;
     }
 
-    // In Professional Space (/grid), subpages navigate back to root feed inside WebView.
+    // 6. In Professional Space (/grid), subpages navigate back to root feed inside WebView.
     // On the root feed (/grid or /index.php/grid), the GRID logo exits back to native Grid SDUI.
     var path = (window.location.pathname || '').toLowerCase();
     var isProfSpace = path.includes('/grid') && !path.includes('/grid-chat');
@@ -3947,14 +4036,11 @@ Error: $error
     }
 
     if (!matched && e.clientX !== undefined && e.clientY !== undefined) {
-      if (e.clientX <= 160 && e.clientY <= 65) {
+      if (e.clientX <= 150 && e.clientY <= 65) {
         var elAtPoint = document.elementFromPoint(e.clientX, e.clientY);
         var checkEl = elAtPoint;
         while (checkEl && checkEl !== document.body) {
-          var t = (checkEl.innerText || checkEl.textContent || '').trim();
-          var isImg = checkEl.tagName === 'IMG' && ((checkEl.getAttribute('src') || '').toLowerCase().includes('grid') || (checkEl.getAttribute('alt') || '').toLowerCase().includes('grid'));
-          var isClass = (typeof checkEl.className === 'string') && (checkEl.className.toLowerCase().includes('grid') || checkEl.className.toLowerCase().includes('logo') || checkEl.className.toLowerCase().includes('brand'));
-          if (/^:::?\\s*GRID/i.test(t) || t === 'GRID' || t === '::: GRID' || (/GRID/i.test(t) && t.length <= 15) || isImg || isClass) {
+          if (isGridElement(checkEl)) {
             matched = true;
             break;
           }
@@ -3967,11 +4053,6 @@ Error: $error
       e.preventDefault();
       e.stopPropagation();
       postBackToGrid();
-      return;
-    }
-
-    // If inside a conversation, NEVER intercept. Let web app handle the back arrow natively!
-    if (isInsideConversation()) {
       return;
     }
   }
@@ -4008,13 +4089,14 @@ Error: $error
   }
 
   function attachGridDirect() {
-    var all = document.querySelectorAll('header, nav, [class*="header"], [class*="nav"], [class*="topbar"], div, a, span, h1, h2, img, button');
+    var all = document.querySelectorAll('.grid-logo, [class*="grid-logo"], [class*="grid_logo"], a[href\$="/grid"], a[href\$="/grid/"], a[href*="/index.php/grid"]');
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
       if (isGridElement(el) && !el.__gridDirectAttached) {
         el.__gridDirectAttached = true;
         el.style.cursor = 'pointer';
         el.addEventListener('click', function(e) {
+          if (e.clientX !== undefined && (e.clientX > 150 || e.clientY > 70)) return;
           var curPath = (window.location.pathname || '').toLowerCase();
           var curProf = curPath.includes('/grid') && !curPath.includes('/grid-chat');
           var curSubpage = curProf && (curPath.includes('/team') || curPath.includes('/profile') || curPath.includes('/settings') || curPath.includes('/jobs') || curPath.includes('/post') || curPath.includes('/resume'));
@@ -4025,7 +4107,7 @@ Error: $error
           e.preventDefault();
           e.stopPropagation();
           postBackToGrid();
-        }, true);
+        }, false);
       }
     }
   }

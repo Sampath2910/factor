@@ -560,6 +560,97 @@ void main() {
         ),
         isTrue,
       );
+
+      // 4. Header Navigation Fix: Right-side action components (Menu, Bell, Avatar, 3-dots) must NOT exit
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementClass: 'notification-bell-btn',
+          clientX: 300,
+          clientY: 25,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementClass: 'user-avatar-btn',
+          clientX: 330,
+          clientY: 25,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementClass: 'menu-drawer-btn',
+          clientX: 270,
+          clientY: 25,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementClass: 'kebab-more-dots-btn',
+          clientX: 360,
+          clientY: 25,
+        ),
+        isFalse,
+      );
+
+      // 5. Clicks outside the top-left logo zone (X > 150 or Y > 70) must NEVER exit
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementText: '::: GRID',
+          clientX: 200,
+          clientY: 30,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementText: '::: GRID',
+          clientX: 50,
+          clientY: 100,
+        ),
+        isFalse,
+      );
+
+      // 6. Layout containers (<header>, <nav>, .topbar) and wide elements must NEVER exit
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          tagName: 'header',
+          topElementText: '::: GRID',
+          elementWidth: 390,
+          elementRight: 390,
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          tagName: 'nav',
+          topElementText: '::: GRID',
+        ),
+        isFalse,
+      );
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          topElementClass: 'topbar-container',
+          topElementText: '::: GRID',
+        ),
+        isFalse,
+      );
+
+      // 7. Legitimate compact top-left GRID logo strictly inside logo boundary MUST exit
+      expect(
+        GridInAppWebViewPage.isGridExitTrigger(
+          tagName: 'a',
+          topElementClass: 'grid-logo',
+          topElementText: '::: GRID',
+          clientX: 40,
+          clientY: 25,
+          elementWidth: 80,
+          elementRight: 100,
+        ),
+        isTrue,
+      );
     });
   });
 
