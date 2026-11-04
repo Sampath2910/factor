@@ -616,7 +616,7 @@ void main() {
   });
 
   testWidgets(
-      'iOS Impeller zero-overlap containment: Mid-turn 45° rotation uses fixed 1:1 scale with ClipRRect slot containment and bypassed RepaintBoundary',
+      'iOS Impeller zero-slicing parity: Mid-turn 45° rotation renders continuous 3D transforms without 2D scissor cuts or freezing',
       (tester) async {
     final faces = <Map<String, dynamic>>[
       <String, dynamic>{
@@ -701,7 +701,13 @@ void main() {
       matching: find.byType(RepaintBoundary),
     ), findsNothing);
 
-    // 3. ClipRRect is present wrapping the rotating card on iOS (strict slot containment, 0 overlap)
-    expect(find.byType(ClipRRect), findsWidgets);
+    // 3. Rotating cube Stack has clipBehavior: Clip.none so 3D dihedral sides and corners are intact
+    final stacks = tester.widgetList<Stack>(find.byType(Stack));
+    final unclippedStack = stacks.firstWhere(
+      (s) => s.clipBehavior == Clip.none,
+      orElse: () => throw StateError('No unclipped Stack found for 3D cube'),
+    );
+    expect(unclippedStack.clipBehavior, Clip.none,
+        reason: 'Stack must remain unclipped for 3D dihedral extrusion');
   });
 }

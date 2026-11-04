@@ -2526,6 +2526,17 @@ class HomeSduiRenderer {
       return child;
     }
 
+    final faces = c['faces'];
+    final isRotating = (faces is List && faces.length > 1) ||
+        c['type'] == 'rotatingFaceCard' ||
+        c['type'] == 'rotatingDeviceCard';
+    if (isRotating) {
+      // 3D rotating cards rotate unclipped at the container level so 3D convex
+      // corners and perpendicular dihedral side faces are not sliced off by a 2D scissor clip.
+      // Individual faces inside the card already clip their own rounded corners.
+      return child;
+    }
+
     final radius = _metroTileRadius(c);
     if (radius > 0) {
       return ClipRRect(
@@ -5233,17 +5244,10 @@ class _RotatingCardState extends State<_RotatingCard>
         }
 
         // iOS IMPELLER PATH
-        // 1. Bypass RepaintBoundary so Metal streams 3D matrix transforms continuously (no freeze).
-        // 2. Wrap in ClipRRect so the rotating 3D cube is strictly contained within its tile slot (zero overlap).
-        if (radius != null && radius > 0) {
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(radius),
-            clipBehavior: Clip.antiAlias,
-            child: cubeStack,
-          );
-        } else {
-          return ClipRect(clipBehavior: Clip.antiAlias, child: cubeStack);
-        }
+        // 1. Bypass RepaintBoundary so Metal streams continuous 3D matrix transforms (no freeze).
+        // 2. Deliver cubeStack directly without 2D ClipRRect so 3D dihedral side faces and rounded
+        //    corners are not sliced off flat. Individual faces inside already clip their own corners.
+        return cubeStack;
       },
     );
   }
