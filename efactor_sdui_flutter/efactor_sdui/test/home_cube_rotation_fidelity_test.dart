@@ -709,5 +709,18 @@ void main() {
     );
     expect(unclippedStack.clipBehavior, Clip.none,
         reason: 'Stack must remain unclipped for 3D dihedral extrusion');
+
+    // 4. Fixed 1:1 vertical scale parity: Y-axis scale entry(1, 1) must remain strictly 1.0 (no vertical zoom in/out)
+    for (final ct in cubeTransforms) {
+      expect(ct.transform.entry(1, 1), closeTo(1.0, 0.001),
+          reason:
+              'Vertical height must remain strictly 1.000 (unscaled) to prevent zoom in/out');
+      expect(ct.transform.entry(0, 0).abs(), lessThan(0.70),
+          reason:
+              'Horizontal rotation axis must be scaled by containmentScale to keep cube in-box');
+      expect(ct.transform.entry(2, 3), lessThan(-30.0),
+          reason:
+              'Pivot must push back by -depth * (cos + sin) so front apex Z <= 0, keeping cube in-box');
+    }
   });
 }

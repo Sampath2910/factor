@@ -4958,14 +4958,27 @@ class _RotatingCardState extends State<_RotatingCard>
     required double depth,
     required String axis,
     required double perspective,
+    double containmentScale = 1.0,
+    double? centeringOverride,
   }) {
     final matrix = Matrix4.identity();
     if (perspective > 0) matrix.setEntry(3, 2, -perspective.abs());
 
+    // Scale strictly on the rotation plane (X & Z for Y-axis rotation) to keep the card
+    // 100% within its slot without protruding into neighbor tiles, while keeping height (Y)
+    // strictly at 1.0 so the card NEVER shrinks vertically (zero camera zoom in/out).
+    if (containmentScale < 0.999) {
+      if (axis == 'x') {
+        matrix.scaleByDouble(1.0, containmentScale, containmentScale, 1.0);
+      } else {
+        matrix.scaleByDouble(containmentScale, 1.0, containmentScale, 1.0);
+      }
+    }
+
     // Web parent transform is translateZ(-halfDepth) rotateY(angle). Without
     // the centering translate the box orbits around the front face instead of
     // spinning in the slot.
-    final centering = _parentCenteringDepth(depth);
+    final centering = centeringOverride ?? _parentCenteringDepth(depth);
     if (centering != 0) {
       matrix.translateByDouble(0.0, 0.0, centering, 1.0);
     }
@@ -5147,6 +5160,25 @@ class _RotatingCardState extends State<_RotatingCard>
         final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.iOS;
 
+        // iOS Impeller 3D containment: Keep rotation 100% strictly inside the tile slot
+        // without 2D scissor cuts or vertical zoom in/out.
+        // Scale ONLY the horizontal rotation plane (X & Z) by 1 / (cos + sin) while leaving
+        // vertical height (Y) strictly at 1.0 (unscaled).
+        // Push the rotation pivot back by -depth * (cos + sin) so front apex Z <= 0, preventing
+        // perspective expansion from pushing vertices outside the slot.
+        final double containmentScale;
+        final double? centeringOverride;
+        if (isIOS && progress.easedFlip > 0.001 && progress.easedFlip < 0.999) {
+          final turnAngle = progress.easedFlip * math.pi / 2;
+          final denom = math.cos(turnAngle) + math.sin(turnAngle);
+          containmentScale =
+              denom > 0.001 ? (1.0 / denom).clamp(0.7071, 1.0) : 1.0;
+          centeringOverride = -depth * denom;
+        } else {
+          containmentScale = 1.0;
+          centeringOverride = null;
+        }
+
         Widget cubeStack = Stack(
           fit: StackFit.expand,
           clipBehavior: Clip.none,
@@ -5199,6 +5231,8 @@ class _RotatingCardState extends State<_RotatingCard>
                           depth: depth,
                           axis: axis,
                           perspective: perspective,
+                          containmentScale: containmentScale,
+                          centeringOverride: centeringOverride,
                         ),
                         child: SizedBox.expand(
                           child: Stack(
