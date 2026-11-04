@@ -47,7 +47,8 @@ Future<void> main() async {
   AuthState? initialAuthState;
   final pendingHandoff =
       IncomingCallService.instance.pendingAnswer != null ||
-      GridChatMessageNotifications.instance.pendingOpen != null;
+      GridChatMessageNotifications.instance.pendingOpen != null ||
+      GridInAppWebViewPage.pendingTargetUrl != null;
   if (!pendingHandoff) {
     try {
       final schema = await SchemaLoadQueue.instance.loadAuth();
@@ -93,6 +94,7 @@ class AnswerFirstShell extends StatefulWidget {
 class _AnswerFirstShellState extends State<AnswerFirstShell> {
   PendingCallAnswer? _latched;
   PendingChatOpen? _latchedChat;
+  String? _latchedTargetUrl;
   final IncomingCallService _calls = IncomingCallService.instance;
   final GridChatMessageNotifications _messages =
       GridChatMessageNotifications.instance;
@@ -104,6 +106,7 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
     _adoptPending();
     _calls.pendingAnswerListenable.addListener(_onPending);
     _messages.pendingOpenListenable.addListener(_onPending);
+    GridInAppWebViewPage.pendingTargetUrlListenable.addListener(_onPending);
   }
 
   @override
@@ -116,6 +119,7 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
   void dispose() {
     _calls.pendingAnswerListenable.removeListener(_onPending);
     _messages.pendingOpenListenable.removeListener(_onPending);
+    GridInAppWebViewPage.pendingTargetUrlListenable.removeListener(_onPending);
     if (_calls.answerHandoffOwnedByShell) {
       _calls.answerHandoffOwnedByShell = false;
     }
@@ -127,10 +131,12 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
     final beforeCall = _latched?.callId;
     final beforeChat = _latchedChat?.conversationId;
     final beforeCompose = _latchedChat?.compose;
+    final beforeTarget = _latchedTargetUrl;
     _adoptPending();
     if (_latched?.callId != beforeCall ||
         _latchedChat?.conversationId != beforeChat ||
-        _latchedChat?.compose != beforeCompose) {
+        _latchedChat?.compose != beforeCompose ||
+        _latchedTargetUrl != beforeTarget) {
       setState(() {});
     }
   }
@@ -153,18 +159,31 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
     if (_latched != null) return;
 
     final chat = _messages.pendingOpen;
-    if (chat == null || chat.needsJs || _calls.navigatorCovered) return;
-    if (_latchedChat?.conversationId == chat.conversationId &&
-        _latchedChat?.compose == chat.compose) {
+    if (chat != null && !chat.needsJs && !_calls.navigatorCovered) {
+      if (_latchedChat?.conversationId != chat.conversationId ||
+          _latchedChat?.compose != chat.compose) {
+        _latchedChat = chat;
+        GridChatMessageNotifications.chatTrace(
+          'GRID Chat navigation started',
+          chat.conversationId,
+          '',
+        );
+        unawaited(_messages.clearPendingOpen(reason: 'navigated'));
+      }
       return;
     }
-    _latchedChat = chat;
-    GridChatMessageNotifications.chatTrace(
-      'GRID Chat navigation started',
-      chat.conversationId,
-      '',
-    );
-    unawaited(_messages.clearPendingOpen(reason: 'navigated'));
+    if (_latchedChat != null) return;
+
+    final pendingTarget = GridInAppWebViewPage.pendingTargetUrl;
+    if (pendingTarget != null &&
+        pendingTarget.isNotEmpty &&
+        !_calls.navigatorCovered) {
+      if (_latchedTargetUrl != pendingTarget) {
+        _latchedTargetUrl = pendingTarget;
+      }
+      GridInAppWebViewPage.clearPendingTargetUrl();
+      return;
+    }
   }
 
   int? _userId() {
@@ -205,6 +224,17 @@ class _AnswerFirstShellState extends State<AnswerFirstShell> {
           compose: chat.compose,
         ),
         title: 'Circle Connect',
+        showAppBar: false,
+        accessToken: widget.authState.accessToken,
+        userId: _userId(),
+      );
+    }
+    final targetUrl = _latchedTargetUrl;
+    if (targetUrl != null && targetUrl.isNotEmpty) {
+      return GridInAppWebViewPage(
+        key: ValueKey<String>('target-handoff-$targetUrl'),
+        uri: Uri.parse(targetUrl),
+        title: 'Professional Space',
         showAppBar: false,
         accessToken: widget.authState.accessToken,
         userId: _userId(),

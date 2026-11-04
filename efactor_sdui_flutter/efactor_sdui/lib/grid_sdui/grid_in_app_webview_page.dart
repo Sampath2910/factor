@@ -17,6 +17,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import '../services/call_permission_helper.dart';
 import '../services/circle_connect_device_key_store.dart';
 import '../services/grid_chat_message_notification.dart';
 import '../services/incoming_call_service.dart';
@@ -519,6 +520,19 @@ class GridInAppWebViewPage extends StatefulWidget {
 
   static String? _pendingTargetUrl;
 
+  /// Listenable for pending target URL navigation during cold starts.
+  static final ValueNotifier<String?> pendingTargetUrlListenable =
+      ValueNotifier<String?>(null);
+
+  /// Currently pending target URL to load once the webview shell is ready.
+  static String? get pendingTargetUrl => pendingTargetUrlListenable.value;
+
+  /// Clears any pending target URL once consumed.
+  static void clearPendingTargetUrl() {
+    _pendingTargetUrl = null;
+    pendingTargetUrlListenable.value = null;
+  }
+
   /// Safely navigates or loads a target URL inside the active WebView if host is efactor.tech
   static Future<bool> loadTargetUrl(String targetUrl) async {
     final cleanUrl = targetUrl.trim();
@@ -540,6 +554,7 @@ class GridInAppWebViewPage extends StatefulWidget {
       }
     } else {
       _pendingTargetUrl = cleanUrl;
+      pendingTargetUrlListenable.value = cleanUrl;
       final nav = IncomingCallService.instance.navigatorKey.currentState;
       if (nav != null) {
         unawaited(
@@ -549,6 +564,32 @@ class GridInAppWebViewPage extends StatefulWidget {
             ),
           ),
         );
+      } else {
+        // App cold start: wait up to 3.5s for navigatorKey if AnswerFirstShell does not latch it
+        Future<void>(() async {
+          for (var i = 0; i < 35; i++) {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+            if (pendingTargetUrlListenable.value == null) {
+              // Consumed by AnswerFirstShell
+              return;
+            }
+            final retryNav =
+                IncomingCallService.instance.navigatorKey.currentState;
+            if (retryNav != null && pendingTargetUrlListenable.value != null) {
+              final latchedUrl = pendingTargetUrlListenable.value!;
+              clearPendingTargetUrl();
+              unawaited(
+                retryNav.push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        GridInAppWebViewPage(uri: Uri.parse(latchedUrl)),
+                  ),
+                ),
+              );
+              return;
+            }
+          }
+        });
       }
       return true;
     }
@@ -750,6 +791,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive) return;
     IncomingCallService.instance.onCircleConnectReadinessChanged();
+    if (state == AppLifecycleState.resumed) {
+      final token = IncomingCallService.instance.deviceToken;
+      if (token != null && token.isNotEmpty) {
+        unawaited(GridInAppWebViewPage.updatePushTokenInWeb(token));
+      }
+    }
   }
 
   @override
@@ -1111,6 +1158,21 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   if (typeof window.gridNativePushTokenRefresh === 'function') {
     try { window.gridNativePushTokenRefresh(fcmToken); } catch(e) { console.error(e); }
   }
+  // Keep-alive polling up to 60s for late-loading React/Webpack SPA on index.php/grid
+  var __grid_token_attempts = 0;
+  var __grid_token_interval = setInterval(function() {
+    __grid_token_attempts++;
+    if (typeof window.gridNativePushTokenRefresh === 'function') {
+      try {
+        window.gridNativePushTokenRefresh(fcmToken);
+      } catch(e) {
+        console.error(e);
+      }
+      clearInterval(__grid_token_interval);
+    } else if (__grid_token_attempts >= 120) {
+      clearInterval(__grid_token_interval);
+    }
+  }, 500);
   var bearerToken = $bearerJson;
   if (bearerToken) {
     window.__efactor_access_token = bearerToken;
@@ -2205,6 +2267,22 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             await channel.invokeMethod('stopAppSound', {'kind': kind});
           } catch (e) {
             debugPrint('[CircleConnectSound] stopAppSound error: $e');
+          }
+        }());
+      } else if (action == 'openAutostartSettings') {
+        unawaited(() async {
+          try {
+            await CallPermissionHelper.openAutostartSettings();
+          } catch (e) {
+            debugPrint('[CircleConnect] openAutostartSettings error: $e');
+          }
+        }());
+      } else if (action == 'requestBatteryOptimizationExemption') {
+        unawaited(() async {
+          try {
+            await CallPermissionHelper.requestIgnoreBatteryOptimizations();
+          } catch (e) {
+            debugPrint('[CircleConnect] requestBatteryOptimizationExemption error: $e');
           }
         }());
       } else if (action == 'callSignalLog') {

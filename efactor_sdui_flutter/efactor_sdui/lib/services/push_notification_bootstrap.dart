@@ -256,6 +256,20 @@ bool isSafeEfactorUrl(String url) {
   return host == 'efactor.tech' || host.endsWith('.efactor.tech');
 }
 
+/// Checks whether an FCM push payload represents a Professional Space (GRID) event.
+bool isProfessionalSpacePush(Map<String, dynamic> data) {
+  final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+  if (type == 'PROFESSIONAL_SPACE_EVENT') return true;
+  final channel = (data['channel'] ?? '').toString().toLowerCase();
+  if (channel == 'grid_activity') return true;
+  final targetUrl =
+      (data['target_url'] ?? data['targetUrl'] ?? '').toString().trim();
+  if (targetUrl.contains('/grid') && !targetUrl.contains('/grid-chat')) {
+    return true;
+  }
+  return false;
+}
+
 /// Darwin notification categories providing interactive action buttons on iOS
 /// (Answer/Decline on calls, inline text Reply + Mark as read on messages, and Stop on live location).
 List<DarwinNotificationCategory> get kDarwinNotificationCategories =>
@@ -527,15 +541,24 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
     return;
   }
 
-  if (type == 'PROFESSIONAL_SPACE_EVENT') {
-    // Professional Space (GRID) sends both notification and data blocks.
-    // When the app is in background or closed, Android's system notification manager
-    // automatically displays the notification using the notification block.
-    // Do NOT build a duplicate notification in onBackgroundMessage.
+  if (isProfessionalSpacePush(data)) {
+    if (message.notification != null) {
+      // Professional Space (GRID) visible block: Android/iOS OS system notification tray
+      // automatically displays the notification using the notification block.
+      // Do NOT build a duplicate notification in onBackgroundMessage.
+      // ignore: avoid_print
+      print(
+        '[FCM_DEBUG] Professional Space push has system notification block; OS tray handles display.',
+      );
+      return;
+    }
+    // Option B: Server sent data-only message (message.notification == null).
+    // The app builds the ONE visible GRID notification itself.
     // ignore: avoid_print
     print(
-      '[FCM_DEBUG] PROFESSIONAL_SPACE_EVENT received in background; handled by system notification tray.',
+      '[FCM_DEBUG] Professional Space data-only push received in background; rendering single GRID notification: $data',
     );
+    await showProfessionalSpaceNotification(plugin, data: data);
     return;
   }
 
@@ -789,21 +812,45 @@ Future<void> showProfessionalSpaceNotification(
   required Map<String, dynamic> data,
   RemoteNotification? notification,
 }) async {
-  final rawTitle = (notification?.title ?? data['title'] ?? 'Professional Space')
+  final rawTitle = (notification?.title ??
+          data['title'] ??
+          data['actor_name'] ??
+          'Professional Space')
       .toString()
       .trim();
   final title = rawTitle.isNotEmpty ? rawTitle : 'Professional Space';
-  final body = (notification?.body ?? data['body'] ?? data['message'] ?? '')
+  final rawBody = (notification?.body ??
+          data['body'] ??
+          data['text'] ??
+          data['message'] ??
+          '')
       .toString()
       .trim();
+  final body = rawBody;
   final targetUrl =
       (data['target_url'] ?? data['targetUrl'] ?? data['url'] ?? '')
           .toString()
           .trim();
   final postId = (data['post_id'] ?? data['postId'] ?? '').toString().trim();
-  final notifId = postId.isNotEmpty
-      ? postId.hashCode.abs()
-      : DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final rawTag = (data['tag'] ??
+          (postId.isNotEmpty ? 'grid_post_$postId' : 'grid_activity'))
+      .toString()
+      .trim();
+  final tag = rawTag.isNotEmpty ? rawTag : 'grid_activity';
+  final notifId = tag.hashCode.abs();
+
+  final avatarUrl = (data['actor_avatar'] ?? '').toString().trim();
+  ByteArrayAndroidBitmap? largeIconBitmap;
+  if (avatarUrl.isNotEmpty && isSafeEfactorUrl(avatarUrl)) {
+    try {
+      final res = await http
+          .get(Uri.parse(avatarUrl))
+          .timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+        largeIconBitmap = ByteArrayAndroidBitmap(res.bodyBytes);
+      }
+    } catch (_) {}
+  }
 
   final payloadMap = <String, dynamic>{
     'type': 'PROFESSIONAL_SPACE_EVENT',
@@ -812,26 +859,31 @@ Future<void> showProfessionalSpaceNotification(
     ...data,
   };
 
+  final androidDetails = AndroidNotificationDetails(
+    kGridActivityChannel.id,
+    kGridActivityChannel.name,
+    channelDescription: kGridActivityChannel.description,
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_notification',
+    largeIcon: largeIconBitmap,
+    tag: tag,
+    playSound: true,
+    enableVibration: true,
+    // Strictly NO action buttons (no reply, mark as read, mute)
+  );
+
+  const iosDetails = DarwinNotificationDetails(
+    presentAlert: true,
+    presentBadge: true,
+    presentSound: true,
+  );
+
   await plugin.show(
     notifId,
     title,
     body,
-    NotificationDetails(
-      android: AndroidNotificationDetails(
-        kGridActivityChannel.id,
-        kGridActivityChannel.name,
-        channelDescription: kGridActivityChannel.description,
-        icon: 'ic_notification',
-        importance: Importance.high,
-        priority: Priority.high,
-        tag: 'grid_activity',
-      ),
-      iOS: const DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
-    ),
+    NotificationDetails(android: androidDetails, iOS: iosDetails),
     payload: jsonEncode(payloadMap),
   );
 }
@@ -1407,6 +1459,7 @@ class PushNotificationBootstrap {
     _tokenSub = messaging.onTokenRefresh.listen((refreshed) {
       IncomingCallService.instance.setDeviceToken(refreshed);
       unawaited(_syncTokenIfLoggedIn(refreshed));
+      unawaited(GridInAppWebViewPage.updatePushTokenInWeb(refreshed));
     });
 
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
@@ -1737,7 +1790,13 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       unawaited(showActivityNotificationOnPlugin(_local, data));
       return;
     }
-    if (type == 'PROFESSIONAL_SPACE_EVENT') {
+    if (isProfessionalSpacePush(data)) {
+      if (message.notification != null) {
+        debugPrint(
+          '[PushBootstrap] Professional Space push in foreground has notification block; skipping duplicate local notification.',
+        );
+        return;
+      }
       unawaited(
         showProfessionalSpaceNotification(
           _local,
@@ -1914,7 +1973,9 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         // Professional Space event or target_url tap
         final targetUrl =
             (data['target_url'] ?? data['targetUrl'] ?? '').toString().trim();
-        if (type == 'PROFESSIONAL_SPACE_EVENT' || targetUrl.isNotEmpty) {
+        if (type == 'PROFESSIONAL_SPACE_EVENT' ||
+            isProfessionalSpacePush(data) ||
+            targetUrl.isNotEmpty) {
           final effectiveUrl = targetUrl.isNotEmpty
               ? targetUrl
               : (data['url'] ?? '').toString().trim();
@@ -1976,7 +2037,9 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
     // Professional Space event or target_url tap
     final targetUrl =
         (data['target_url'] ?? data['targetUrl'] ?? '').toString().trim();
-    if (type == 'PROFESSIONAL_SPACE_EVENT' || targetUrl.isNotEmpty) {
+    if (type == 'PROFESSIONAL_SPACE_EVENT' ||
+        isProfessionalSpacePush(data) ||
+        targetUrl.isNotEmpty) {
       final effectiveUrl = targetUrl.isNotEmpty
           ? targetUrl
           : (data['url'] ?? '').toString().trim();

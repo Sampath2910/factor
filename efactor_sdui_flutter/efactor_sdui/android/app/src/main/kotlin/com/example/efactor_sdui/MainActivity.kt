@@ -73,7 +73,40 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createDefaultNotificationChannels()
         wakeAndUnlock()
+    }
+
+    private fun createDefaultNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+
+            // Professional Space (GRID) notification channel (matches AndroidManifest default_notification_channel_id)
+            val activityChannel = NotificationChannel(
+                "grid_activity",
+                "Professional Space",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for posts, comments, connections, and activity in Professional Space"
+                enableLights(true)
+                enableVibration(true)
+                setShowBadge(true)
+            }
+            notificationManager.createNotificationChannel(activityChannel)
+
+            // Circle Connect default message notification channel
+            val messagesChannel = NotificationChannel(
+                "grid_messages_v4",
+                "Messages",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Circle Connect chat message notifications"
+                enableLights(true)
+                enableVibration(true)
+                setShowBadge(true)
+            }
+            notificationManager.createNotificationChannel(messagesChannel)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
