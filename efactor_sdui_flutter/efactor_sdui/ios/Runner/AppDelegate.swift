@@ -5,7 +5,7 @@ import UIKit
 import UserNotifications
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UNUserNotificationCenterDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let wifiNativeBridge = WifiNativeBridge()
   private var isBridgeRegistered = false
   private var incomingRingPlayer: AVAudioPlayer?
@@ -150,7 +150,7 @@ import UserNotifications
   }
 
   @available(iOS 12.0, *)
-  func userNotificationCenter(
+  override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     openSettingsFor notification: UNNotification?
   ) {
