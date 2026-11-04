@@ -5233,8 +5233,8 @@ class _RotatingCardState extends State<_RotatingCard>
         }
 
         // iOS IMPELLER PATH
-        // 1. Bypass RepaintBoundary so Metal streams continuous 3D matrix transforms (no freeze).
-        // 2. Wrap in ClipRRect so the rotating 3D cube is strictly contained within the box with zero neighbor overlap.
+        // 1. Bypass RepaintBoundary so Metal streams 3D matrix transforms continuously (no freeze).
+        // 2. Wrap in ClipRRect so the rotating 3D cube is strictly contained within its tile slot (zero overlap).
         if (radius != null && radius > 0) {
           return ClipRRect(
             borderRadius: BorderRadius.circular(radius),
