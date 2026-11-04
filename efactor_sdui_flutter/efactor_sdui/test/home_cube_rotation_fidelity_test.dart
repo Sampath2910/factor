@@ -616,7 +616,7 @@ void main() {
   });
 
   testWidgets(
-      'iOS Impeller zero-overlap containment: Mid-turn 45° rotation uses dynamic containment scale S(θ) without 2D scissor slicing',
+      'iOS Impeller zero-overlap containment: Mid-turn 45° rotation retains fixed scale strictly contained in tile slot',
       (tester) async {
     final faces = <Map<String, dynamic>>[
       <String, dynamic>{
@@ -687,7 +687,7 @@ void main() {
     expect(find.text('Face Beta'), findsOneWidget,
         reason: 'Face Beta must rotate in from the right simultaneously');
 
-    // Impeller zero-slicing verification:
+    // Impeller zero-overlap containment verification:
     // 1. Direct 3D perspective transforms are rendered
     final transforms = tester.widgetList<Transform>(find.byType(Transform));
     final cubeTransforms =
@@ -700,5 +700,9 @@ void main() {
       of: find.byType(Transform).first,
       matching: find.byType(RepaintBoundary),
     ), findsNothing);
+
+    // 3. ClipRRect is present wrapping the rotating card on iOS for slot containment
+    expect(find.byType(ClipRRect), findsWidgets,
+        reason: 'ClipRRect must wrap rotating card on iOS for slot containment');
   });
 }
