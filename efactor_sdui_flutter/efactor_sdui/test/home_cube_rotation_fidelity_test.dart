@@ -606,8 +606,13 @@ void main() {
     );
     await tester.pump();
 
-    // On iOS, RepaintBoundary is bypassed around the cube (avoiding Impeller layer flattening / freeze),
+    // On iOS, RepaintBoundary isolates cube layer for smooth 60 FPS,
     // and 3D transforms render directly with perspective.
+    final iosBoundaries =
+        tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
+    expect(iosBoundaries, isNotEmpty,
+        reason:
+            'iOS Impeller pipeline must wrap cube in RepaintBoundary for smooth 60 FPS layer isolation');
     final iosTransforms = tester.widgetList<Transform>(find.byType(Transform));
     final iosCubeTransforms =
         iosTransforms.where((t) => t.transform.entry(3, 2) != 0).toList();
@@ -695,11 +700,8 @@ void main() {
     expect(cubeTransforms, isNotEmpty,
         reason: '3D perspective transforms must be active during mid-turn');
 
-    // 2. RepaintBoundary is NOT present around the rotating card on iOS (no freezing)
-    expect(find.descendant(
-      of: find.byType(Transform).first,
-      matching: find.byType(RepaintBoundary),
-    ), findsNothing);
+    // 2. RepaintBoundary is present around the rotating card for smooth layer isolation
+    expect(find.byType(RepaintBoundary), findsWidgets);
 
     // 3. Rotating cube Stack has clipBehavior: Clip.none so 3D dihedral sides and corners are intact
     final stacks = tester.widgetList<Stack>(find.byType(Stack));
@@ -710,17 +712,13 @@ void main() {
     expect(unclippedStack.clipBehavior, Clip.none,
         reason: 'Stack must remain unclipped for 3D dihedral extrusion');
 
-    // 4. Fixed 1:1 vertical scale parity: Y-axis scale entry(1, 1) must remain strictly 1.0 (no vertical zoom in/out)
+    // 4. Undistorted 1:1 scale parity matching Android: Y-axis scale entry(1, 1) strictly 1.0 (no zoom in/out)
     for (final ct in cubeTransforms) {
       expect(ct.transform.entry(1, 1), closeTo(1.0, 0.001),
           reason:
               'Vertical height must remain strictly 1.000 (unscaled) to prevent zoom in/out');
-      expect(ct.transform.entry(0, 0).abs(), lessThan(0.70),
-          reason:
-              'Horizontal rotation axis must be scaled by containmentScale to keep cube in-box');
-      expect(ct.transform.entry(2, 3), lessThan(-30.0),
-          reason:
-              'Pivot must push back by -depth * (cos + sin) so front apex Z <= 0, keeping cube in-box');
+      expect(ct.transform.entry(3, 2), lessThan(0.0),
+          reason: '3D perspective entry(3, 2) must be negative for convex rotation');
     }
   });
 }
