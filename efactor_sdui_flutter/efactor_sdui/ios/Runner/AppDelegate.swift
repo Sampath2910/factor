@@ -5,7 +5,7 @@ import UIKit
 import UserNotifications
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UNUserNotificationCenterDelegate {
   private let wifiNativeBridge = WifiNativeBridge()
   private var isBridgeRegistered = false
   private var incomingRingPlayer: AVAudioPlayer?
@@ -72,7 +72,7 @@ import UserNotifications
         result(true)
       case "isOngoingCallActive":
         result(self.isOngoingCallAudioActive)
-      case "openNotificationChannelSettings":
+      case "openNotificationChannelSettings", "openAppNotificationSettings", "openNotificationSettings":
         if let url = URL(string: UIApplication.openSettingsURLString), UIApplication.shared.canOpenURL(url) {
           UIApplication.shared.open(url, options: [:], completionHandler: nil)
           result(true)
@@ -147,5 +147,16 @@ import UserNotifications
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+  }
+
+  @available(iOS 12.0, *)
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    openSettingsFor notification: UNNotification?
+  ) {
+    if let controller = window?.rootViewController as? FlutterViewController {
+      let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: controller.binaryMessenger)
+      channel.invokeMethod("openSettingsUrl", arguments: ["url": "https://efactor.tech/index.php/grid-chat/settings"])
+    }
   }
 }

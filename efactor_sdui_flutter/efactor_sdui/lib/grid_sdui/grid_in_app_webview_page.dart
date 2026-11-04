@@ -539,6 +539,16 @@ class GridInAppWebViewPage extends StatefulWidget {
       }
     } else {
       _pendingTargetUrl = cleanUrl;
+      final nav = IncomingCallService.instance.navigatorKey.currentState;
+      if (nav != null) {
+        unawaited(
+          nav.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => GridInAppWebViewPage(uri: uri),
+            ),
+          ),
+        );
+      }
       return true;
     }
   }
@@ -1579,6 +1589,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     };
     api.systemSoundsSupported = true;
     api.messageNotificationsManaged = true;
+    api.notificationSettingsSupported = true;
+    api.openNotificationSettings = function() {
+      post({ action: 'openNotificationSettings' });
+    };
     api.__efactorNativeBridge = true;
   }
   bindNativeCallBridge();
@@ -1934,6 +1948,15 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
                 'if (window.CircleConnectPush) { window.CircleConnectPush.hasDeviceKey = true; }',
               ),
             );
+          }
+        }());
+      } else if (action == 'openNotificationSettings') {
+        unawaited(() async {
+          try {
+            const channel = MethodChannel('tech.efactor/circle_connect');
+            await channel.invokeMethod('openAppNotificationSettings');
+          } catch (e) {
+            debugPrint('[CircleConnect] openAppNotificationSettings error: $e');
           }
         }());
       } else if (action == 'pickSystemSound') {

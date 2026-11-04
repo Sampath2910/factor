@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -14,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'call_lifecycle_tracker.dart';
 import 'circle_connect_device_key_store.dart';
 import 'grid_chat_message_notification.dart';
+import 'grid_unread_counts_service.dart';
 import 'incoming_call_service.dart';
 import 'json_http.dart';
 import 'ongoing_call_service.dart';
@@ -53,6 +55,196 @@ const AndroidNotificationChannel kGridActivityChannel = AndroidNotificationChann
   playSound: true,
   enableVibration: true,
 );
+
+/// Circle Connect Notification Channel Groups
+const AndroidNotificationChannelGroup kGroupGridChatMessages =
+    AndroidNotificationChannelGroup(
+  'grid_chat_messages',
+  'GRID Chat messages',
+  description: 'Messages, calls, and chat alerts from Circle Connect',
+);
+
+const AndroidNotificationChannelGroup kGroupGridChatActivity =
+    AndroidNotificationChannelGroup(
+  'grid_chat_activity',
+  'GRID Chat activity',
+  description: 'Activity, mentions, reactions, and social updates from Circle Connect',
+);
+
+/// Group 1: GRID Chat messages
+const AndroidNotificationChannel kChannelMessages = AndroidNotificationChannel(
+  'messages',
+  'Messages',
+  groupId: 'grid_chat_messages',
+  description: 'Circle Connect direct chat messages',
+  importance: Importance.max,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelGroupMessages =
+    AndroidNotificationChannel(
+  'group_messages',
+  'Group messages',
+  groupId: 'grid_chat_messages',
+  description: 'Circle Connect group chat messages',
+  importance: Importance.max,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelCalls = AndroidNotificationChannel(
+  'calls',
+  'Calls',
+  groupId: 'grid_chat_messages',
+  description: 'Circle Connect incoming voice and video calls',
+  importance: Importance.max,
+  audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelMissedCalls =
+    AndroidNotificationChannel(
+  'missed_calls',
+  'Missed calls',
+  groupId: 'grid_chat_messages',
+  description: 'Circle Connect missed call notifications',
+  importance: Importance.high,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+/// Group 2: GRID Chat activity
+const AndroidNotificationChannel kChannelMentions = AndroidNotificationChannel(
+  'mentions',
+  'Mentions',
+  groupId: 'grid_chat_activity',
+  description: 'Mentions in moments, comments, and posts',
+  importance: Importance.high,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelComments = AndroidNotificationChannel(
+  'comments',
+  'Comments',
+  groupId: 'grid_chat_activity',
+  description: 'Comments and replies on your moments and posts',
+  importance: Importance.defaultImportance,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelLikes = AndroidNotificationChannel(
+  'likes',
+  'Likes & reactions',
+  groupId: 'grid_chat_activity',
+  description: 'Likes and reactions on your moments and messages',
+  importance: Importance.defaultImportance,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelLive = AndroidNotificationChannel(
+  'live',
+  'Live videos',
+  groupId: 'grid_chat_activity',
+  description: 'Live video broadcasts from people you follow',
+  importance: Importance.defaultImportance,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelChannels = AndroidNotificationChannel(
+  'channels',
+  'Channel posts & followers',
+  groupId: 'grid_chat_activity',
+  description: 'Posts and follower updates from subscribed channels',
+  importance: Importance.defaultImportance,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelGroups = AndroidNotificationChannel(
+  'groups',
+  'Groups (added / admin)',
+  groupId: 'grid_chat_activity',
+  description: 'Group additions, admin alerts, and group invites',
+  importance: Importance.defaultImportance,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelLocation = AndroidNotificationChannel(
+  'location',
+  'Live location',
+  groupId: 'grid_chat_activity',
+  description: 'Live location sharing updates from contacts',
+  importance: Importance.defaultImportance,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelPolls = AndroidNotificationChannel(
+  'polls',
+  'Polls',
+  groupId: 'grid_chat_activity',
+  description: 'Poll alerts and voting results',
+  importance: Importance.defaultImportance,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+const AndroidNotificationChannel kChannelContacts = AndroidNotificationChannel(
+  'contacts',
+  'Contacts joined',
+  groupId: 'grid_chat_activity',
+  description: 'Alerts when your phone contacts join Circle Connect',
+  importance: Importance.defaultImportance,
+  playSound: true,
+  enableVibration: true,
+  enableLights: true,
+);
+
+/// Map of all Circle Connect channel IDs to their definitions.
+const Map<String, AndroidNotificationChannel> kCircleConnectChannels = {
+  'messages': kChannelMessages,
+  'group_messages': kChannelGroupMessages,
+  'calls': kChannelCalls,
+  'missed_calls': kChannelMissedCalls,
+  'mentions': kChannelMentions,
+  'comments': kChannelComments,
+  'likes': kChannelLikes,
+  'live': kChannelLive,
+  'channels': kChannelChannels,
+  'groups': kChannelGroups,
+  'location': kChannelLocation,
+  'polls': kChannelPolls,
+  'contacts': kChannelContacts,
+};
+
+/// Resolves the effective Android notification channel id from push data key `channel`.
+String resolveCircleConnectChannelId(String? rawChannel, {String fallback = 'mentions'}) {
+  final clean = rawChannel?.trim().toLowerCase();
+  if (clean == null || clean.isEmpty) return fallback;
+  if (clean == 'calls') return PushNotificationBootstrap.activeCallsChannelId;
+  if (clean == 'messages') return PushNotificationBootstrap.activeMessagesChannelId;
+  if (kCircleConnectChannels.containsKey(clean)) return clean;
+  return fallback;
+}
 
 /// Safely validates that a target URL belongs to the efactor.tech domain.
 bool isSafeEfactorUrl(String url) {
@@ -317,9 +509,23 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
       await android?.deleteNotificationChannel(oldId);
     } catch (_) {}
   }
+  await android?.createNotificationChannelGroup(kGroupGridChatMessages);
+  await android?.createNotificationChannelGroup(kGroupGridChatActivity);
+  for (final channel in kCircleConnectChannels.values) {
+    await android?.createNotificationChannel(channel);
+  }
   await android?.createNotificationChannel(kMessagesChannel);
   await android?.createNotificationChannel(kCallsChannel);
   await android?.createNotificationChannel(kGridActivityChannel);
+
+  if (type == 'ACTIVITY') {
+    // ignore: avoid_print
+    print(
+      '[FCM_DEBUG] ACTIVITY push received in background; rendering notification: $data',
+    );
+    await showActivityNotificationOnPlugin(plugin, data);
+    return;
+  }
 
   if (type == 'PROFESSIONAL_SPACE_EVENT') {
     // Professional Space (GRID) sends both notification and data blocks.
@@ -518,6 +724,12 @@ Future<void> showMissedCallNotificationOnPlugin(
       rawData != null ? Map<String, dynamic>.from(rawData) : call.toJson();
   payloadMap['type'] = 'MISSED_CALL';
 
+  final rawChannel = rawData?['channel']?.toString();
+  final channelId = resolveCircleConnectChannelId(rawChannel,
+      fallback: kChannelMissedCalls.id);
+  final targetChannel =
+      kCircleConnectChannels[channelId] ?? kChannelMissedCalls;
+
   final subtitle = call.body.isNotEmpty
       ? call.body
       : (call.isVideo ? 'Missed video call' : 'Missed voice call');
@@ -528,11 +740,11 @@ Future<void> showMissedCallNotificationOnPlugin(
     subtitle,
     NotificationDetails(
       android: AndroidNotificationDetails(
-        PushNotificationBootstrap.activeMessagesChannelId,
-        kMessagesChannel.name,
-        channelDescription: kMessagesChannel.description,
+        targetChannel.id,
+        targetChannel.name,
+        channelDescription: targetChannel.description,
         icon: 'ic_notification',
-        importance: Importance.max,
+        importance: targetChannel.importance,
         priority: Priority.high,
         visibility: NotificationVisibility.public,
         category: AndroidNotificationCategory.missedCall,
@@ -624,6 +836,94 @@ Future<void> showProfessionalSpaceNotification(
   );
 }
 
+/// Posts Circle Connect Activity notification (mentions, comments, likes, live, etc.)
+/// on its designated notification channel with in-place tag replacement and avatar icon.
+Future<void> showActivityNotificationOnPlugin(
+  FlutterLocalNotificationsPlugin plugin,
+  Map<String, dynamic> data, {
+  RemoteNotification? notification,
+}) async {
+  final rawTitle = (notification?.title ?? data['title'] ?? 'Circle Connect')
+      .toString()
+      .trim();
+  final title = rawTitle.isNotEmpty ? rawTitle : 'Circle Connect';
+  final body = (notification?.body ?? data['body'] ?? data['message'] ?? '')
+      .toString()
+      .trim();
+  final rawChannel = data['channel']?.toString();
+  final channelId =
+      resolveCircleConnectChannelId(rawChannel, fallback: 'mentions');
+  final targetChannel = kCircleConnectChannels[channelId] ?? kChannelMentions;
+  final tag = (data['tag'] ?? data['activity_id'] ?? '').toString().trim();
+  final notifId = (tag.isNotEmpty
+          ? tag.hashCode
+          : (data['activity_id']?.hashCode ??
+              DateTime.now().millisecondsSinceEpoch ~/ 1000))
+      .abs();
+  final avatarUrl = (data['actor_avatar'] ?? '').toString().trim();
+  final rawUrl =
+      (data['url'] ?? data['target_url'] ?? data['targetUrl'] ?? '')
+          .toString()
+          .trim();
+  final targetUrl = rawUrl.isNotEmpty
+      ? rawUrl
+      : 'https://efactor.tech/index.php/grid-chat?open=activity';
+  final unread = data['unread'];
+  if (unread != null) {
+    GridUnreadCountsService.instance.updateUnreadCount(unread);
+  }
+
+  ByteArrayAndroidBitmap? largeIconBitmap;
+  if (avatarUrl.isNotEmpty && isSafeEfactorUrl(avatarUrl)) {
+    try {
+      final res = await http
+          .get(Uri.parse(avatarUrl))
+          .timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+        largeIconBitmap = ByteArrayAndroidBitmap(res.bodyBytes);
+      }
+    } catch (_) {}
+  }
+
+  final isHigh = targetChannel.importance == Importance.max ||
+      targetChannel.importance == Importance.high;
+
+  final androidDetails = AndroidNotificationDetails(
+    targetChannel.id,
+    targetChannel.name,
+    channelDescription: targetChannel.description,
+    importance: targetChannel.importance,
+    priority: isHigh ? Priority.high : Priority.defaultPriority,
+    icon: 'ic_notification',
+    largeIcon: largeIconBitmap,
+    tag: tag.isNotEmpty ? tag : null,
+    playSound: true,
+    enableVibration: true,
+    enableLights: true,
+  );
+
+  const iosDetails = DarwinNotificationDetails(
+    presentAlert: true,
+    presentBadge: true,
+    presentSound: true,
+  );
+
+  final payloadMap = <String, dynamic>{
+    'type': 'ACTIVITY',
+    'url': targetUrl,
+    'target_url': targetUrl,
+    ...data,
+  };
+
+  await plugin.show(
+    notifId,
+    title,
+    body,
+    NotificationDetails(android: androidDetails, iOS: iosDetails),
+    payload: jsonEncode(payloadMap),
+  );
+}
+
 /// Posts chat message notification with inline Reply and Mark as read buttons.
 Future<void> showMessageNotificationOnPlugin(
   FlutterLocalNotificationsPlugin plugin,
@@ -691,6 +991,20 @@ Future<void> showMessageNotificationOnPlugin(
           : '$senderName: $baseBody')
       : baseBody;
 
+  final rawChannel = data['channel']?.toString();
+  final channelId = rawChannel != null && rawChannel.trim().isNotEmpty
+      ? resolveCircleConnectChannelId(
+          rawChannel,
+          fallback: isGroup
+              ? kChannelGroupMessages.id
+              : PushNotificationBootstrap.activeMessagesChannelId,
+        )
+      : (isGroup
+          ? kChannelGroupMessages.id
+          : PushNotificationBootstrap.activeMessagesChannelId);
+  final targetChannel = kCircleConnectChannels[channelId] ??
+      (isGroup ? kChannelGroupMessages : kMessagesChannel);
+
   if (isLocked) {
     await plugin.show(
       notifId,
@@ -698,11 +1012,11 @@ Future<void> showMessageNotificationOnPlugin(
       'New message',
       NotificationDetails(
         android: AndroidNotificationDetails(
-          PushNotificationBootstrap.activeMessagesChannelId,
-          kMessagesChannel.name,
-          channelDescription: kMessagesChannel.description,
+          targetChannel.id,
+          targetChannel.name,
+          channelDescription: targetChannel.description,
           icon: 'ic_notification',
-          importance: Importance.max,
+          importance: targetChannel.importance,
           priority: Priority.high,
           visibility: NotificationVisibility.public,
           autoCancel: true,
@@ -731,11 +1045,11 @@ Future<void> showMessageNotificationOnPlugin(
     effectiveBody,
     NotificationDetails(
       android: AndroidNotificationDetails(
-        PushNotificationBootstrap.activeMessagesChannelId,
-        kMessagesChannel.name,
-        channelDescription: kMessagesChannel.description,
+        targetChannel.id,
+        targetChannel.name,
+        channelDescription: targetChannel.description,
         icon: 'ic_notification',
-        importance: Importance.max,
+        importance: targetChannel.importance,
         priority: Priority.high,
         visibility: NotificationVisibility.public,
         category: AndroidNotificationCategory.message,
@@ -1097,6 +1411,18 @@ class PushNotificationBootstrap {
 
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpened);
+
+    const MethodChannel('tech.efactor/circle_connect')
+        .setMethodCallHandler((call) async {
+      if (call.method == 'openSettingsUrl') {
+        final url = (call.arguments as Map?)?['url']?.toString() ??
+            'https://efactor.tech/index.php/grid-chat/settings';
+        if (isSafeEfactorUrl(url)) {
+          unawaited(GridInAppWebViewPage.loadTargetUrl(url));
+        }
+      }
+      return null;
+    });
     try {
       final initial = await messaging
           .getInitialMessage()
@@ -1173,6 +1499,7 @@ class PushNotificationBootstrap {
         sound: true,
         criticalAlert: true,
         provisional: false,
+        providesAppNotificationSettings: true,
       );
       if (Platform.isIOS) {
         // Prevent Firebase from auto-popping raw, unstacked alert banners in the foreground.
@@ -1300,6 +1627,11 @@ Token: $token
         await androidPlugin?.deleteNotificationChannel(oldId);
       } catch (_) {}
     }
+    await androidPlugin?.createNotificationChannelGroup(kGroupGridChatMessages);
+    await androidPlugin?.createNotificationChannelGroup(kGroupGridChatActivity);
+    for (final channel in kCircleConnectChannels.values) {
+      await androidPlugin?.createNotificationChannel(channel);
+    }
     await androidPlugin?.createNotificationChannel(kMessagesChannel);
     await androidPlugin?.createNotificationChannel(kCallsChannel);
     await androidPlugin?.createNotificationChannel(kGridActivityChannel);
@@ -1399,6 +1731,10 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
           activeConversationId: _activeConversationId,
         ),
       );
+      return;
+    }
+    if (type == 'ACTIVITY') {
+      unawaited(showActivityNotificationOnPlugin(_local, data));
       return;
     }
     if (type == 'PROFESSIONAL_SPACE_EVENT') {
@@ -1562,6 +1898,18 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       } else if (type == 'MISSED_CALL') {
         final call = IncomingCallData.fromJson(data);
         await IncomingCallService.instance.openCallScreenWithoutAction(call);
+      } else if (type == 'ACTIVITY') {
+        final rawUrl =
+            (data['url'] ?? data['target_url'] ?? data['targetUrl'] ?? '')
+                .toString()
+                .trim();
+        final effectiveUrl = rawUrl.isNotEmpty
+            ? rawUrl
+            : 'https://efactor.tech/index.php/grid-chat?open=activity';
+        if (isSafeEfactorUrl(effectiveUrl)) {
+          unawaited(GridInAppWebViewPage.loadTargetUrl(effectiveUrl));
+          return;
+        }
       } else {
         // Professional Space event or target_url tap
         final targetUrl =
@@ -1610,6 +1958,19 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         IncomingCallService.instance.openCallScreenWithoutAction(call),
       );
       return;
+    }
+    if (type == 'ACTIVITY') {
+      final rawUrl =
+          (data['url'] ?? data['target_url'] ?? data['targetUrl'] ?? '')
+              .toString()
+              .trim();
+      final effectiveUrl = rawUrl.isNotEmpty
+          ? rawUrl
+          : 'https://efactor.tech/index.php/grid-chat?open=activity';
+      if (isSafeEfactorUrl(effectiveUrl)) {
+        unawaited(GridInAppWebViewPage.loadTargetUrl(effectiveUrl));
+        return;
+      }
     }
 
     // Professional Space event or target_url tap
