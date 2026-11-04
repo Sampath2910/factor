@@ -3,6 +3,7 @@ package com.example.efactor_sdui
 import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
+import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
@@ -81,7 +82,81 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
 
-            // Professional Space (GRID) notification channel (matches AndroidManifest default_notification_channel_id)
+            // Channel Groups
+            notificationManager.createNotificationChannelGroup(
+                NotificationChannelGroup("grid_chat_messages", "GRID Chat messages")
+            )
+            notificationManager.createNotificationChannelGroup(
+                NotificationChannelGroup("grid_chat_activity", "GRID Chat activity")
+            )
+
+            // 1. Calls channel (in GRID Chat messages group, with user's saved ringtone)
+            val ringtoneUri = getSavedRingtoneUri()
+            val callsChannel = NotificationChannel(
+                "calls",
+                "Calls",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                group = "grid_chat_messages"
+                description = "Circle Connect incoming voice and video calls"
+                enableLights(true)
+                enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                setSound(ringtoneUri, audioAttributes)
+            }
+            notificationManager.createNotificationChannel(callsChannel)
+
+            // 2. Messages channels (in GRID Chat messages group, with user's saved notification sound)
+            val notifUri = getSavedNotificationUri()
+            val msgAudioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            val messagesChannel = NotificationChannel(
+                "messages",
+                "Messages",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                group = "grid_chat_messages"
+                description = "Circle Connect direct chat messages"
+                enableLights(true)
+                enableVibration(true)
+                setSound(notifUri, msgAudioAttributes)
+            }
+            notificationManager.createNotificationChannel(messagesChannel)
+
+            val groupMessagesChannel = NotificationChannel(
+                "group_messages",
+                "Group messages",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                group = "grid_chat_messages"
+                description = "Circle Connect group chat messages"
+                enableLights(true)
+                enableVibration(true)
+                setSound(notifUri, msgAudioAttributes)
+            }
+            notificationManager.createNotificationChannel(groupMessagesChannel)
+
+            // 3. Missed calls channel (in GRID Chat messages group)
+            val missedCallsChannel = NotificationChannel(
+                "missed_calls",
+                "Missed calls",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                group = "grid_chat_messages"
+                description = "Circle Connect missed call notifications"
+                enableLights(true)
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(missedCallsChannel)
+
+            // 4. Professional Space (GRID) notification channel
             val activityChannel = NotificationChannel(
                 "grid_activity",
                 "Professional Space",
@@ -94,18 +169,15 @@ class MainActivity : FlutterActivity() {
             }
             notificationManager.createNotificationChannel(activityChannel)
 
-            // Circle Connect default message notification channel
-            val messagesChannel = NotificationChannel(
-                "grid_messages_v4",
-                "Messages",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Circle Connect chat message notifications"
-                enableLights(true)
-                enableVibration(true)
-                setShowBadge(true)
+            // Clean up old legacy channels that show under "Other"
+            val channels = notificationManager.notificationChannels
+            for (ch in channels) {
+                if (ch.id.startsWith("grid_calls") || ch.id.startsWith("grid_messages")) {
+                    try {
+                        notificationManager.deleteNotificationChannel(ch.id)
+                    } catch (_: Exception) {}
+                }
             }
-            notificationManager.createNotificationChannel(messagesChannel)
         }
     }
 
@@ -186,7 +258,7 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "openNotificationChannelSettings" -> {
-                    val channelId = call.argument<String>("channelId") ?: "grid_calls_v4"
+                    val channelId = call.argument<String>("channelId") ?: "calls"
                     try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
@@ -386,8 +458,8 @@ class MainActivity : FlutterActivity() {
                 }
                 "getActiveNotificationChannels" -> {
                     val prefs = getPrefs()
-                    val callsChannelId = prefs.getString(PREF_CALLS_CHANNEL_ID, "grid_calls_v4") ?: "grid_calls_v4"
-                    val messagesChannelId = prefs.getString(PREF_MESSAGES_CHANNEL_ID, "grid_messages_v4") ?: "grid_messages_v4"
+                    val callsChannelId = prefs.getString(PREF_CALLS_CHANNEL_ID, "calls") ?: "calls"
+                    val messagesChannelId = prefs.getString(PREF_MESSAGES_CHANNEL_ID, "messages") ?: "messages"
                     result.success(mapOf(
                         "callsChannelId" to callsChannelId,
                         "messagesChannelId" to messagesChannelId
@@ -601,13 +673,12 @@ class MainActivity : FlutterActivity() {
         val uriPref = if (isRingtone) PREF_RINGTONE_URI else PREF_NOTIF_URI
         val soundIdPref = if (isRingtone) PREF_RINGTONE_SOUND_ID else PREF_NOTIF_SOUND_ID
         val channelIdPref = if (isRingtone) PREF_CALLS_CHANNEL_ID else PREF_MESSAGES_CHANNEL_ID
-        val versionPref = if (isRingtone) PREF_CALLS_CHANNEL_VER else PREF_MESSAGES_CHANNEL_VER
-        val defaultChannelId = if (isRingtone) "grid_calls_v4" else "grid_messages_v4"
+        val targetChannelId = if (isRingtone) "calls" else "messages"
 
         val oldChoice = prefs.getString(choicePref, "") ?: ""
         val oldUri = prefs.getString(uriPref, "") ?: ""
         val oldSoundId = prefs.getString(soundIdPref, "") ?: ""
-        val currentChannelId = prefs.getString(channelIdPref, defaultChannelId) ?: defaultChannelId
+        val currentChannelId = prefs.getString(channelIdPref, targetChannelId) ?: targetChannelId
 
         // If nothing changed, do not recreate channel
         if (oldChoice == choice && oldUri == uri && oldSoundId == soundId && prefs.contains(channelIdPref)) {
@@ -615,41 +686,70 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        val currentVer = prefs.getInt(versionPref, 4)
-        val newVer = currentVer + 1
-        val newChannelId = if (isRingtone) "grid_calls_v$newVer" else "grid_messages_v$newVer"
-
         val resolvedUri = resolveSoundUri(kind, choice, uri, soundId)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             if (notificationManager != null) {
-                try {
-                    notificationManager.deleteNotificationChannel(currentChannelId)
-                } catch (e: Exception) {
-                    Log.w("MainActivity", "Failed to delete old channel $currentChannelId: ${e.message}")
-                }
+                if (isRingtone) {
+                    try {
+                        notificationManager.deleteNotificationChannel("calls")
+                    } catch (_: Exception) {}
 
-                val channelName = if (isRingtone) "Incoming calls" else "Messages"
-                val channelDesc = if (isRingtone) "Alerts for incoming Circle Connect calls" else "Circle Connect chat message notifications"
-                val channelUsage = if (isRingtone) AudioAttributes.USAGE_NOTIFICATION_RINGTONE else AudioAttributes.USAGE_NOTIFICATION
+                    val channel = NotificationChannel(
+                        "calls",
+                        "Calls",
+                        NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        group = "grid_chat_messages"
+                        description = "Circle Connect incoming voice and video calls"
+                        enableVibration(true)
+                        enableLights(true)
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                        val audioAttributes = AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                        setSound(resolvedUri, audioAttributes)
+                    }
+                    notificationManager.createNotificationChannel(channel)
+                } else {
+                    try {
+                        notificationManager.deleteNotificationChannel("messages")
+                        notificationManager.deleteNotificationChannel("group_messages")
+                    } catch (_: Exception) {}
 
-                val channel = NotificationChannel(
-                    newChannelId,
-                    channelName,
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = channelDesc
-                    enableVibration(true)
-                    enableLights(true)
-                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     val audioAttributes = AudioAttributes.Builder()
-                        .setUsage(channelUsage)
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
-                    setSound(resolvedUri, audioAttributes)
+
+                    val directMsgChannel = NotificationChannel(
+                        "messages",
+                        "Messages",
+                        NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        group = "grid_chat_messages"
+                        description = "Circle Connect direct chat messages"
+                        enableVibration(true)
+                        enableLights(true)
+                        setSound(resolvedUri, audioAttributes)
+                    }
+                    notificationManager.createNotificationChannel(directMsgChannel)
+
+                    val groupMsgChannel = NotificationChannel(
+                        "group_messages",
+                        "Group messages",
+                        NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        group = "grid_chat_messages"
+                        description = "Circle Connect group chat messages"
+                        enableVibration(true)
+                        enableLights(true)
+                        setSound(resolvedUri, audioAttributes)
+                    }
+                    notificationManager.createNotificationChannel(groupMsgChannel)
                 }
-                notificationManager.createNotificationChannel(channel)
             }
         }
 
@@ -657,12 +757,11 @@ class MainActivity : FlutterActivity() {
             .putString(choicePref, choice)
             .putString(uriPref, uri)
             .putString(soundIdPref, soundId)
-            .putString(channelIdPref, newChannelId)
-            .putInt(versionPref, newVer)
+            .putString(channelIdPref, targetChannelId)
             .apply()
 
-        Log.i("MainActivity", "[SOUND] Updated $kind sound to choice=$choice, channel=$newChannelId")
-        result.success(mapOf("changed" to true, "channelId" to newChannelId))
+        Log.i("MainActivity", "[SOUND] Updated $kind sound to choice=$choice, channel=$targetChannelId")
+        result.success(mapOf("changed" to true, "channelId" to targetChannelId))
     }
 
     private fun handlePlayAppSound(kind: String, result: MethodChannel.Result) {

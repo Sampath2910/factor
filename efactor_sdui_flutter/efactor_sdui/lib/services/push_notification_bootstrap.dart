@@ -240,8 +240,6 @@ const Map<String, AndroidNotificationChannel> kCircleConnectChannels = {
 String resolveCircleConnectChannelId(String? rawChannel, {String fallback = 'mentions'}) {
   final clean = rawChannel?.trim().toLowerCase();
   if (clean == null || clean.isEmpty) return fallback;
-  if (clean == 'calls') return PushNotificationBootstrap.activeCallsChannelId;
-  if (clean == 'messages') return PushNotificationBootstrap.activeMessagesChannelId;
   if (kCircleConnectChannels.containsKey(clean)) return clean;
   return fallback;
 }
@@ -515,9 +513,23 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
     'grid_calls',
     'grid_calls_v2',
     'grid_calls_v3',
+    'grid_calls_v4',
+    'grid_calls_v5',
+    'grid_calls_v6',
+    'grid_calls_v7',
+    'grid_calls_v8',
+    'grid_calls_v9',
+    'grid_calls_v10',
     'grid_messages',
     'grid_messages_v2',
     'grid_messages_v3',
+    'grid_messages_v4',
+    'grid_messages_v5',
+    'grid_messages_v6',
+    'grid_messages_v7',
+    'grid_messages_v8',
+    'grid_messages_v9',
+    'grid_messages_v10',
   ]) {
     try {
       await android?.deleteNotificationChannel(oldId);
@@ -528,8 +540,6 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   for (final channel in kCircleConnectChannels.values) {
     await android?.createNotificationChannel(channel);
   }
-  await android?.createNotificationChannel(kMessagesChannel);
-  await android?.createNotificationChannel(kCallsChannel);
   await android?.createNotificationChannel(kGridActivityChannel);
 
   if (type == 'ACTIVITY') {
@@ -669,15 +679,20 @@ Future<void> showIncomingCallNotificationOnPlugin(
       ? call.body
       : (call.isVideo ? 'Incoming video call' : 'Incoming voice call');
 
+  final rawChannel = rawData?['channel']?.toString();
+  final channelId =
+      resolveCircleConnectChannelId(rawChannel, fallback: kChannelCalls.id);
+  final targetChannel = kCircleConnectChannels[channelId] ?? kChannelCalls;
+
   await plugin.show(
     notifId,
     call.callerName,
     callSubtitle,
     NotificationDetails(
       android: AndroidNotificationDetails(
-        PushNotificationBootstrap.activeCallsChannelId,
-        kCallsChannel.name,
-        channelDescription: kCallsChannel.description,
+        targetChannel.id,
+        targetChannel.name,
+        channelDescription: targetChannel.description,
         icon: 'ic_notification',
         importance: Importance.max,
         priority: Priority.max,
@@ -1049,13 +1064,13 @@ Future<void> showMessageNotificationOnPlugin(
           rawChannel,
           fallback: isGroup
               ? kChannelGroupMessages.id
-              : PushNotificationBootstrap.activeMessagesChannelId,
+              : kChannelMessages.id,
         )
       : (isGroup
           ? kChannelGroupMessages.id
-          : PushNotificationBootstrap.activeMessagesChannelId);
+          : kChannelMessages.id);
   final targetChannel = kCircleConnectChannels[channelId] ??
-      (isGroup ? kChannelGroupMessages : kMessagesChannel);
+      (isGroup ? kChannelGroupMessages : kChannelMessages);
 
   if (isLocked) {
     await plugin.show(
@@ -1342,8 +1357,8 @@ class PushNotificationBootstrap {
   static final PushNotificationBootstrap instance =
       PushNotificationBootstrap._();
 
-  static String _activeCallsChannelId = kCallsChannel.id;
-  static String _activeMessagesChannelId = kMessagesChannel.id;
+  static String _activeCallsChannelId = kChannelCalls.id;
+  static String _activeMessagesChannelId = kChannelMessages.id;
 
   static String get activeCallsChannelId => _activeCallsChannelId;
   static String get activeMessagesChannelId => _activeMessagesChannelId;
@@ -1352,13 +1367,22 @@ class PushNotificationBootstrap {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedCalls = prefs.getString('circle_connect_calls_channel_id');
-      if (savedCalls != null && savedCalls.isNotEmpty) {
+      if (savedCalls != null &&
+          savedCalls.isNotEmpty &&
+          !savedCalls.startsWith('grid_calls')) {
         _activeCallsChannelId = savedCalls;
+      } else {
+        _activeCallsChannelId = kChannelCalls.id;
       }
       final savedMsgs = prefs.getString('circle_connect_messages_channel_id');
-      if (savedMsgs != null && savedMsgs.isNotEmpty) {
+      if (savedMsgs != null &&
+          savedMsgs.isNotEmpty &&
+          !savedMsgs.startsWith('grid_messages')) {
         _activeMessagesChannelId = savedMsgs;
         GridChatMessageNotifications.activeChannelId = savedMsgs;
+      } else {
+        _activeMessagesChannelId = kChannelMessages.id;
+        GridChatMessageNotifications.activeChannelId = kChannelMessages.id;
       }
     } catch (_) {}
   }
@@ -1672,9 +1696,23 @@ Token: $token
       'grid_calls',
       'grid_calls_v2',
       'grid_calls_v3',
+      'grid_calls_v4',
+      'grid_calls_v5',
+      'grid_calls_v6',
+      'grid_calls_v7',
+      'grid_calls_v8',
+      'grid_calls_v9',
+      'grid_calls_v10',
       'grid_messages',
       'grid_messages_v2',
       'grid_messages_v3',
+      'grid_messages_v4',
+      'grid_messages_v5',
+      'grid_messages_v6',
+      'grid_messages_v7',
+      'grid_messages_v8',
+      'grid_messages_v9',
+      'grid_messages_v10',
     ]) {
       try {
         await androidPlugin?.deleteNotificationChannel(oldId);
@@ -1685,8 +1723,6 @@ Token: $token
     for (final channel in kCircleConnectChannels.values) {
       await androidPlugin?.createNotificationChannel(channel);
     }
-    await androidPlugin?.createNotificationChannel(kMessagesChannel);
-    await androidPlugin?.createNotificationChannel(kCallsChannel);
     await androidPlugin?.createNotificationChannel(kGridActivityChannel);
     _localNotificationsReady = true;
   }

@@ -835,7 +835,7 @@ class _PushDiagnosticSheetState extends State<PushDiagnosticSheet> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
-                          'Call Channel Settings (grid_calls_v4)',
+                          'Call Channel Settings (calls)',
                           style: TextStyle(color: Colors.white, fontSize: 13),
                         ),
                         subtitle: const Text(

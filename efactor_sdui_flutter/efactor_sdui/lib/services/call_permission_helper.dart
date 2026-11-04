@@ -31,7 +31,7 @@ class CallPermissionHelper {
   /// On Vivo FuntouchOS, Samsung, and Xiaomi, this screen contains the
   /// "Floating notifications / Banner" and "Lock screen" toggle.
   static Future<bool> openCallNotificationChannelSettings({
-    String channelId = 'grid_calls_v4',
+    String channelId = 'calls',
   }) async {
     if (kIsWeb || !Platform.isAndroid) return false;
     try {

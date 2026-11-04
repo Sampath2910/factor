@@ -353,7 +353,11 @@ class GridChatMessageNotifications {
       };
       await _writeStacks(stacks);
       await _rememberSeen(seen, message.messageId);
-      await _show(plugin, message, lines, locked: locked);
+      final rawChannel = data['channel']?.toString();
+      final channelId = (rawChannel != null && rawChannel.trim().isNotEmpty)
+          ? rawChannel.trim().toLowerCase()
+          : (message.isGroup ? 'group_messages' : 'messages');
+      await _show(plugin, message, lines, locked: locked, channelId: channelId);
       chatTrace('posted', message.conversationId, message.messageId);
     });
   }
@@ -475,14 +479,22 @@ class GridChatMessageNotifications {
     GridChatMessage message,
     List<GridChatMessageLine> lines, {
     required bool locked,
+    String? channelId,
   }) async {
+    final effectiveChannelId = channelId ??
+        (message.isGroup ? 'group_messages' : activeChannelId);
+    final effectiveChannelName =
+        message.isGroup ? 'Group messages' : kMessagesChannelName;
+    final effectiveChannelDescription = message.isGroup
+        ? 'Circle Connect group chat messages'
+        : kMessagesChannelDescription;
     final timeout = _timeoutAfter(message.expiresAt);
     final details = locked
         ? NotificationDetails(
             android: AndroidNotificationDetails(
-              activeChannelId,
-              kMessagesChannelName,
-              channelDescription: kMessagesChannelDescription,
+              effectiveChannelId,
+              effectiveChannelName,
+              channelDescription: effectiveChannelDescription,
               icon: 'ic_notification',
               importance: Importance.max,
               priority: Priority.high,
@@ -508,9 +520,9 @@ class GridChatMessageNotifications {
           )
         : NotificationDetails(
             android: AndroidNotificationDetails(
-              activeChannelId,
-              kMessagesChannelName,
-              channelDescription: kMessagesChannelDescription,
+              effectiveChannelId,
+              effectiveChannelName,
+              channelDescription: effectiveChannelDescription,
               icon: 'ic_notification',
               importance: Importance.max,
               priority: Priority.high,
@@ -736,7 +748,7 @@ class GridChatMessageNotifications {
   }
 }
 
-const String kMessagesChannelId = 'grid_messages_v4';
+const String kMessagesChannelId = 'messages';
 const String kMessagesChannelName = 'Messages';
 const String kMessagesChannelDescription =
-    'Circle Connect chat message notifications';
+    'Circle Connect direct chat messages';

@@ -7,17 +7,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Circle Connect Phone Sounds Parity Tests', () {
-    test('Default channels initialize with standard IDs', () {
-      expect(PushNotificationBootstrap.activeCallsChannelId,
-          equals('grid_calls_v4'));
-      expect(PushNotificationBootstrap.activeMessagesChannelId,
-          equals('grid_messages_v4'));
-      expect(GridChatMessageNotifications.activeChannelId,
-          equals('grid_messages_v4'));
+    test('Default channels initialize with standard grouped IDs', () {
+      expect(PushNotificationBootstrap.activeCallsChannelId, equals('calls'));
+      expect(PushNotificationBootstrap.activeMessagesChannelId, equals('messages'));
+      expect(GridChatMessageNotifications.activeChannelId, equals('messages'));
     });
 
     test(
-        'refreshActiveChannels updates to versioned channels from SharedPreferences',
+        'refreshActiveChannels ignores legacy grid_calls / grid_messages and uses calls/messages',
         () async {
       SharedPreferences.setMockInitialValues({
         'circle_connect_calls_channel_id': 'grid_calls_v5',
@@ -26,12 +23,22 @@ void main() {
 
       await PushNotificationBootstrap.refreshActiveChannels();
 
-      expect(PushNotificationBootstrap.activeCallsChannelId,
-          equals('grid_calls_v5'));
-      expect(PushNotificationBootstrap.activeMessagesChannelId,
-          equals('grid_messages_v5'));
-      expect(GridChatMessageNotifications.activeChannelId,
-          equals('grid_messages_v5'));
+      expect(PushNotificationBootstrap.activeCallsChannelId, equals('calls'));
+      expect(PushNotificationBootstrap.activeMessagesChannelId, equals('messages'));
+      expect(GridChatMessageNotifications.activeChannelId, equals('messages'));
+    });
+
+    test('refreshActiveChannels updates to active grouped channels', () async {
+      SharedPreferences.setMockInitialValues({
+        'circle_connect_calls_channel_id': 'calls',
+        'circle_connect_messages_channel_id': 'messages',
+      });
+
+      await PushNotificationBootstrap.refreshActiveChannels();
+
+      expect(PushNotificationBootstrap.activeCallsChannelId, equals('calls'));
+      expect(PushNotificationBootstrap.activeMessagesChannelId, equals('messages'));
+      expect(GridChatMessageNotifications.activeChannelId, equals('messages'));
     });
   });
 }
