@@ -24,6 +24,7 @@ import '../services/ongoing_call_service.dart';
 import '../services/push_notification_bootstrap.dart';
 import '../services/grid_unread_counts_service.dart';
 import 'dynamic_grid_sdui_page.dart';
+import 'circle_connect_file_service.dart';
 import 'grid_live_location_service.dart';
 import 'grid_media_cache_service.dart';
 import 'grid_offline_outbox_service.dart';
@@ -717,6 +718,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         GridInAppWebViewPage.updatePushTokenInWeb(newToken);
       }
     });
+    CircleConnectFileService.instance.onBridgeEvent = (eventName, data) {
+      if (!mounted) return;
+      final js =
+          'window.CircleConnectFiles && window.CircleConnectFiles._trigger(${jsonEncode(eventName)}, ${jsonEncode(data)});';
+      unawaited(_controller.runJavaScript(js));
+    };
     _initController();
     _setupPermissionsAndLoad();
   }
@@ -753,6 +760,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     PushNotificationBootstrap.instance.setActiveConversationId(null);
     CircleConnectDeviceKeyStore.instance
         .removeKeyStatusListener(_onDeviceKeyStatusChanged);
+    CircleConnectFileService.instance.onBridgeEvent = null;
     GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
     _outboxSyncedSub?.cancel();
     _connectivitySub?.cancel();
@@ -791,6 +799,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         'CircleConnectMediaBridge',
         onMessageReceived: (JavaScriptMessage msg) {
           _handleCircleConnectMediaBridgeMessage(msg.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        'CircleConnectFileBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          _handleCircleConnectFileBridgeMessage(msg.message);
         },
       )
       ..addJavaScriptChannel(
@@ -1672,6 +1686,163 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     onActionSynced: null
   };
 
+  // Native File Sharing & Open With Bridge
+  (function() {
+    var listeners = {};
+    var pendingPromises = {};
+
+    window.CircleConnectFiles = {
+      pickDocument: function(options) {
+        return new Promise(function(resolve, reject) {
+          var callId = 'file_pick_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+          pendingPromises[callId] = { resolve: resolve, reject: reject };
+          if (window.CircleConnectFileBridge) {
+            window.CircleConnectFileBridge.postMessage(JSON.stringify({
+              action: 'pickDocument',
+              callId: callId,
+              options: options || {}
+            }));
+          } else {
+            reject({ success: false, error: 'CircleConnectFileBridge not available' });
+          }
+        });
+      },
+      getCachedFile: function(remoteUrl, fileName, mimeType) {
+        return new Promise(function(resolve, reject) {
+          var callId = 'file_cache_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+          pendingPromises[callId] = { resolve: resolve, reject: reject };
+          if (window.CircleConnectFileBridge) {
+            window.CircleConnectFileBridge.postMessage(JSON.stringify({
+              action: 'getCachedFile',
+              callId: callId,
+              remoteUrl: String(remoteUrl || ''),
+              fileName: fileName ? String(fileName) : '',
+              mimeType: mimeType ? String(mimeType) : ''
+            }));
+          } else {
+            resolve({ isCached: false, localPath: null });
+          }
+        });
+      },
+      downloadFile: function(remoteUrl, fileName, mimeType, downloadId) {
+        return new Promise(function(resolve, reject) {
+          var id = downloadId ? String(downloadId) : ('dl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+          pendingPromises[id] = { resolve: resolve, reject: reject };
+          if (window.CircleConnectFileBridge) {
+            window.CircleConnectFileBridge.postMessage(JSON.stringify({
+              action: 'downloadFile',
+              callId: id,
+              downloadId: id,
+              remoteUrl: String(remoteUrl || ''),
+              fileName: fileName ? String(fileName) : '',
+              mimeType: mimeType ? String(mimeType) : ''
+            }));
+          } else {
+            reject({ success: false, error: 'CircleConnectFileBridge not available' });
+          }
+        });
+      },
+      cancelDownload: function(downloadId) {
+        if (window.CircleConnectFileBridge) {
+          window.CircleConnectFileBridge.postMessage(JSON.stringify({
+            action: 'cancelDownload',
+            downloadId: String(downloadId || '')
+          }));
+        }
+      },
+      openFile: function(localPath, mimeType, fileName) {
+        return new Promise(function(resolve, reject) {
+          var callId = 'file_open_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+          pendingPromises[callId] = { resolve: resolve, reject: reject };
+          if (window.CircleConnectFileBridge) {
+            window.CircleConnectFileBridge.postMessage(JSON.stringify({
+              action: 'openFile',
+              callId: callId,
+              localPath: String(localPath || ''),
+              mimeType: mimeType ? String(mimeType) : '',
+              fileName: fileName ? String(fileName) : ''
+            }));
+          } else {
+            reject({ success: false, error: 'CircleConnectFileBridge not available' });
+          }
+        });
+      },
+      saveFileToDownloads: function(remoteUrl, fileName, mimeType) {
+        return new Promise(function(resolve, reject) {
+          var callId = 'file_save_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+          pendingPromises[callId] = { resolve: resolve, reject: reject };
+          if (window.CircleConnectFileBridge) {
+            window.CircleConnectFileBridge.postMessage(JSON.stringify({
+              action: 'saveFileToDownloads',
+              callId: callId,
+              remoteUrl: String(remoteUrl || ''),
+              fileName: fileName ? String(fileName) : '',
+              mimeType: mimeType ? String(mimeType) : ''
+            }));
+          } else {
+            reject({ success: false, error: 'CircleConnectFileBridge not available' });
+          }
+        });
+      },
+      uploadFile: function(options) {
+        return new Promise(function(resolve, reject) {
+          options = options || {};
+          var id = options.uploadId ? String(options.uploadId) : ('up_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+          pendingPromises[id] = { resolve: resolve, reject: reject };
+          if (window.CircleConnectFileBridge) {
+            window.CircleConnectFileBridge.postMessage(JSON.stringify({
+              action: 'uploadFile',
+              callId: id,
+              uploadId: id,
+              localPath: String(options.localPath || ''),
+              uploadUrl: String(options.uploadUrl || ''),
+              headers: options.headers || null,
+              fields: options.fields || null
+            }));
+          } else {
+            reject({ success: false, error: 'CircleConnectFileBridge not available' });
+          }
+        });
+      },
+      cancelUpload: function(uploadId) {
+        if (window.CircleConnectFileBridge) {
+          window.CircleConnectFileBridge.postMessage(JSON.stringify({
+            action: 'cancelUpload',
+            uploadId: String(uploadId || '')
+          }));
+        }
+      },
+      on: function(event, callback) {
+        listeners[event] = listeners[event] || [];
+        listeners[event].push(callback);
+      },
+      off: function(event, callback) {
+        if (!listeners[event]) return;
+        listeners[event] = listeners[event].filter(function(cb) { return cb !== callback; });
+      },
+      _trigger: function(event, data) {
+        if (listeners[event]) {
+          listeners[event].forEach(function(cb) {
+            try { cb(data); } catch(e) { console.error('CircleConnectFiles listener error:', e); }
+          });
+        }
+        try {
+          window.dispatchEvent(new CustomEvent(event, { detail: data }));
+        } catch(e) {}
+      },
+      _resolvePromise: function(callId, result, isError) {
+        if (pendingPromises[callId]) {
+          if (isError) {
+            pendingPromises[callId].reject(result);
+          } else {
+            pendingPromises[callId].resolve(result);
+          }
+          delete pendingPromises[callId];
+        }
+      }
+    };
+  })();
+
   // Channels Real-Time In-Place Offline Recovery (Preserves React App & All Tabs like Calls/Chats)
   (function() {
     if (window.__channels_snapshot_active) return;
@@ -2199,6 +2370,129 @@ Error: $error
       }
     } catch (e) {
       debugPrint('[GridInAppWebView] Media bridge error: $e');
+    }
+  }
+
+  /// Handles file sharing, download, upload and "Open With" requests from CircleConnectFileBridge.
+  void _handleCircleConnectFileBridgeMessage(String rawJson) async {
+    try {
+      final data = jsonDecode(rawJson) as Map<String, dynamic>;
+      final action = data['action']?.toString();
+      final callId = data['callId']?.toString();
+
+      void resolve(dynamic result, {bool isError = false}) {
+        if (!mounted || callId == null || callId.isEmpty) return;
+        final js =
+            'window.CircleConnectFiles && window.CircleConnectFiles._resolvePromise(${jsonEncode(callId)}, ${jsonEncode(result)}, $isError);';
+        unawaited(_controller.runJavaScript(js));
+      }
+
+      if (action == 'pickDocument') {
+        final options = (data['options'] as Map?) ?? const {};
+        final allowedExtensions = (options['allowedExtensions'] as List?)
+            ?.map((e) => e.toString())
+            .toList();
+        final maxSizeBytes = options['maxSizeBytes'] is int
+            ? options['maxSizeBytes'] as int
+            : (options['maxSizeMb'] is num
+                ? ((options['maxSizeMb'] as num) * 1024 * 1024).round()
+                : null);
+
+        final result = await CircleConnectFileService.instance.pickDocument(
+          allowedExtensions: allowedExtensions,
+          maxSizeBytes: maxSizeBytes,
+        );
+        resolve(result,
+            isError: result['success'] != true && result['cancelled'] != true);
+      } else if (action == 'getCachedFile') {
+        final remoteUrl = data['remoteUrl']?.toString() ?? '';
+        final fileName = data['fileName']?.toString();
+        final mimeType = data['mimeType']?.toString();
+
+        final result = await CircleConnectFileService.instance.getCachedFile(
+          remoteUrl: remoteUrl,
+          fileName: fileName,
+          mimeType: mimeType,
+        );
+        resolve(result);
+      } else if (action == 'downloadFile') {
+        final remoteUrl = data['remoteUrl']?.toString() ?? '';
+        final downloadId = data['downloadId']?.toString() ??
+            callId ??
+            'dl_${DateTime.now().millisecondsSinceEpoch}';
+        final fileName = data['fileName']?.toString();
+        final mimeType = data['mimeType']?.toString();
+        final headers = data['headers'] is Map
+            ? Map<String, String>.from((data['headers'] as Map).map(
+                (k, v) => MapEntry(k.toString(), v.toString()),
+              ))
+            : null;
+
+        final result = await CircleConnectFileService.instance.downloadFile(
+          remoteUrl: remoteUrl,
+          downloadId: downloadId,
+          fileName: fileName,
+          mimeType: mimeType,
+          headers: headers,
+        );
+        resolve(result, isError: result['success'] != true);
+      } else if (action == 'cancelDownload') {
+        final downloadId = data['downloadId']?.toString() ?? '';
+        CircleConnectFileService.instance.cancelDownload(downloadId);
+      } else if (action == 'openFile') {
+        final localPath = data['localPath']?.toString() ?? '';
+        final mimeType = data['mimeType']?.toString();
+        final fileName = data['fileName']?.toString();
+
+        final result = await CircleConnectFileService.instance.openFile(
+          localPath: localPath,
+          mimeType: mimeType,
+          fileName: fileName,
+        );
+        resolve(result, isError: result['success'] != true);
+      } else if (action == 'saveFileToDownloads') {
+        final remoteUrl = data['remoteUrl']?.toString() ?? '';
+        final fileName = data['fileName']?.toString();
+        final mimeType = data['mimeType']?.toString();
+
+        final result =
+            await CircleConnectFileService.instance.saveFileToDownloads(
+          remoteUrl: remoteUrl,
+          fileName: fileName,
+          mimeType: mimeType,
+        );
+        resolve(result, isError: result['success'] != true);
+      } else if (action == 'uploadFile') {
+        final uploadId = data['uploadId']?.toString() ??
+            callId ??
+            'up_${DateTime.now().millisecondsSinceEpoch}';
+        final localPath = data['localPath']?.toString() ?? '';
+        final uploadUrl = data['uploadUrl']?.toString() ?? '';
+        final headers = data['headers'] is Map
+            ? Map<String, String>.from((data['headers'] as Map).map(
+                (k, v) => MapEntry(k.toString(), v.toString()),
+              ))
+            : null;
+        final fields = data['fields'] is Map
+            ? Map<String, String>.from((data['fields'] as Map).map(
+                (k, v) => MapEntry(k.toString(), v.toString()),
+              ))
+            : null;
+
+        final result = await CircleConnectFileService.instance.uploadFile(
+          uploadId: uploadId,
+          localPath: localPath,
+          uploadUrl: uploadUrl,
+          headers: headers,
+          fields: fields,
+        );
+        resolve(result, isError: result['success'] != true);
+      } else if (action == 'cancelUpload') {
+        final uploadId = data['uploadId']?.toString() ?? '';
+        CircleConnectFileService.instance.cancelUpload(uploadId);
+      }
+    } catch (e) {
+      debugPrint('[GridInAppWebView] File bridge error: $e');
     }
   }
 
