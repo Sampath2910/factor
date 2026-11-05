@@ -58,6 +58,23 @@ import UserNotifications
         } else {
           result("")
         }
+      case "saveImageToGallery":
+        guard let args = call.arguments as? [String: Any],
+              let base64Str = args["base64"] as? String else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing image data", details: nil))
+          return
+        }
+        var cleanBase64 = base64Str.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let commaIndex = cleanBase64.firstIndex(of: ",") {
+          cleanBase64 = String(cleanBase64[cleanBase64.index(after: commaIndex)...])
+        }
+        guard let data = Data(base64Encoded: cleanBase64),
+              let image = UIImage(data: data) else {
+          result(FlutterError(code: "DECODE_ERROR", message: "Failed to decode Base64 image", details: nil))
+          return
+        }
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        result(true)
       case "startIncomingRing":
         self.startIncomingRing()
         result(true)

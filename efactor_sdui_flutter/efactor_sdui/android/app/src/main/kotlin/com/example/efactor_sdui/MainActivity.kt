@@ -6,23 +6,28 @@ import android.app.NotificationChannel
 import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaScannerConnection
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Base64
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -33,6 +38,8 @@ import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Application host.
@@ -223,6 +230,62 @@ class MainActivity : FlutterActivity() {
                     val url = call.argument<String>("url") ?: "https://efactor.tech"
                     val cookies = CookieManager.getInstance().getCookie(url) ?: ""
                     result.success(cookies)
+                }
+                "saveImageToGallery" -> {
+                    val base64Data = call.argument<String>("base64") ?: ""
+                    val fileName = call.argument<String>("fileName") ?: "grid-card.png"
+                    val mimeType = call.argument<String>("mimeType") ?: "image/png"
+                    try {
+                        val cleanBase64 = if (base64Data.contains(",")) {
+                            base64Data.substringAfter(",")
+                        } else {
+                            base64Data
+                        }.trim()
+                        val bytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+
+                        val resolver = applicationContext.contentResolver
+                        val contentValues = ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/GRID")
+                                put(MediaStore.MediaColumns.IS_PENDING, 1)
+                            }
+                        }
+
+                        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                        if (uri != null) {
+                            resolver.openOutputStream(uri)?.use { stream ->
+                                stream.write(bytes)
+                                stream.flush()
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                contentValues.clear()
+                                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                                resolver.update(uri, contentValues, null, null)
+                            }
+                            result.success(true)
+                        } else {
+                            val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                            val gridDir = File(picturesDir, "GRID")
+                            if (!gridDir.exists()) gridDir.mkdirs()
+                            val destFile = File(gridDir, fileName)
+                            FileOutputStream(destFile).use { fos ->
+                                fos.write(bytes)
+                                fos.flush()
+                            }
+                            MediaScannerConnection.scanFile(
+                                applicationContext,
+                                arrayOf(destFile.absolutePath),
+                                arrayOf(mimeType),
+                                null
+                            )
+                            result.success(true)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error saving image to gallery", e)
+                        result.error("SAVE_FAILED", e.message, null)
+                    }
                 }
                 "canDrawOverlays" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

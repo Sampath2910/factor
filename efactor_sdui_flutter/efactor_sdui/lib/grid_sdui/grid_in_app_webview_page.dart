@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -194,8 +195,7 @@ class GridInAppWebViewPage extends StatefulWidget {
     final initialPath = initialUri.path.toLowerCase();
     final initialIsScanner =
         initialPath.contains('scanner') || initialPath.contains('scan');
-    final initialIsChat =
-        initialPath.contains('/grid-chat') ||
+    final initialIsChat = initialPath.contains('/grid-chat') ||
         initialPath.contains('/grid_chat') ||
         initialPath.contains('chat');
     final initialIsGrid =
@@ -326,7 +326,8 @@ class GridInAppWebViewPage extends StatefulWidget {
     double? elementWidth,
   }) {
     // 1. Strict coordinate boundary: clicks outside top-left logo zone are never exit triggers
-    if (clientX != null && (clientX > 150 || (clientY != null && clientY > 70))) {
+    if (clientX != null &&
+        (clientX > 150 || (clientY != null && clientY > 70))) {
       return false;
     }
 
@@ -1129,7 +1130,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
                 '[GridInAppWebView] Circle Connect logo exit intercepted via onUrlChange: $url',
               );
               _safeExitToGrid();
-            } else if (GridInAppWebViewPage.isProfessionalSpaceExitUrl(targetUri)) {
+            } else if (GridInAppWebViewPage.isProfessionalSpaceExitUrl(
+                targetUri)) {
               debugPrint(
                 '[GridInAppWebView] Professional Space exit intercepted via onUrlChange: $url',
               );
@@ -1291,6 +1293,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
 (function() {
   var fcmToken = $tokenJson;
   window.__efactor_fcm_token = fcmToken;
+  window.__efactor_can_save_image = true;
+  window.__efactor_can_share = true;
   if (typeof window.gridNativePushTokenRefresh === 'function') {
     try { window.gridNativePushTokenRefresh(fcmToken); } catch(e) { console.error(e); }
   }
@@ -2429,7 +2433,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           try {
             await CallPermissionHelper.requestIgnoreBatteryOptimizations();
           } catch (e) {
-            debugPrint('[CircleConnect] requestBatteryOptimizationExemption error: $e');
+            debugPrint(
+                '[CircleConnect] requestBatteryOptimizationExemption error: $e');
           }
         }());
       } else if (action == 'callSignalLog') {
@@ -2509,11 +2514,96 @@ Error: $error
       } else if (action == 'stopLiveLocation') {
         final messageId = data['messageId']?.toString() ?? '';
         GridLiveLocationService.instance.stop(messageId, postStop: false);
+      } else if (action == 'share') {
+        final title = data['title']?.toString() ?? '';
+        final text = data['text']?.toString() ?? '';
+        final url = data['url']?.toString() ?? '';
+        _handleCardShare(title: title, text: text, url: url);
+      } else if (action == 'saveImage') {
+        final fileName = data['fileName']?.toString() ?? 'grid-card.png';
+        final mimeType = data['mimeType']?.toString() ?? 'image/png';
+        final base64Data = data['base64']?.toString() ?? '';
+        _handleSaveCardImage(
+          fileName: fileName,
+          mimeType: mimeType,
+          base64Data: base64Data,
+        );
       }
     } catch (e) {
       debugPrint(
           '[GridInAppWebView] Failed parsing CircleConnectPushBridge msg: $e');
     }
+  }
+
+  void _handleCardShare({
+    required String title,
+    required String text,
+    required String url,
+  }) {
+    final parts = <String>[];
+    if (text.trim().isNotEmpty) parts.add(text.trim());
+    if (url.trim().isNotEmpty && !parts.contains(url.trim())) {
+      parts.add(url.trim());
+    }
+    final shareContent =
+        parts.isNotEmpty ? parts.join('\n') : (url.isNotEmpty ? url : title);
+    if (shareContent.isEmpty) return;
+
+    unawaited(SharePlus.instance.share(
+      ShareParams(
+        text: shareContent,
+        subject: title.isNotEmpty ? title : null,
+      ),
+    ));
+  }
+
+  void _handleSaveCardImage({
+    required String fileName,
+    required String mimeType,
+    required String base64Data,
+  }) {
+    var cleanBase64 = base64Data.trim();
+    if (cleanBase64.contains(',')) {
+      cleanBase64 = cleanBase64.split(',').last.trim();
+    }
+    if (cleanBase64.isEmpty) return;
+
+    unawaited(() async {
+      try {
+        const channel = MethodChannel('tech.efactor/circle_connect');
+        final success = await channel.invokeMethod<bool>('saveImageToGallery', {
+          'base64': cleanBase64,
+          'fileName': fileName.isNotEmpty ? fileName : 'grid-card.png',
+          'mimeType': mimeType.isNotEmpty ? mimeType : 'image/png',
+        });
+        if (mounted && (success ?? false)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Visiting card QR code saved to gallery'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('[GridInAppWebView] Native saveImageToGallery failed: $e');
+        try {
+          final bytes = base64Decode(cleanBase64);
+          final dir = await getApplicationDocumentsDirectory();
+          final effectiveFileName =
+              fileName.isNotEmpty ? fileName : 'grid-card.png';
+          final file = File('${dir.path}/$effectiveFileName');
+          await file.writeAsBytes(bytes);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('QR code saved: ${file.path.split('/').last}'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        } catch (_) {}
+      }
+    }());
   }
 
   Future<void> _handleStartLiveLocation({
@@ -2674,7 +2764,8 @@ Error: $error
           mimeType: mimeType,
           headers: requestHeaders.isNotEmpty ? requestHeaders : null,
         );
-        final isError = result['success'] != true && result['cancelled'] != true;
+        final isError =
+            result['success'] != true && result['cancelled'] != true;
         // Resolve using the client's downloadId as requested by Circle Connect spec
         if (downloadId.isNotEmpty) {
           final js =
@@ -2691,7 +2782,11 @@ Error: $error
         // Also reject/resolve the pending promise so the client is notified immediately
         if (downloadId.isNotEmpty) {
           final js =
-              'window.CircleConnectFiles && window.CircleConnectFiles._resolvePromise(${jsonEncode(downloadId)}, ${jsonEncode({'success': false, 'cancelled': true, 'error': 'Download cancelled.'})}, false);';
+              'window.CircleConnectFiles && window.CircleConnectFiles._resolvePromise(${jsonEncode(downloadId)}, ${jsonEncode({
+                'success': false,
+                'cancelled': true,
+                'error': 'Download cancelled.'
+              })}, false);';
           unawaited(_controller.runJavaScript(js));
         }
       } else if (action == 'openFile') {
@@ -2779,7 +2874,10 @@ Error: $error
       final effectiveId = downloadId ?? callId;
       if (mounted && effectiveId != null && effectiveId.isNotEmpty) {
         final js =
-            'window.CircleConnectFiles && window.CircleConnectFiles._resolvePromise(${jsonEncode(effectiveId)}, ${jsonEncode({'success': false, 'error': e.toString()})}, true);';
+            'window.CircleConnectFiles && window.CircleConnectFiles._resolvePromise(${jsonEncode(effectiveId)}, ${jsonEncode({
+              'success': false,
+              'error': e.toString()
+            })}, true);';
         unawaited(_controller.runJavaScript(js));
       }
     }
@@ -3264,6 +3362,21 @@ Error: $error
             types.any((t) =>
                 t.name.toLowerCase().contains('microphone') ||
                 t.name.toLowerCase().contains('audio'));
+
+    // Security check: Only grant hardware media permissions to https://efactor.tech
+    final currentUrl =
+        (await _controller.currentUrl()) ?? widget.uri.toString();
+    final uri = Uri.tryParse(currentUrl);
+    final isAllowedOrigin = uri != null &&
+        (uri.host == 'efactor.tech' || uri.host == 'www.efactor.tech') &&
+        uri.scheme == 'https';
+
+    if (!isAllowedOrigin) {
+      debugPrint(
+          '[GridInAppWebView] Denying media permission request from non-whitelisted origin: $currentUrl');
+      request.deny();
+      return;
+    }
 
     var canGrant = true;
 
