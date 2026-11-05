@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -17,6 +18,9 @@ import '../services/json_http.dart';
 import '../services/schema_patch.dart';
 import '../sdui/schema_runtime.dart';
 
+// Top-level function for compute()
+dynamic _appStateJsonDecode(String raw) => jsonDecode(raw);
+
 /// Runtime state, typed binding validation and schema action dispatch.
 class AppState extends ChangeNotifier {
   AppState(
@@ -26,6 +30,7 @@ class AppState extends ChangeNotifier {
     DeviceCommandTransport? transport,
     String? accessToken,
     GlobalKey<ScaffoldMessengerState>? messengerKey,
+    String? deviceName,
     this.onAuthenticationFailure,
     this.onOpenScanner,
     this.onOpenWifiConfig,
@@ -38,6 +43,7 @@ class AppState extends ChangeNotifier {
         _scanRepository = scanRepository ?? ScanRepository(),
         _accessToken = accessToken ?? '',
         _messengerKey = messengerKey,
+        _deviceName = deviceName?.trim(),
         _transportWasInjected = transport != null {
     _transport = transport ?? EfactorHttpTransport(client: _client);
     _deviceApiTransport = EfactorDeviceApiTransport();
@@ -53,6 +59,8 @@ class AppState extends ChangeNotifier {
   final bool _transportWasInjected;
   String _accessToken;
   final GlobalKey<ScaffoldMessengerState>? _messengerKey;
+  final String? _deviceName;
+  String? get deviceName => _deviceName;
   final Map<String, dynamic> _parameters = <String, dynamic>{};
   final Map<String, dynamic> _scanResult = <String, dynamic>{
     'scanId': null,
@@ -1040,6 +1048,21 @@ class AppState extends ChangeNotifier {
       case 'app.modelNo':
       case r'$app.modelNo':
         return _schema['meta']?['app']?['modelNo'];
+      case 'app.name':
+      case r'$app.name':
+      case 'app.deviceName':
+      case r'$app.deviceName':
+      case 'device.name':
+      case 'device_name':
+      case 'state.deviceName':
+      case 'state.device.name':
+      case 'meta.app.name':
+        if (_deviceName != null && _deviceName.isNotEmpty) {
+          return _deviceName;
+        }
+        return _schema['meta']?['app']?['name'] ??
+            _schema['meta']?['app']?['modelNo'] ??
+            resolveDeviceIdentity().nodeId;
       case 'state.scanResult':
         return Map<String, dynamic>.from(_scanResult);
       case 'state.scanResult.value':
@@ -1670,7 +1693,9 @@ class AppState extends ChangeNotifier {
         logDebug('[SDUI][LIVE_PARAMS] HTTP ${response.statusCode}');
         return 0;
       }
-      final decoded = jsonDecode(response.body);
+      final decoded = response.body.length > 50 * 1024
+          ? await compute(_appStateJsonDecode, response.body)
+          : jsonDecode(response.body);
       final changed = ingestCloudPayload(decoded, nodeId: nodeId);
       logDebug('[SDUI][LIVE_PARAMS] changed=$changed');
       return changed;
@@ -5244,21 +5269,44 @@ class AppState extends ChangeNotifier {
     final messengerState = _messengerKey?.currentState;
     if (messengerState == null) return;
     final scheme = Theme.of(messengerState.context).colorScheme;
+
+    String userMessage = message;
+    if (message.contains('Schema frame is incomplete/invalid')) {
+      userMessage = 'Device command unavailable: incomplete protocol frame in device schema.';
+    } else if (message.contains('Write blocked by schema access contract')) {
+      userMessage = 'This control is read-only according to device specification.';
+    } else if (message.contains('Authentication failed')) {
+      userMessage = 'Authentication expired. Please log in again.';
+    } else if (message.contains('Server rejected request')) {
+      userMessage = 'Device server rejected the command.';
+    } else if (message.contains('Cannot send command: runtime modelId or nodeId is missing')) {
+      userMessage = 'Device identity missing. Cannot dispatch command.';
+    }
+
     messengerState.hideCurrentSnackBar();
     messengerState.showSnackBar(
       SnackBar(
-        duration: const Duration(seconds: 8),
+        duration: const Duration(seconds: 5),
         behavior: SnackBarBehavior.floating,
         backgroundColor: scheme.error,
-        content: SingleChildScrollView(
-          child: Text(
-            message,
-            style: TextStyle(
-              fontSize: 12,
-              color: scheme.onError,
-              fontFamily: 'monospace',
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        content: Row(
+          children: [
+            Icon(Icons.info_outline, color: scheme.onError, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                userMessage,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: scheme.onError,
+                ),
+              ),
             ),
-          ),
+          ],
         ),
         action: SnackBarAction(
           label: 'DISMISS',

@@ -1524,6 +1524,15 @@ class SduiRenderer {
     if (binding != null) {
       final v = state.resolveBinding(binding);
       if (v != null) text = v.toString();
+    } else if (state.deviceName != null && state.deviceName!.isNotEmpty) {
+      final staticAppName = state.schema['meta']?['app']?['name']?.toString();
+      final staticModelId = state.schema['meta']?['app']?['model_id']?.toString();
+      final staticModelNo = state.schema['meta']?['app']?['modelNo']?.toString();
+      if ((staticAppName != null && text.trim() == staticAppName.trim()) ||
+          (staticModelId != null && text.trim() == staticModelId.trim()) ||
+          (staticModelNo != null && text.trim() == staticModelNo.trim())) {
+        text = state.deviceName!;
+      }
     }
 
     final themeTypography =

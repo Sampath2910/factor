@@ -363,17 +363,43 @@ class SduiStyle {
     );
   }
 
+  static const List<String> systemFontFallbacks = <String>[
+    '-apple-system',
+    'SF Pro Text',
+    'Helvetica Neue',
+    'Roboto',
+    'sans-serif',
+  ];
+
   /// Applies a schema-declared font family without assuming that the font is
   /// installed on the Android/iOS device. Google Fonts is already a project
   /// dependency; unsupported families gracefully fall back to Flutter's normal
   /// family lookup rather than introducing a model-specific font rule.
   static TextStyle withFontFamily(TextStyle base, dynamic family) {
     final name = family?.toString().trim();
-    if (name == null || name.isEmpty) return base;
+    if (name == null || name.isEmpty) {
+      return base.copyWith(
+        fontFamilyFallback: base.fontFamilyFallback ?? systemFontFallbacks,
+      );
+    }
+    // Normalize generic CSS aliases for iOS/Impeller
+    final lower = name.toLowerCase();
+    if (lower == 'sans-serif' || lower == 'system-ui') {
+      return base.copyWith(
+        fontFamily: null,
+        fontFamilyFallback: systemFontFallbacks,
+      );
+    }
     try {
-      return GoogleFonts.getFont(name, textStyle: base);
+      final style = GoogleFonts.getFont(name, textStyle: base);
+      return style.copyWith(
+        fontFamilyFallback: style.fontFamilyFallback ?? systemFontFallbacks,
+      );
     } catch (_) {
-      return base.copyWith(fontFamily: name);
+      return base.copyWith(
+        fontFamily: name,
+        fontFamilyFallback: systemFontFallbacks,
+      );
     }
   }
 

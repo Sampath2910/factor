@@ -30,6 +30,7 @@ class DeviceUiScreen extends StatefulWidget {
     super.key,
     required this.modelId,
     required this.nodeId,
+    this.deviceName,
     required this.accessToken,
     required this.onAuthenticationFailure,
     required this.onDisconnect,
@@ -38,6 +39,7 @@ class DeviceUiScreen extends StatefulWidget {
 
   final String modelId;
   final String nodeId;
+  final String? deviceName;
   final String accessToken;
   final Future<void> Function() onAuthenticationFailure;
   final VoidCallback onDisconnect;
@@ -662,24 +664,17 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
         textTheme = Theme.of(context).textTheme;
       }
     }
+    textTheme = textTheme.apply(
+      fontFamilyFallback: SduiStyle.systemFontFallbacks,
+    );
 
-    final appTitle = schema['meta']?['app']?['name']?.toString();
-    if (appTitle == null || appTitle.trim().isEmpty) {
-      return _wrapAppOrPage(
-        context: context,
-        child: const Scaffold(
-          body: Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: SchemaIssueWidget(
-                title: 'Schema meta missing',
-                details: ['Provide meta.app.name.'],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    final effectiveDeviceName = widget.deviceName?.trim();
+    final rawAppTitle = schema['meta']?['app']?['name']?.toString();
+    final appTitle = (effectiveDeviceName != null && effectiveDeviceName.isNotEmpty)
+        ? effectiveDeviceName
+        : (rawAppTitle != null && rawAppTitle.trim().isNotEmpty
+            ? rawAppTitle.trim()
+            : widget.nodeId);
 
     final themeData = ThemeData(
       useMaterial3: true,
@@ -695,6 +690,7 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
       accessToken: widget.accessToken,
       modelId: widget.modelId,
       nodeId: widget.nodeId,
+      deviceName: widget.deviceName,
       initialOnline: widget.initialOnline,
       onAuthenticationFailure: widget.onAuthenticationFailure,
       visiblePageIndex: currentPageNo - 1,
@@ -773,6 +769,7 @@ class _DeviceContentScreen extends StatefulWidget {
     required this.accessToken,
     required this.modelId,
     required this.nodeId,
+    this.deviceName,
     required this.onAuthenticationFailure,
     required this.visiblePageIndex,
     required this.onActivePageChanged,
@@ -788,6 +785,7 @@ class _DeviceContentScreen extends StatefulWidget {
   final String accessToken;
   final String modelId;
   final String nodeId;
+  final String? deviceName;
   final bool? initialOnline;
   final Future<void> Function() onAuthenticationFailure;
   final Future<bool> Function() onRefresh;
@@ -801,6 +799,8 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
     with WidgetsBindingObserver {
   late final AppState _state;
   late SduiRenderer _renderer;
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
 
   bool _preserveValuesOnNextSchema = true;
   bool _isDisconnecting = false;
@@ -849,6 +849,8 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
     super.initState();
     _state = AppState(
       widget.schema,
+      messengerKey: _messengerKey,
+      deviceName: widget.deviceName,
       accessToken: widget.accessToken,
       onAuthenticationFailure: widget.onAuthenticationFailure,
       onOpenScanner: handleOpenScanner,
@@ -1165,87 +1167,90 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
               SduiStyle.color(widget.schema['theme']?['colors']?['background']) ??
                   const Color(0xFFF8FAFC);
 
-          return PopScope(
-            canPop: false,
-            onPopInvokedWithResult: (didPop, _) {
-              if (didPop || _isDisconnecting) return;
-              _isDisconnecting = true;
-              widget.onDisconnect();
-            },
-            child: Scaffold(
-              backgroundColor: background,
-              body: SafeArea(
-                bottom: true,
-                child: Stack(
-                  children: [
-                    SchemaPullToRefresh(
-                      fillViewport: true,
-                      onRefresh: () async {
-                        await widget.onRefresh();
-                      },
-                      child: AnimatedBuilder(
-                        animation: _state,
-                        builder: (context, _) {
-                          if (rootTree == null) {
-                            return const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(24),
-                                child: SchemaIssueWidget(
-                                  title: 'Schema entry missing',
-                                  details: [
-                                    'None of the server-declared render entry points '
-                                        'resolved to a widget tree.',
-                                    'Check meta.flutterEntry and rendering.layout.',
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-
-                          return LayoutBuilder(
-                            builder: (context, constraints) {
-                              final runtime = SchemaRuntime(widget.schema);
-                              final responsiveLayout = runtime.resolveResponsiveLayout(
-                                constraints.maxWidth,
-                                logicalHeight: constraints.maxHeight,
-                                orientation: screenMetrics.orientation,
-                              );
-
-                              _logScreenMetricsIfChanged(screenMetrics, responsiveLayout);
-
-                              // Use the schema-selected maximum width when it exists.
-                              // If the schema has no responsive contract, use the actual
-                              // available Flutter width instead of inventing a device
-                              // width or a component-specific fallback.
-                              final schemaMaxWidth = responsiveLayout?.maxContentWidth;
-                              final effectiveMaxWidth = schemaMaxWidth == null
-                                  ? constraints.maxWidth
-                                  : schemaMaxWidth
-                                      .clamp(0.0, constraints.maxWidth)
-                                      .toDouble();
-
-                              // Host pull-to-refresh uses a viewport-sized ListView so
-                              // nested page-mode ListViews still receive a bounded height.
-                              return Center(
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth: effectiveMaxWidth,
-                                    maxHeight: constraints.maxHeight,
-                                  ),
-                                  child: _renderer.build(context, rootTree),
-                                ),
-                              );
-                            },
-                          );
+          return ScaffoldMessenger(
+            key: _messengerKey,
+            child: PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, _) {
+                if (didPop || _isDisconnecting) return;
+                _isDisconnecting = true;
+                widget.onDisconnect();
+              },
+              child: Scaffold(
+                backgroundColor: background,
+                body: SafeArea(
+                  bottom: true,
+                  child: Stack(
+                    children: [
+                      SchemaPullToRefresh(
+                        fillViewport: true,
+                        onRefresh: () async {
+                          await widget.onRefresh();
                         },
+                        child: AnimatedBuilder(
+                          animation: _state,
+                          builder: (context, _) {
+                            if (rootTree == null) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: SchemaIssueWidget(
+                                    title: 'Schema entry missing',
+                                    details: [
+                                      'None of the server-declared render entry points '
+                                          'resolved to a widget tree.',
+                                      'Check meta.flutterEntry and rendering.layout.',
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return LayoutBuilder(
+                              builder: (context, constraints) {
+                                final runtime = SchemaRuntime(widget.schema);
+                                final responsiveLayout = runtime.resolveResponsiveLayout(
+                                  constraints.maxWidth,
+                                  logicalHeight: constraints.maxHeight,
+                                  orientation: screenMetrics.orientation,
+                                );
+
+                                _logScreenMetricsIfChanged(screenMetrics, responsiveLayout);
+
+                                // Use the schema-selected maximum width when it exists.
+                                // If the schema has no responsive contract, use the actual
+                                // available Flutter width instead of inventing a device
+                                // width or a component-specific fallback.
+                                final schemaMaxWidth = responsiveLayout?.maxContentWidth;
+                                final effectiveMaxWidth = schemaMaxWidth == null
+                                    ? constraints.maxWidth
+                                    : schemaMaxWidth
+                                        .clamp(0.0, constraints.maxWidth)
+                                        .toDouble();
+
+                                // Host pull-to-refresh uses a viewport-sized ListView so
+                                // nested page-mode ListViews still receive a bounded height.
+                                return Center(
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: effectiveMaxWidth,
+                                      maxHeight: constraints.maxHeight,
+                                    ),
+                                    child: _renderer.build(context, rootTree),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                    const TapDiagnosticFab(),
-                  ],
+                      const TapDiagnosticFab(),
+                    ],
+                  ),
                 ),
               ),
             ),
-    );
+          );
         },
       ),
     );

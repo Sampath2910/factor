@@ -1103,7 +1103,7 @@ class HomeSduiState extends ChangeNotifier {
       final keys = prefs.getKeys().toList();
       final prefix = uid != null && uid.isNotEmpty ? 'home_sdui.cache.$uid.' : 'home_sdui.cache.';
       for (final key in keys) {
-        if (key.startsWith(prefix) || key.startsWith('home_sdui.cache.')) {
+        if (key.startsWith(prefix)) {
           await prefs.remove(key);
         }
       }

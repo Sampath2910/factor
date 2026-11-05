@@ -12,6 +12,7 @@ import '../services/schema_offline.dart';
 
 // Top-level functions required for compute() — must not be closures.
 dynamic _jsonDecodeAny(String raw) => jsonDecode(raw);
+String _decodeUtf8AndTrim(List<int> bytes) => utf8.decode(bytes).trim();
 
 /// Loads the live SDUI schema using the MODEL_ID and NODE_ID entered by
 /// the user on the connection screen.
@@ -522,7 +523,9 @@ class SchemaRepository {
       );
     }
 
-    final raw = utf8.decode(response.bodyBytes).trim();
+    final raw = response.bodyBytes.length > 50 * 1024
+        ? await compute(_decodeUtf8AndTrim, response.bodyBytes)
+        : utf8.decode(response.bodyBytes).trim();
 
     if (raw.isEmpty) {
       throw FormatException(

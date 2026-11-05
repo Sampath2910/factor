@@ -42,6 +42,7 @@ class DynamicIotSduiPage extends StatefulWidget {
   final Future<void> Function({
     required String modelId,
     required String nodeId,
+    String? deviceName,
     bool? online,
   })?
   onOpenDevice;
@@ -375,9 +376,14 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
               );
             }
 
+            final devName = device['device_name']?.toString() ??
+                device['name']?.toString() ??
+                device['devicename']?.toString();
+
             await handler(
               modelId: modelId,
               nodeId: nodeId,
+              deviceName: devName,
               online: _asOnlineFlag(device),
             );
             await _refreshAfterDeviceReturn(nextState);
@@ -496,7 +502,17 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
           );
         }
 
-        await handler(modelId: modelId, nodeId: nodeId);
+        final devName = (args['deviceName'] ??
+                args['name'] ??
+                action['deviceName'] ??
+                action['name'])
+            ?.toString();
+
+        await handler(
+          modelId: modelId,
+          nodeId: nodeId,
+          deviceName: devName,
+        );
         final activeState = _state;
         if (activeState != null) {
           await _refreshAfterDeviceReturn(activeState);

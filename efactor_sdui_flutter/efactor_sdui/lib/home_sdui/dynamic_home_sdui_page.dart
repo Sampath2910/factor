@@ -60,6 +60,7 @@ class DynamicHomeSduiPage extends StatefulWidget {
   final Future<void> Function({
     required String modelId,
     required String nodeId,
+    String? deviceName,
     bool? online,
   })? onOpenDevice;
 
@@ -484,9 +485,14 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         if (handler == null) {
           throw StateError('No Home Device SDUI host callback is registered.');
         }
+        final devName = (params['deviceName'] ??
+                params['device_name'] ??
+                params['name'])
+            ?.toString();
         await handler(
           modelId: modelId,
           nodeId: nodeId,
+          deviceName: devName,
           online: _asBool(params['online'] ?? params['isOnline']),
         );
         return;
@@ -1033,6 +1039,7 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
                 onOpenDevice: ({
                   required String modelId,
                   required String nodeId,
+                  String? deviceName,
                   bool? online,
                 }) async {
                   final handler = widget.onOpenDevice;
@@ -1044,6 +1051,7 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
                   await handler(
                     modelId: modelId,
                     nodeId: nodeId,
+                    deviceName: deviceName,
                     online: online,
                   );
                 },

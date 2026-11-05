@@ -1,5 +1,6 @@
 import 'package:efactor_sdui/data/schema_repository.dart';
 import 'package:efactor_sdui/sdui/renderer.dart';
+import 'package:efactor_sdui/sdui/tap_diagnostic_inspector.dart';
 import 'package:efactor_sdui/state/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('Multi-page schema displays all page number buttons and progress bar',
       (tester) async {
+    final prevEnabled = TapDiagnosticInspector.instance.isEnabled;
+    TapDiagnosticInspector.instance.isEnabled = false;
+    addTearDown(() {
+      TapDiagnosticInspector.instance.isEnabled = prevEnabled;
+    });
     final schema = <String, dynamic>{
       'version': '4.0.0',
       'theme': {
@@ -117,6 +123,7 @@ void main() {
 
     SchemaRepository.ensurePlaceholderSlides(schema);
     final state = AppState(schema);
+    addTearDown(() => state.dispose());
 
     expect(state.pages.length, 6);
     expect(state.activePage['title'], 'Page1.Operation');
@@ -150,7 +157,7 @@ void main() {
     await tester.ensureVisible(find.text('2'));
     await tester.pump();
     await tester.tap(find.text('2'));
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(seconds: 1));
 
     expect(state.activePageIndex, 1);
     expect(state.activePage['title'], 'Configure.Config');
@@ -159,7 +166,7 @@ void main() {
     await tester.ensureVisible(find.text('6'));
     await tester.pump();
     await tester.tap(find.text('6'));
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(seconds: 1));
 
     expect(state.activePageIndex, 5);
     expect(state.activePage['title'], 'Mortgage');

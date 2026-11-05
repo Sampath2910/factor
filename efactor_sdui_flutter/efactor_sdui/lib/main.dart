@@ -429,6 +429,7 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
           onOpenDevice: ({
             required String modelId,
             required String nodeId,
+            String? deviceName,
             bool? online,
           }) async {
             SchemaLoadQueue.instance.prioritizeDevice(
@@ -440,6 +441,7 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
                 builder: (deviceContext) => DeviceUiScreen(
                   modelId: modelId,
                   nodeId: nodeId,
+                  deviceName: deviceName,
                   accessToken: widget.authState.accessToken ?? '',
                   initialOnline: online,
                   onAuthenticationFailure: () async {
@@ -498,6 +500,7 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
                   onOpenDevice: ({
                     required String modelId,
                     required String nodeId,
+                    String? deviceName,
                     bool? online,
                   }) async {
                     SchemaLoadQueue.instance.prioritizeDevice(
@@ -509,6 +512,7 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
                         builder: (deviceContext) => DeviceUiScreen(
                           modelId: modelId,
                           nodeId: nodeId,
+                          deviceName: deviceName,
                           accessToken: widget.authState.accessToken ?? '',
                           initialOnline: online,
                           onAuthenticationFailure: () async {
