@@ -415,6 +415,110 @@ void main() {
       );
     });
 
+    test('isCircleConnectExitUrl and isProfessionalSpaceExitUrl accurately match and isolate dedicated exits', () {
+      // 1. Circle Connect dedicated exit URL:
+      // Host: efactor.tech or www.efactor.tech | Path: /index.php/grid_chat | Query: app=exit
+      expect(
+        GridInAppWebViewPage.isCircleConnectExitUrl(
+          Uri.parse('https://efactor.tech/index.php/grid_chat?app=exit'),
+        ),
+        isTrue,
+        reason: 'Circle Connect exact exit URL must match',
+      );
+      expect(
+        GridInAppWebViewPage.isCircleConnectExitUrl(
+          Uri.parse('https://www.efactor.tech/index.php/grid_chat?app=exit'),
+        ),
+        isTrue,
+        reason: 'Circle Connect www host exit URL must match',
+      );
+      expect(
+        GridInAppWebViewPage.isCircleConnectExitUrl(
+          Uri.parse('https://efactor.tech/grid_chat?app=exit'),
+        ),
+        isTrue,
+        reason: 'Circle Connect clean path without index.php must match',
+      );
+      expect(
+        GridInAppWebViewPage.isCircleConnectExitUrl(
+          Uri.parse('https://efactor.tech/index.php/grid-chat?app=exit'),
+        ),
+        isTrue,
+        reason: 'Circle Connect hyphenated path with app=exit must match',
+      );
+
+      // Circle Connect non-exit routes must NOT match
+      expect(
+        GridInAppWebViewPage.isCircleConnectExitUrl(
+          Uri.parse('https://efactor.tech/index.php/grid_chat'),
+        ),
+        isFalse,
+        reason: 'Circle Connect root without app=exit must NOT exit',
+      );
+      expect(
+        GridInAppWebViewPage.isCircleConnectExitUrl(
+          Uri.parse('https://efactor.tech/index.php/grid_chat?conversation_id=99'),
+        ),
+        isFalse,
+        reason: 'Circle Connect conversation routes must NOT exit',
+      );
+      expect(
+        GridInAppWebViewPage.isCircleConnectExitUrl(
+          Uri.parse('https://otherdomain.com/index.php/grid_chat?app=exit'),
+        ),
+        isFalse,
+        reason: 'Untrusted domain must NOT match Circle Connect exit',
+      );
+
+      // Isolation check: Professional Space exit URL must NOT match Circle Connect exit
+      expect(
+        GridInAppWebViewPage.isCircleConnectExitUrl(
+          Uri.parse('https://efactor.tech/index.php/grid?app=exit'),
+        ),
+        isFalse,
+        reason: 'Professional Space exit URL must NOT match Circle Connect exit',
+      );
+
+      // 2. Professional Space dedicated exit URL:
+      expect(
+        GridInAppWebViewPage.isProfessionalSpaceExitUrl(
+          Uri.parse('https://efactor.tech/index.php/grid?app=exit'),
+        ),
+        isTrue,
+        reason: 'Professional Space exit URL must match',
+      );
+      expect(
+        GridInAppWebViewPage.isProfessionalSpaceExitUrl(
+          Uri.parse('https://www.efactor.tech/index.php/grid?app=exit'),
+        ),
+        isTrue,
+        reason: 'Professional Space www host exit URL must match',
+      );
+      expect(
+        GridInAppWebViewPage.isProfessionalSpaceExitUrl(
+          Uri.parse('https://efactor.tech/grid?app=exit'),
+        ),
+        isTrue,
+        reason: 'Professional Space clean path without index.php must match',
+      );
+
+      // Isolation check: Circle Connect exit URL must NOT match Professional Space exit
+      expect(
+        GridInAppWebViewPage.isProfessionalSpaceExitUrl(
+          Uri.parse('https://efactor.tech/index.php/grid_chat?app=exit'),
+        ),
+        isFalse,
+        reason: 'Circle Connect exit URL must NOT match Professional Space exit',
+      );
+      expect(
+        GridInAppWebViewPage.isProfessionalSpaceExitUrl(
+          Uri.parse('https://efactor.tech/index.php/grid'),
+        ),
+        isFalse,
+        reason: 'Professional Space normal feed must NOT exit',
+      );
+    });
+
     test('isProfessionalSpaceRootUrl accurately identifies root feed vs subpages', () {
       // Root paths:
       expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid')), isTrue);

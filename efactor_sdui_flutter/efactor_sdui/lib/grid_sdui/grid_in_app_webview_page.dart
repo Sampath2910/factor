@@ -126,29 +126,78 @@ class GridInAppWebViewPage extends StatefulWidget {
     return uri.replace(queryParameters: updated);
   }
 
+  /// Dedicated exit URL for Circle Connect (/grid_chat):
+  /// Emitted by Circle Connect web when the user taps the GRID logo.
+  /// Matches:
+  /// - Host: efactor.tech or www.efactor.tech
+  /// - Path: /index.php/grid_chat or /grid_chat (also accepts /index.php/grid-chat or /grid-chat)
+  /// - Query parameter: app=exit
+  static bool isCircleConnectExitUrl(Uri uri) {
+    final host = uri.host.toLowerCase();
+    final isEfactor = host == 'efactor.tech' || host == 'www.efactor.tech';
+    if (!isEfactor) return false;
+
+    final path = uri.path.toLowerCase();
+    final isChatPath = path == '/index.php/grid_chat' ||
+        path == '/index.php/grid_chat/' ||
+        path == '/grid_chat' ||
+        path == '/grid_chat/' ||
+        path == '/index.php/grid-chat' ||
+        path == '/index.php/grid-chat/' ||
+        path == '/grid-chat' ||
+        path == '/grid-chat/';
+
+    return isChatPath && uri.queryParameters['app'] == 'exit';
+  }
+
+  /// Dedicated exit URL for Professional Space (/grid):
+  /// Emitted by Professional Space web when the user chooses "Switch to Circle Connect" or exits.
+  /// Matches:
+  /// - Host: efactor.tech or www.efactor.tech
+  /// - Path: /index.php/grid or /grid (or ending with /exit)
+  /// - Query parameter: app=exit, exit=1, or action=exit
+  static bool isProfessionalSpaceExitUrl(Uri uri) {
+    final host = uri.host.toLowerCase();
+    final isEfactor = host == 'efactor.tech' || host == 'www.efactor.tech';
+    if (!isEfactor) return false;
+
+    final path = uri.path.toLowerCase();
+    final isGridPath = path == '/index.php/grid' ||
+        path == '/index.php/grid/' ||
+        path == '/grid' ||
+        path == '/grid/' ||
+        path.endsWith('/exit') ||
+        path.endsWith('/exit/');
+
+    if (!isGridPath) return false;
+
+    return uri.queryParameters['app'] == 'exit' ||
+        uri.queryParameters['exit'] == '1' ||
+        uri.queryParameters['action'] == 'exit' ||
+        path.endsWith('/exit') ||
+        path.endsWith('/exit/');
+  }
+
   static bool isGridRedirectUrl(
     Uri targetUri, {
     required Uri initialUri,
     bool pageFinished = true,
   }) {
-    final targetPath = targetUri.path.toLowerCase();
-
-    // Dedicated exit URL from GRID menu:
-    // "Switch to Circle Connect" -> https://efactor.tech/index.php/grid?app=exit
-    // Or explicit exit query / path (/exit, ?exit=1, ?action=exit)
-    if (targetUri.queryParameters['app'] == 'exit' ||
-        targetUri.queryParameters['exit'] == '1' ||
-        targetUri.queryParameters['action'] == 'exit' ||
-        targetUri.toString().contains('app=exit') ||
-        targetPath.endsWith('/exit') ||
-        targetPath.endsWith('/exit/')) {
+    if (isCircleConnectExitUrl(targetUri)) {
       return true;
     }
+    if (isProfessionalSpaceExitUrl(targetUri)) {
+      return true;
+    }
+
+    final targetPath = targetUri.path.toLowerCase();
     final initialPath = initialUri.path.toLowerCase();
     final initialIsScanner =
         initialPath.contains('scanner') || initialPath.contains('scan');
     final initialIsChat =
-        initialPath.contains('/grid-chat') || initialPath.contains('chat');
+        initialPath.contains('/grid-chat') ||
+        initialPath.contains('/grid_chat') ||
+        initialPath.contains('chat');
     final initialIsGrid =
         !initialIsChat && !initialIsScanner && initialPath.contains('/grid');
 
@@ -160,7 +209,9 @@ class GridInAppWebViewPage extends StatefulWidget {
     }
 
     // Any chat sub-path, room, or API must NOT be treated as a Grid redirect.
-    if (targetPath.contains('grid-chat') || targetPath.contains('/chat')) {
+    if (targetPath.contains('grid-chat') ||
+        targetPath.contains('grid_chat') ||
+        targetPath.contains('/chat')) {
       return false;
     }
 
@@ -1006,8 +1057,30 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
                 !initialIsScanner &&
                 initialPath.contains('/grid');
 
+            // 1. Dedicated Circle Connect logo exit URL:
+            // Host: efactor.tech / www.efactor.tech | Path: /index.php/grid_chat | Query: app=exit
+            if (GridInAppWebViewPage.isCircleConnectExitUrl(targetUri)) {
+              debugPrint(
+                '[GridInAppWebView] Circle Connect logo exit requested: ${request.url}',
+              );
+              _safeExitToGrid();
+              return NavigationDecision.prevent;
+            }
+
+            // 2. Dedicated Professional Space exit URL:
+            // Host: efactor.tech / www.efactor.tech | Path: /index.php/grid | Query: app=exit
+            if (GridInAppWebViewPage.isProfessionalSpaceExitUrl(targetUri)) {
+              debugPrint(
+                '[GridInAppWebView] Professional Space exit requested: ${request.url}',
+              );
+              _safeExitToGrid();
+              return NavigationDecision.prevent;
+            }
+
             // If user opened Professional Space (/grid), do not allow server to redirect to Circle Connect (/grid-chat)
-            if (initialIsGrid && targetPath.contains('/grid-chat')) {
+            if (initialIsGrid &&
+                (targetPath.contains('/grid-chat') ||
+                    targetPath.contains('/grid_chat'))) {
               debugPrint(
                 '[GridInAppWebView] Intercepting unwanted redirect to chat -> keeping Professional Space: ${widget.uri}',
               );
@@ -1045,6 +1118,23 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             }
 
             return NavigationDecision.navigate;
+          },
+          onUrlChange: (UrlChange change) {
+            final url = change.url;
+            if (url == null || url.isEmpty) return;
+            final targetUri = Uri.tryParse(url);
+            if (targetUri == null) return;
+            if (GridInAppWebViewPage.isCircleConnectExitUrl(targetUri)) {
+              debugPrint(
+                '[GridInAppWebView] Circle Connect logo exit intercepted via onUrlChange: $url',
+              );
+              _safeExitToGrid();
+            } else if (GridInAppWebViewPage.isProfessionalSpaceExitUrl(targetUri)) {
+              debugPrint(
+                '[GridInAppWebView] Professional Space exit intercepted via onUrlChange: $url',
+              );
+              _safeExitToGrid();
+            }
           },
           onPageStarted: (_) {
             if (!mounted) return;
@@ -1945,13 +2035,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         } catch(e) {}
       },
       _resolvePromise: function(callId, result, isError) {
-        if (pendingPromises[callId]) {
-          if (isError) {
-            pendingPromises[callId].reject(result);
-          } else {
-            pendingPromises[callId].resolve(result);
-          }
+        var p = pendingPromises[callId];
+        if (!p && result && result.downloadId && pendingPromises[result.downloadId]) {
+          p = pendingPromises[result.downloadId];
+          delete pendingPromises[result.downloadId];
+        }
+        if (p) {
           delete pendingPromises[callId];
+          if (isError) {
+            p.reject(result);
+          } else {
+            p.resolve(result);
+          }
         }
       }
     };
@@ -2505,10 +2600,13 @@ Error: $error
 
   /// Handles file sharing, download, upload and "Open With" requests from CircleConnectFileBridge.
   void _handleCircleConnectFileBridgeMessage(String rawJson) async {
+    String? callId;
+    String? downloadId;
     try {
       final data = jsonDecode(rawJson) as Map<String, dynamic>;
       final action = data['action']?.toString();
-      final callId = data['callId']?.toString();
+      callId = data['callId']?.toString();
+      downloadId = data['downloadId']?.toString();
 
       void resolve(dynamic result, {bool isError = false}) {
         if (!mounted || callId == null || callId.isEmpty) return;
@@ -2576,10 +2674,26 @@ Error: $error
           mimeType: mimeType,
           headers: requestHeaders.isNotEmpty ? requestHeaders : null,
         );
-        resolve(result, isError: result['success'] != true);
+        final isError = result['success'] != true && result['cancelled'] != true;
+        // Resolve using the client's downloadId as requested by Circle Connect spec
+        if (downloadId.isNotEmpty) {
+          final js =
+              'window.CircleConnectFiles && window.CircleConnectFiles._resolvePromise(${jsonEncode(downloadId)}, ${jsonEncode(result)}, $isError);';
+          unawaited(_controller.runJavaScript(js));
+        }
+        // If callId is distinct, also resolve callId so no promise remains pending
+        if (callId != null && callId.isNotEmpty && callId != downloadId) {
+          resolve(result, isError: isError);
+        }
       } else if (action == 'cancelDownload') {
         final downloadId = data['downloadId']?.toString() ?? '';
         CircleConnectFileService.instance.cancelDownload(downloadId);
+        // Also reject/resolve the pending promise so the client is notified immediately
+        if (downloadId.isNotEmpty) {
+          final js =
+              'window.CircleConnectFiles && window.CircleConnectFiles._resolvePromise(${jsonEncode(downloadId)}, ${jsonEncode({'success': false, 'cancelled': true, 'error': 'Download cancelled.'})}, false);';
+          unawaited(_controller.runJavaScript(js));
+        }
       } else if (action == 'openFile') {
         final localPath = data['localPath']?.toString() ?? '';
         final mimeType = data['mimeType']?.toString();
@@ -2662,6 +2776,12 @@ Error: $error
       }
     } catch (e) {
       debugPrint('[GridInAppWebView] File bridge error: $e');
+      final effectiveId = downloadId ?? callId;
+      if (mounted && effectiveId != null && effectiveId.isNotEmpty) {
+        final js =
+            'window.CircleConnectFiles && window.CircleConnectFiles._resolvePromise(${jsonEncode(effectiveId)}, ${jsonEncode({'success': false, 'error': e.toString()})}, true);';
+        unawaited(_controller.runJavaScript(js));
+      }
     }
   }
 
@@ -2737,12 +2857,11 @@ Error: $error
 
   void _safeExitToGrid() {
     if (!mounted || _isPopping) return;
+    _isPopping = true;
     final nav = Navigator.of(context);
     if (nav.canPop()) {
-      _isPopping = true;
       nav.pop();
     } else {
-      _isPopping = true;
       nav.pushReplacement(
         MaterialPageRoute<void>(
           builder: (_) => DynamicGridSduiPage(

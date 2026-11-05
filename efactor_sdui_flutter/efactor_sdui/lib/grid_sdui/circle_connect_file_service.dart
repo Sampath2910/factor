@@ -18,12 +18,19 @@ class CircleConnectFileService {
   static const int kMaxDocumentSizeBytes = 100 * 1024 * 1024; // 100 MB
   static const List<String> kAllowedExtensions = <String>[
     'pdf',
+    'ppt',
+    'pptx',
     'doc',
     'docx',
+    'xls',
+    'xlsx',
     'txt',
+    'csv',
+    'rtf',
     'jpg',
     'jpeg',
     'png',
+    'webp',
     'zip',
   ];
 
@@ -50,19 +57,43 @@ class CircleConnectFileService {
     switch (ext) {
       case 'pdf':
         return 'application/pdf';
+      case 'ppt':
+        return 'application/vnd.ms-powerpoint';
+      case 'pptx':
+        return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
       case 'doc':
         return 'application/msword';
       case 'docx':
         return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       case 'txt':
         return 'text/plain';
+      case 'csv':
+        return 'text/csv';
+      case 'rtf':
+        return 'application/rtf';
       case 'jpg':
       case 'jpeg':
         return 'image/jpeg';
       case 'png':
         return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      case 'mp4':
+        return 'video/mp4';
+      case 'mp3':
+        return 'audio/mpeg';
       case 'zip':
         return 'application/zip';
+      case 'rar':
+        return 'application/x-rar-compressed';
+      case '7z':
+        return 'application/x-7z-compressed';
       default:
         return 'application/octet-stream';
     }
@@ -79,11 +110,11 @@ class CircleConnectFileService {
         );
         if (extDirs != null && extDirs.isNotEmpty) {
           final dataPath = extDirs.first.path;
-          // Converts /Android/data/<package>/files/Documents to /Android/media/<package>/Media/Documents
+          // Converts /Android/data/<package>/files/documents to /Android/media/<package>/Media/Documents
+          // Case-insensitively removes /files/documents or /files so no duplicate /documents directory is created.
           final mediaPath = dataPath
               .replaceFirst('/Android/data/', '/Android/media/')
-              .replaceAll('/files/Documents', '/Media/Documents')
-              .replaceAll('/files', '/Media/Documents');
+              .replaceAll(RegExp(r'/files(/documents)?', caseSensitive: false), '/Media/Documents');
           final dir = Directory(mediaPath);
           if (!dir.existsSync()) {
             dir.createSync(recursive: true);
@@ -223,6 +254,7 @@ class CircleConnectFileService {
         return <String, dynamic>{
           'isCached': true,
           'localPath': candidate.path,
+          'fileName': effectiveName,
           'size': candidate.lengthSync(),
         };
       }
@@ -234,6 +266,7 @@ class CircleConnectFileService {
         return <String, dynamic>{
           'isCached': true,
           'localPath': hashCandidate.path,
+          'fileName': hashName,
           'size': hashCandidate.lengthSync(),
         };
       }
@@ -271,23 +304,31 @@ class CircleConnectFileService {
     );
     if (cached['isCached'] == true) {
       final path = cached['localPath'] as String;
+      final cachedSize = (cached['size'] as int?) ?? File(path).lengthSync();
+      final effectiveName = (cached['fileName'] as String?) ??
+          (fileName != null && fileName.trim().isNotEmpty
+              ? _sanitizeFileName(fileName, 'dat')
+              : path.split('/').last);
+
       _emitEvent('fileDownloadProgress', {
         'downloadId': downloadId,
-        'fileName': fileName ?? '',
-        'bytesReceived': cached['size'] ?? 0,
-        'totalBytes': cached['size'] ?? 0,
+        'fileName': effectiveName,
+        'bytesReceived': cachedSize,
+        'totalBytes': cachedSize,
         'progress': 100.0,
       });
       _emitEvent('fileDownloadCompleted', {
         'downloadId': downloadId,
-        'fileName': fileName ?? '',
+        'fileName': effectiveName,
         'localPath': path,
-        'size': cached['size'] ?? 0,
+        'size': cachedSize,
       });
       return <String, dynamic>{
         'success': true,
         'downloadId': downloadId,
         'localPath': path,
+        'fileName': effectiveName,
+        'size': cachedSize,
         'cached': true,
       };
     }
@@ -374,6 +415,7 @@ class CircleConnectFileService {
         'success': true,
         'downloadId': downloadId,
         'localPath': targetFile.path,
+        'fileName': effectiveName,
         'size': receivedBytes,
       };
     } catch (e) {
@@ -443,15 +485,23 @@ class CircleConnectFileService {
 
     try {
       if (Platform.isAndroid) {
+        debugPrint(
+          '[CircleConnectFiles] openFile: path=$cleanPath, mime=$effectiveMime, exists=${file.existsSync()}',
+        );
         final result = await OpenFilex.open(
           cleanPath,
           type: effectiveMime,
+        );
+        debugPrint(
+          '[CircleConnectFiles] OpenFilex.open result: type=${result.type} message=${result.message}',
         );
         final isSuccess = result.type == ResultType.done;
         return <String, dynamic>{
           'success': isSuccess,
           'message': result.message,
           'type': result.type.name,
+          'localPath': cleanPath,
+          'mimeType': effectiveMime,
         };
       } else {
         // iOS: Native Share Sheet with "Save to Files" / "Open With"
