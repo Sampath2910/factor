@@ -58,6 +58,17 @@ class CircleConnectDeviceKeyStore {
   static const String _kBaseUrl = 'efactor.circle_connect.base_url';
   static const String _kOfflineQueueKey = 'circle_connect_offline_read_queue';
 
+  // Dual-storage unencrypted fallback cache for background isolates.
+  // On devices like Vivo, Samsung, Xiaomi, Android Keystore can be locked or
+  // unavailable to background workers when the app is killed. SharedPreferences
+  // guarantees instant (<1ms) key access without Keystore initialization.
+  static const String _kDeviceKeyFallback =
+      'efactor.circle_connect.device_key_unencrypted_cache';
+  static const String _kInstallationIdFallback =
+      'efactor.circle_connect.installation_id_cache';
+  static const String _kBaseUrlFallback =
+      'efactor.circle_connect.base_url_cache';
+
   static const String defaultBaseUrl =
       'https://efactor.tech/index.php/grid-chat/api';
 
@@ -87,7 +98,7 @@ class CircleConnectDeviceKeyStore {
     }
   }
 
-  /// Saves the device key and installation ID to secure storage.
+  /// Saves the device key and installation ID to secure storage and fallback prefs.
   /// Newer keys replace existing keys. Key is never logged.
   Future<void> setDeviceKey(
     String deviceKey,
@@ -109,14 +120,32 @@ class CircleConnectDeviceKeyStore {
           value: _normalizeBaseUrl(baseUrl),
         );
       }
-      _notifyKeyStatus(true);
-      debugPrint(
-        '[CircleConnectKeyStore] Device key stored securely '
-        '(installationId=${cleanId.isNotEmpty ? cleanId : "none"})',
-      );
     } catch (e) {
-      debugPrint('[CircleConnectKeyStore] Error storing device key: $e');
+      debugPrint('[CircleConnectKeyStore] Error storing device key in secure storage: $e');
     }
+
+    // Dual storage: Also persist to SharedPreferences as unencrypted fallback cache.
+    // In background/killed state on devices like Vivo/Samsung, Android Keystore may be
+    // locked or unavailable to the background isolate. SharedPreferences guarantees
+    // immediate <1ms access without Keystore dependencies.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kDeviceKeyFallback, cleanKey);
+      if (cleanId.isNotEmpty) {
+        await prefs.setString(_kInstallationIdFallback, cleanId);
+      }
+      if (baseUrl != null && baseUrl.isNotEmpty) {
+        await prefs.setString(_kBaseUrlFallback, _normalizeBaseUrl(baseUrl));
+      }
+    } catch (e) {
+      debugPrint('[CircleConnectKeyStore] Error storing device key in fallback prefs: $e');
+    }
+
+    _notifyKeyStatus(true);
+    debugPrint(
+      '[CircleConnectKeyStore] Device key stored securely & cached '
+      '(installationId=${cleanId.isNotEmpty ? cleanId : "none"})',
+    );
   }
 
   /// Checks if a non-empty device key is currently stored.
@@ -125,24 +154,44 @@ class CircleConnectDeviceKeyStore {
     return key != null && key.isNotEmpty;
   }
 
-  /// Retrieves the stored device key from encrypted storage.
+  /// Retrieves the stored device key from encrypted storage, falling back to cached prefs.
   Future<String?> getDeviceKey() async {
     try {
-      return await _storage.read(key: _kDeviceKey);
+      final key = await _storage.read(key: _kDeviceKey);
+      if (key != null && key.isNotEmpty) return key;
     } catch (e) {
-      debugPrint('[CircleConnectKeyStore] Error reading device key: $e');
-      return null;
+      debugPrint('[CircleConnectKeyStore] Error reading device key from secure storage: $e');
     }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fallbackKey = prefs.getString(_kDeviceKeyFallback);
+      if (fallbackKey != null && fallbackKey.isNotEmpty) {
+        return fallbackKey;
+      }
+    } catch (e) {
+      debugPrint('[CircleConnectKeyStore] Error reading device key from fallback prefs: $e');
+    }
+    return null;
   }
 
   /// Retrieves the stored installation ID.
   Future<String?> getInstallationId() async {
     try {
-      return await _storage.read(key: _kInstallationId);
+      final id = await _storage.read(key: _kInstallationId);
+      if (id != null && id.isNotEmpty) return id;
     } catch (e) {
-      debugPrint('[CircleConnectKeyStore] Error reading installation ID: $e');
-      return null;
+      debugPrint('[CircleConnectKeyStore] Error reading installation ID from secure storage: $e');
     }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fallbackId = prefs.getString(_kInstallationIdFallback);
+      if (fallbackId != null && fallbackId.isNotEmpty) {
+        return fallbackId;
+      }
+    } catch (e) {
+      debugPrint('[CircleConnectKeyStore] Error reading installation ID from fallback prefs: $e');
+    }
+    return null;
   }
 
   /// Retrieves the stored API base URL.
@@ -153,6 +202,11 @@ class CircleConnectDeviceKeyStore {
     try {
       final stored = await _storage.read(key: _kBaseUrl);
       if (stored != null && stored.isNotEmpty) return stored;
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fallbackUrl = prefs.getString(_kBaseUrlFallback);
+      if (fallbackUrl != null && fallbackUrl.isNotEmpty) return fallbackUrl;
     } catch (_) {}
     return defaultBaseUrl;
   }
@@ -170,7 +224,7 @@ class CircleConnectDeviceKeyStore {
     return defaultBaseUrl;
   }
 
-  /// Deletes the device key from secure storage (e.g. on 401 response or logout).
+  /// Deletes the device key from secure storage and fallback cache (e.g. on 401 response or logout).
   ///
   /// If [matchingKey] is provided, the key is only cleared if the currently
   /// stored key still matches [matchingKey]. This protects against race conditions
@@ -178,7 +232,7 @@ class CircleConnectDeviceKeyStore {
   Future<void> clearDeviceKey({String? matchingKey}) async {
     try {
       if (matchingKey != null && matchingKey.isNotEmpty) {
-        final currentKey = await _storage.read(key: _kDeviceKey);
+        final currentKey = await getDeviceKey();
         if (currentKey != null && currentKey != matchingKey) {
           debugPrint(
             '[CircleConnectKeyStore] 401 received for key, but key was replaced in-flight. Retaining new key.',
@@ -189,12 +243,20 @@ class CircleConnectDeviceKeyStore {
       await _storage.delete(key: _kDeviceKey);
       await _storage.delete(key: _kInstallationId);
       await _storage.delete(key: _kBaseUrl);
-      _notifyKeyStatus(false);
-      debugPrint(
-          '[CircleConnectKeyStore] Device key cleared from secure storage.');
     } catch (e) {
-      debugPrint('[CircleConnectKeyStore] Error clearing device key: $e');
+      debugPrint('[CircleConnectKeyStore] Error clearing device key from secure storage: $e');
     }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kDeviceKeyFallback);
+      await prefs.remove(_kInstallationIdFallback);
+      await prefs.remove(_kBaseUrlFallback);
+    } catch (e) {
+      debugPrint('[CircleConnectKeyStore] Error clearing device key from fallback prefs: $e');
+    }
+    _notifyKeyStatus(false);
+    debugPrint(
+        '[CircleConnectKeyStore] Device key cleared from secure storage & fallback cache.');
   }
 
   /// Sends a background "Mark as read" request for a conversation and message.

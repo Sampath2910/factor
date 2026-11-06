@@ -144,13 +144,11 @@ class HomeSduiRenderer {
       }
     }
 
-    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
     final list = ListView.separated(
       padding: padding,
-      physics: AlwaysScrollableScrollPhysics(
-        parent: isIos
-            ? const BouncingScrollPhysics()
-            : const ClampingScrollPhysics(),
+      addAutomaticKeepAlives: true,
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
       ),
       itemCount: widgets.length,
       separatorBuilder: (_, __) => SizedBox(height: gap),
@@ -2225,8 +2223,8 @@ class HomeSduiRenderer {
                                   },
                           );
 
-                          final isIOS =
-                              Theme.of(context).platform == TargetPlatform.iOS ||
+                          final isIOS = Theme.of(context).platform ==
+                                  TargetPlatform.iOS ||
                               defaultTargetPlatform == TargetPlatform.iOS;
                           if (!isIOS) {
                             // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
@@ -2240,12 +2238,14 @@ class HomeSduiRenderer {
 
                           // iOS IMPELLER PATH
                           final faces = p.item.component['faces'];
-                          final isRotating = (faces is List && faces.length > 1) ||
+                          final isRotating = (faces is List &&
+                                  faces.length > 1) ||
                               p.item.component['type'] == 'rotatingFaceCard' ||
                               p.item.component['type'] == 'rotatingDeviceCard';
                           final body = isRotating
                               ? child
-                              : RepaintBoundary(child: SizedBox.expand(child: child));
+                              : RepaintBoundary(
+                                  child: SizedBox.expand(child: child));
                           return _clipToTileBounds(
                             p.item.component,
                             body,
@@ -2504,9 +2504,9 @@ class HomeSduiRenderer {
     Widget child, [
     BuildContext? context,
   ]) {
-    final isIOS = (context != null &&
-            Theme.of(context).platform == TargetPlatform.iOS) ||
-        defaultTargetPlatform == TargetPlatform.iOS;
+    final isIOS =
+        (context != null && Theme.of(context).platform == TargetPlatform.iOS) ||
+            defaultTargetPlatform == TargetPlatform.iOS;
     if (!isIOS) {
       // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
       final radius = _metroTileRadius(c);
@@ -4282,6 +4282,7 @@ class _RotatingCardState extends State<_RotatingCard>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final AnimationController _cycleController;
   bool _animationsAllowed = true;
+  final Map<int, Widget> _cachedFaces = <int, Widget>{};
 
   @override
   void initState() {
@@ -4293,17 +4294,28 @@ class _RotatingCardState extends State<_RotatingCard>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _cachedFaces.clear();
     _syncAnimation();
   }
 
   @override
   void didUpdateWidget(covariant _RotatingCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.faces.length != widget.faces.length ||
+    if (oldWidget.faces != widget.faces ||
         oldWidget.component != widget.component ||
         oldWidget.schema != widget.schema) {
+      _cachedFaces.clear();
       _syncAnimation();
     }
+  }
+
+  Widget _getOrBuildFace(int index) {
+    if (widget.faces.isEmpty) return const SizedBox.shrink();
+    final faceIndex = index % widget.faces.length;
+    return _cachedFaces.putIfAbsent(
+      faceIndex,
+      () => widget.buildFace(widget.faces[faceIndex], faceIndex),
+    );
   }
 
   @override
@@ -4913,7 +4925,8 @@ class _RotatingCardState extends State<_RotatingCard>
         config['transitionMs'] ??
         nested['transitionDuration'] ??
         nested['transitionMs'] ??
-        widget.schema['designTokens']?['animation']?['cardRotationTransitionMs'];
+        widget.schema['designTokens']?['animation']
+            ?['cardRotationTransitionMs'];
     final transitionMs = transitionMsRaw is num
         ? transitionMsRaw.toDouble()
         : double.tryParse(transitionMsRaw?.toString() ?? '');
@@ -4929,7 +4942,8 @@ class _RotatingCardState extends State<_RotatingCard>
         config['holdRatio'] ??
         nested['dwellRatio'] ??
         nested['holdRatio'] ??
-        widget.schema['designTokens']?['animation']?['cardRotationDwellRatio'] ??
+        widget.schema['designTokens']?['animation']
+            ?['cardRotationDwellRatio'] ??
         contractRatio;
     final ratio = ratioRaw is num
         ? ratioRaw.toDouble()
@@ -5030,7 +5044,17 @@ class _RotatingCardState extends State<_RotatingCard>
     );
   }
 
-  Widget _buildCube(BuildContext context, double controllerValue) {
+  Widget _buildCubeContent(
+    BuildContext context,
+    double controllerValue, {
+    required double width,
+    required double height,
+    required double depth,
+    required double perspective,
+    required String axis,
+    required int totalSides,
+    required double? radius,
+  }) {
     if (widget.faces.isEmpty) return const SizedBox.shrink();
 
     final defaultIndex = _resolvedDefaultIndex();
@@ -5053,13 +5077,132 @@ class _RotatingCardState extends State<_RotatingCard>
 
     final animationRadiansPerFace = _animationDegreesPerFace() * math.pi / 180;
 
-    // Web dwell-then-rotateY: parent angle lerps for the whole turn. The
-    // interactive/current face stays on the dwelling segment until the turn
-    // completes. There is no mid-turn content swap.
     final parentAngle =
         (progress.segmentIndex + progress.easedFlip) * animationRadiansPerFace;
     final currentIndex = progress.segmentIndex % widget.faces.length;
 
+    final sortedSideIndices = List<int>.generate(totalSides, (i) => i)
+      ..sort((a, b) {
+        final angleA = parentAngle + _faceBaseDegrees(a % 4) * math.pi / 180;
+        final angleB = parentAngle + _faceBaseDegrees(b % 4) * math.pi / 180;
+        return math.cos(angleA).compareTo(math.cos(angleB));
+      });
+
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+
+    final double containmentScale;
+    final double? centeringOverride;
+    if (isIOS && progress.easedFlip > 0.001 && progress.easedFlip < 0.999) {
+      final turnAngle = progress.easedFlip * math.pi / 2;
+      final denom = math.cos(turnAngle) + math.sin(turnAngle);
+      containmentScale = denom > 0.001 ? (1.0 / denom).clamp(0.7071, 1.0) : 1.0;
+      centeringOverride = -depth * denom;
+    } else {
+      containmentScale = 1.0;
+      centeringOverride = null;
+    }
+
+    final cubeStack = Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        for (final sideIndex in sortedSideIndices)
+          Builder(
+            key: ValueKey('cube_side_$sideIndex'),
+            builder: (context) {
+              final faceDataIndex = sideIndex % widget.faces.length;
+              final baseAngle = _faceBaseDegrees(sideIndex % 4) * math.pi / 180;
+              final effectiveAngle = parentAngle + baseAngle;
+              final visible = _faceVisible(effectiveAngle);
+
+              final double shadeOpacity;
+              if (!isIOS) {
+                // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
+                shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
+                    .clamp(0.0, 0.4);
+              } else {
+                // iOS IMPELLER DIRECTIONAL LIGHTING CONTRAST
+                final turnAmount =
+                    (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
+                final isRecedingFace = (animationRadiansPerFace < 0 &&
+                        math.sin(effectiveAngle) < 0) ||
+                    (animationRadiansPerFace > 0 &&
+                        math.sin(effectiveAngle) > 0);
+                final directionalFactor = isRecedingFace ? 0.28 : 0.08;
+                shadeOpacity =
+                    (turnAmount * directionalFactor).clamp(0.0, 0.45);
+              }
+
+              final faceWidget = _getOrBuildFace(faceDataIndex);
+
+              return IgnorePointer(
+                ignoring: faceDataIndex != currentIndex,
+                child: Visibility(
+                  visible: visible,
+                  maintainState: true,
+                  child: Transform(
+                    alignment: Alignment.center,
+                    filterQuality:
+                        isIOS ? FilterQuality.medium : FilterQuality.low,
+                    transform: _cubeFaceTransform(
+                      parentAngle: parentAngle,
+                      faceAngle: baseAngle,
+                      depth: depth,
+                      axis: axis,
+                      perspective: perspective,
+                      containmentScale: containmentScale,
+                      centeringOverride: centeringOverride,
+                    ),
+                    child: SizedBox.expand(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          faceWidget,
+                          if (shadeOpacity > 0.01)
+                            IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Color.fromRGBO(0, 0, 0, shadeOpacity),
+                                  borderRadius: radius != null && radius > 0
+                                      ? BorderRadius.circular(radius)
+                                      : null,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+
+    if (!isIOS) {
+      // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
+      Widget cube = RepaintBoundary(child: cubeStack);
+      if (radius != null && radius > 0) {
+        cube = ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          clipBehavior: Clip.antiAlias,
+          child: cube,
+        );
+      } else {
+        cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
+      }
+      return cube;
+    }
+
+    // iOS IMPELLER PATH
+    return cubeStack;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.faces.isEmpty) return const SizedBox.shrink();
     return LayoutBuilder(
       builder: (context, constraints) {
         final width =
@@ -5067,7 +5210,9 @@ class _RotatingCardState extends State<_RotatingCard>
         final height =
             constraints.maxHeight.isFinite ? constraints.maxHeight : width;
         if (width <= 0 || height <= 0) {
-          return widget.buildFace(widget.faces[currentIndex], currentIndex);
+          final defaultIndex = _resolvedDefaultIndex();
+          final currentIndex = defaultIndex % widget.faces.length;
+          return _getOrBuildFace(currentIndex);
         }
 
         final depth = _depthForWidth(width, height);
@@ -5148,151 +5293,21 @@ class _RotatingCardState extends State<_RotatingCard>
           }
         }
 
-        final sortedSideIndices = List<int>.generate(totalSides, (i) => i)
-          ..sort((a, b) {
-            final angleA =
-                parentAngle + _faceBaseDegrees(a % 4) * math.pi / 180;
-            final angleB =
-                parentAngle + _faceBaseDegrees(b % 4) * math.pi / 180;
-            return math.cos(angleA).compareTo(math.cos(angleB));
-          });
-
-        final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.iOS;
-
-        // iOS Impeller 3D containment: Keep rotation 100% strictly inside the tile slot
-        // without 2D scissor cuts or vertical zoom in/out.
-        // Scale ONLY the horizontal rotation plane (X & Z) by 1 / (cos + sin) while leaving
-        // vertical height (Y) strictly at 1.0 (unscaled).
-        // Push the rotation pivot back by -depth * (cos + sin) so front apex Z <= 0, preventing
-        // perspective expansion from pushing vertices outside the slot.
-        final double containmentScale;
-        final double? centeringOverride;
-        if (isIOS && progress.easedFlip > 0.001 && progress.easedFlip < 0.999) {
-          final turnAngle = progress.easedFlip * math.pi / 2;
-          final denom = math.cos(turnAngle) + math.sin(turnAngle);
-          containmentScale =
-              denom > 0.001 ? (1.0 / denom).clamp(0.7071, 1.0) : 1.0;
-          centeringOverride = -depth * denom;
-        } else {
-          containmentScale = 1.0;
-          centeringOverride = null;
-        }
-
-        Widget cubeStack = Stack(
-          fit: StackFit.expand,
-          clipBehavior: Clip.none,
-          children: [
-            for (final sideIndex in sortedSideIndices)
-              Builder(
-                key: ValueKey('cube_side_$sideIndex'),
-                builder: (context) {
-                  final faceDataIndex = sideIndex % widget.faces.length;
-                  final baseAngle =
-                      _faceBaseDegrees(sideIndex % 4) * math.pi / 180;
-                  final effectiveAngle = parentAngle + baseAngle;
-                  final visible = _faceVisible(effectiveAngle);
-
-                  final double shadeOpacity;
-                  if (!isIOS) {
-                    // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-                    shadeOpacity =
-                        ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
-                            .clamp(0.0, 0.4);
-                  } else {
-                    // iOS IMPELLER DIRECTIONAL LIGHTING CONTRAST
-                    final turnAmount =
-                        (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
-                    final isRecedingFace =
-                        (animationRadiansPerFace < 0 && math.sin(effectiveAngle) < 0) ||
-                        (animationRadiansPerFace > 0 && math.sin(effectiveAngle) > 0);
-                    final directionalFactor = isRecedingFace ? 0.28 : 0.08;
-                    shadeOpacity =
-                        (turnAmount * directionalFactor).clamp(0.0, 0.45);
-                  }
-
-                  final faceWidget = widget.buildFace(
-                    widget.faces[faceDataIndex],
-                    faceDataIndex,
-                  );
-
-                  return IgnorePointer(
-                    ignoring: faceDataIndex != currentIndex,
-                    child: Visibility(
-                      visible: visible,
-                      maintainState: true,
-                      child: Transform(
-                        alignment: Alignment.center,
-                        filterQuality:
-                            isIOS ? FilterQuality.medium : FilterQuality.low,
-                        transform: _cubeFaceTransform(
-                          parentAngle: parentAngle,
-                          faceAngle: baseAngle,
-                          depth: depth,
-                          axis: axis,
-                          perspective: perspective,
-                          containmentScale: containmentScale,
-                          centeringOverride: centeringOverride,
-                        ),
-                        child: SizedBox.expand(
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              faceWidget,
-                              if (shadeOpacity > 0.01)
-                                IgnorePointer(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Color.fromRGBO(0, 0, 0, shadeOpacity),
-                                      borderRadius: radius != null && radius > 0
-                                          ? BorderRadius.circular(radius)
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-          ],
+        return AnimatedBuilder(
+          animation: _cycleController,
+          builder: (context, _) => _buildCubeContent(
+            context,
+            _cycleController.value,
+            width: width,
+            height: height,
+            depth: depth,
+            perspective: perspective,
+            axis: axis,
+            totalSides: totalSides,
+            radius: radius,
+          ),
         );
-
-        if (!isIOS) {
-          // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-          Widget cube = RepaintBoundary(child: cubeStack);
-          if (radius != null && radius > 0) {
-            cube = ClipRRect(
-              borderRadius: BorderRadius.circular(radius),
-              clipBehavior: Clip.antiAlias,
-              child: cube,
-            );
-          } else {
-            cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
-          }
-          return cube;
-        }
-
-        // iOS IMPELLER PATH
-        // 1. Bypass RepaintBoundary so Metal streams continuous 3D matrix transforms (no freeze).
-        // 2. Deliver cubeStack directly without 2D ClipRRect so 3D dihedral side faces and rounded
-        //    corners are not sliced off flat. Individual faces inside already clip their own corners.
-        return cubeStack;
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.faces.isEmpty) return const SizedBox.shrink();
-    Theme.of(context);
-    return AnimatedBuilder(
-      animation: _cycleController,
-      builder: (context, _) => _buildCube(context, _cycleController.value),
     );
   }
 }

@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:efactor_sdui/grid_sdui/grid_in_app_webview_page.dart';
 import 'package:efactor_sdui/grid_sdui/grid_schema_repository.dart';
+import 'package:efactor_sdui/grid_sdui/grid_sdui_renderer.dart';
 import 'package:efactor_sdui/grid_sdui/grid_sdui_state.dart';
 import 'package:efactor_sdui/grid_sdui/grid_web_snapshot.dart';
 import 'package:efactor_sdui/services/grid_unread_counts_service.dart';
@@ -24,7 +27,8 @@ void main() {
           .setMockMessageHandler('flutter/assets', (ByteData? message) async {
         final key = utf8.decode(message!.buffer.asUint8List());
         if (key == 'assets/branding/grid.json') {
-          return ByteData.view(Uint8List.fromList(utf8.encode(jsonContent)).buffer);
+          return ByteData.view(
+              Uint8List.fromList(utf8.encode(jsonContent)).buffer);
         }
         return null;
       });
@@ -37,7 +41,9 @@ void main() {
   });
 
   group('Grid SDUI Asset Fallback and Cold-Start Resilience', () {
-    test('readFromCache returns valid bundled asset schema when disk cache is empty', () async {
+    test(
+        'readFromCache returns valid bundled asset schema when disk cache is empty',
+        () async {
       await GridSchemaRepository.clearUserCache(userId: 99999);
       final repo = GridSchemaRepository(
         accessToken: 'test_token',
@@ -49,11 +55,14 @@ void main() {
       expect(schema!['schemaVersion'] ?? schema['schema_version'], isNotNull);
       expect(schema['components'], isA<Map>());
       expect(schema['page'], isA<Map>());
-      expect(schema['_clientGridSchemaSource'], contains('asset://assets/branding/grid.json'));
+      expect(schema['_clientGridSchemaSource'],
+          contains('asset://assets/branding/grid.json'));
       expect(schema['_clientGridSchemaCacheHit'], isTrue);
     });
 
-    test('load() gracefully falls back to asset bundle when network fails and no disk cache', () async {
+    test(
+        'load() gracefully falls back to asset bundle when network fails and no disk cache',
+        () async {
       await GridSchemaRepository.clearUserCache(userId: 99998);
 
       final failingClient = MockClient((request) async {
@@ -69,14 +78,17 @@ void main() {
       final schema = await repo.load();
       expect(schema, isNotNull);
       expect(schema['components'], isA<Map>());
-      expect(schema['_clientGridSchemaSource'], contains('asset://assets/branding/grid.json'));
+      expect(schema['_clientGridSchemaSource'],
+          contains('asset://assets/branding/grid.json'));
     });
   });
 
   group('Grid URL Sanitization in GridSduiState', () {
-    test('GridSduiState normalizes duplicate /index.php/index.php/ prefixes', () async {
+    test('GridSduiState normalizes duplicate /index.php/index.php/ prefixes',
+        () async {
       final schemaFile = File('assets/branding/grid.json');
-      final schema = jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
+      final schema =
+          jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
       final state = GridSduiState(schema);
 
       Uri? openedUri;
@@ -88,18 +100,23 @@ void main() {
       await state.dispatch(
         'grid-open-professional-space',
         extra: <String, dynamic>{
-          'url': 'https://efactor.tech/index.php/index.php/grid?grid_sso=token123',
+          'url':
+              'https://efactor.tech/index.php/index.php/grid?grid_sso=token123',
         },
       );
 
       expect(openedUri, isNotNull);
-      expect(openedUri.toString(), 'https://efactor.tech/index.php/grid?grid_sso=token123');
+      expect(openedUri.toString(),
+          'https://efactor.tech/index.php/grid?grid_sso=token123');
       expect(openedUri.toString().contains('/index.php/index.php/'), isFalse);
     });
 
-    test('GridSduiState handles deeply nested duplicate /index.php/index.php/index.php/', () async {
+    test(
+        'GridSduiState handles deeply nested duplicate /index.php/index.php/index.php/',
+        () async {
       final schemaFile = File('assets/branding/grid.json');
-      final schema = jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
+      final schema =
+          jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
       final state = GridSduiState(schema);
 
       Uri? openedUri;
@@ -121,27 +138,58 @@ void main() {
   });
 
   group('Grid In-App WebView Navigation Scheme & SSO Logic', () {
-    test('isExternalScheme identifies WhatsApp, phone, email, and intent schemes', () {
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('whatsapp://send?phone=919876543210')), isTrue);
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('https://wa.me/919876543210')), isTrue);
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('https://api.whatsapp.com/send?phone=919876543210')), isTrue);
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('tel:+919876543210')), isTrue);
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('mailto:support@efactor.tech')), isTrue);
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('sms:+919876543210')), isTrue);
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('intent://view?data=abc')), isTrue);
+    test(
+        'isExternalScheme identifies WhatsApp, phone, email, and intent schemes',
+        () {
+      expect(
+          GridInAppWebViewPage.isExternalScheme(
+              Uri.parse('whatsapp://send?phone=919876543210')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isExternalScheme(
+              Uri.parse('https://wa.me/919876543210')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isExternalScheme(
+              Uri.parse('https://api.whatsapp.com/send?phone=919876543210')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isExternalScheme(Uri.parse('tel:+919876543210')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isExternalScheme(
+              Uri.parse('mailto:support@efactor.tech')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isExternalScheme(Uri.parse('sms:+919876543210')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isExternalScheme(
+              Uri.parse('intent://view?data=abc')),
+          isTrue);
 
       // Normal in-app web browsing routes should not be classified as external
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('https://efactor.tech/index.php/grid')), isFalse);
-      expect(GridInAppWebViewPage.isExternalScheme(Uri.parse('https://efactor.tech/index.php/grid-chat')), isFalse);
+      expect(
+          GridInAppWebViewPage.isExternalScheme(
+              Uri.parse('https://efactor.tech/index.php/grid')),
+          isFalse);
+      expect(
+          GridInAppWebViewPage.isExternalScheme(
+              Uri.parse('https://efactor.tech/index.php/grid-chat')),
+          isFalse);
     });
 
-    test('normalizeUrl and normalizeUri strip repeated index.php path fragments', () {
+    test(
+        'normalizeUrl and normalizeUri strip repeated index.php path fragments',
+        () {
       expect(
-        GridInAppWebViewPage.normalizeUrl('https://efactor.tech/index.php/index.php/grid'),
+        GridInAppWebViewPage.normalizeUrl(
+            'https://efactor.tech/index.php/index.php/grid'),
         'https://efactor.tech/index.php/grid',
       );
       expect(
-        GridInAppWebViewPage.normalizeUrl('https://efactor.tech/index.php/index.php/index.php/grid-chat?tab=1'),
+        GridInAppWebViewPage.normalizeUrl(
+            'https://efactor.tech/index.php/index.php/index.php/grid-chat?tab=1'),
         'https://efactor.tech/index.php/grid-chat?tab=1',
       );
 
@@ -152,26 +200,44 @@ void main() {
       expect(uri.queryParameters['grid_sso'], 'abc');
     });
 
-    test('shouldInjectSso and injectSso preserve grid_sso on server /signin redirects', () {
-      final initialUri = Uri.parse('https://efactor.tech/index.php/grid?grid_sso=sso_token_secure_99');
+    test(
+        'shouldInjectSso and injectSso preserve grid_sso on server /signin redirects',
+        () {
+      final initialUri = Uri.parse(
+          'https://efactor.tech/index.php/grid?grid_sso=sso_token_secure_99');
       final signinRedirect = Uri.parse('https://efactor.tech/index.php/signin');
 
-      expect(GridInAppWebViewPage.shouldInjectSso(signinRedirect, initialUri: initialUri), isTrue);
+      expect(
+          GridInAppWebViewPage.shouldInjectSso(signinRedirect,
+              initialUri: initialUri),
+          isTrue);
 
-      final injected = GridInAppWebViewPage.injectSso(signinRedirect, initialUri: initialUri);
+      final injected = GridInAppWebViewPage.injectSso(signinRedirect,
+          initialUri: initialUri);
       expect(injected.queryParameters['grid_sso'], 'sso_token_secure_99');
-      expect(injected.toString(), 'https://efactor.tech/index.php/signin?grid_sso=sso_token_secure_99');
+      expect(injected.toString(),
+          'https://efactor.tech/index.php/signin?grid_sso=sso_token_secure_99');
 
       // If target already has grid_sso, do not re-inject
-      final alreadyHasSso = Uri.parse('https://efactor.tech/index.php/signin?grid_sso=existing');
-      expect(GridInAppWebViewPage.shouldInjectSso(alreadyHasSso, initialUri: initialUri), isFalse);
+      final alreadyHasSso =
+          Uri.parse('https://efactor.tech/index.php/signin?grid_sso=existing');
+      expect(
+          GridInAppWebViewPage.shouldInjectSso(alreadyHasSso,
+              initialUri: initialUri),
+          isFalse);
 
       // If initialUri did not have grid_sso, do not inject
-      final initialWithoutSso = Uri.parse('https://efactor.tech/index.php/grid');
-      expect(GridInAppWebViewPage.shouldInjectSso(signinRedirect, initialUri: initialWithoutSso), isFalse);
+      final initialWithoutSso =
+          Uri.parse('https://efactor.tech/index.php/grid');
+      expect(
+          GridInAppWebViewPage.shouldInjectSso(signinRedirect,
+              initialUri: initialWithoutSso),
+          isFalse);
     });
 
-    test('GridInAppWebViewPage defaults to showAppBar: false (header hidden for full-screen)', () {
+    test(
+        'GridInAppWebViewPage defaults to showAppBar: false (header hidden for full-screen)',
+        () {
       final page = GridInAppWebViewPage(
         uri: Uri.parse('https://efactor.tech/index.php/grid'),
         title: 'Professional Space',
@@ -179,7 +245,9 @@ void main() {
       expect(page.showAppBar, isFalse);
     });
 
-    test('GridInAppWebViewPage preserves explicit showAppBar: true when specified', () {
+    test(
+        'GridInAppWebViewPage preserves explicit showAppBar: true when specified',
+        () {
       final page = GridInAppWebViewPage(
         uri: Uri.parse('https://efactor.tech/index.php/grid'),
         title: 'Professional Space',
@@ -188,7 +256,9 @@ void main() {
       expect(page.showAppBar, isTrue);
     });
 
-    testWidgets('GridInAppWebViewPage does not save snapshots and initializes in live-only mode', (WidgetTester tester) async {
+    testWidgets(
+        'GridInAppWebViewPage does not save snapshots and initializes in live-only mode',
+        (WidgetTester tester) async {
       final page = GridInAppWebViewPage(
         uri: Uri.parse('https://efactor.tech/index.php/grid'),
         title: 'Professional Space',
@@ -198,7 +268,9 @@ void main() {
       expect(page.showAppBar, isFalse);
     });
 
-    test('isIgnorableError correctly distinguishes benign redirect aborts from actual offline errors', () {
+    test(
+        'isIgnorableError correctly distinguishes benign redirect aborts from actual offline errors',
+        () {
       // Benign redirect / cancellation aborts must return true (ignored)
       expect(
         GridInAppWebViewPage.isIgnorableError(
@@ -267,42 +339,61 @@ void main() {
       );
     });
 
-    test('isGridRedirectUrl detects navigation back to Grid SDUI without blocking chat features', () {
+    test(
+        'isGridRedirectUrl detects navigation back to Grid SDUI without blocking chat features',
+        () {
       final chatUri = Uri.parse('https://efactor.tech/index.php/grid-chat');
 
       // Grid routes should redirect
       expect(
-        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid'), initialUri: chatUri),
+        GridInAppWebViewPage.isGridRedirectUrl(
+            Uri.parse('https://efactor.tech/index.php/grid'),
+            initialUri: chatUri),
         isTrue,
       );
       expect(
-        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/grid'), initialUri: chatUri),
+        GridInAppWebViewPage.isGridRedirectUrl(
+            Uri.parse('https://efactor.tech/grid'),
+            initialUri: chatUri),
         isTrue,
       );
       expect(
-        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid/'), initialUri: chatUri),
+        GridInAppWebViewPage.isGridRedirectUrl(
+            Uri.parse('https://efactor.tech/index.php/grid/'),
+            initialUri: chatUri),
         isTrue,
       );
       expect(
-        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/v8/grid_api_creation.php'), initialUri: chatUri),
+        GridInAppWebViewPage.isGridRedirectUrl(
+            Uri.parse('https://efactor.tech/v8/grid_api_creation.php'),
+            initialUri: chatUri),
         isTrue,
       );
 
       // Normal chat API calls and conversation routes must NOT be intercepted
       expect(
-        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat/api/chat/send'), initialUri: chatUri),
+        GridInAppWebViewPage.isGridRedirectUrl(
+            Uri.parse('https://efactor.tech/index.php/grid-chat/api/chat/send'),
+            initialUri: chatUri),
         isFalse,
       );
       expect(
-        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat?conversation_id=42'), initialUri: chatUri),
+        GridInAppWebViewPage.isGridRedirectUrl(
+            Uri.parse(
+                'https://efactor.tech/index.php/grid-chat?conversation_id=42'),
+            initialUri: chatUri),
         isFalse,
       );
       expect(
-        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat?tab=calls'), initialUri: chatUri),
+        GridInAppWebViewPage.isGridRedirectUrl(
+            Uri.parse('https://efactor.tech/index.php/grid-chat?tab=calls'),
+            initialUri: chatUri),
         isFalse,
       );
       expect(
-        GridInAppWebViewPage.isGridRedirectUrl(Uri.parse('https://efactor.tech/index.php/grid-chat?tab=reels'), initialUri: chatUri),
+        GridInAppWebViewPage.isGridRedirectUrl(
+            Uri.parse('https://efactor.tech/index.php/grid-chat?tab=reels'),
+            initialUri: chatUri),
         isFalse,
       );
 
@@ -415,7 +506,9 @@ void main() {
       );
     });
 
-    test('isCircleConnectExitUrl and isProfessionalSpaceExitUrl accurately match and isolate dedicated exits', () {
+    test(
+        'isCircleConnectExitUrl and isProfessionalSpaceExitUrl accurately match and isolate dedicated exits',
+        () {
       // 1. Circle Connect dedicated exit URL:
       // Host: efactor.tech or www.efactor.tech | Path: /index.php/grid_chat | Query: app=exit
       expect(
@@ -457,7 +550,8 @@ void main() {
       );
       expect(
         GridInAppWebViewPage.isCircleConnectExitUrl(
-          Uri.parse('https://efactor.tech/index.php/grid_chat?conversation_id=99'),
+          Uri.parse(
+              'https://efactor.tech/index.php/grid_chat?conversation_id=99'),
         ),
         isFalse,
         reason: 'Circle Connect conversation routes must NOT exit',
@@ -476,7 +570,8 @@ void main() {
           Uri.parse('https://efactor.tech/index.php/grid?app=exit'),
         ),
         isFalse,
-        reason: 'Professional Space exit URL must NOT match Circle Connect exit',
+        reason:
+            'Professional Space exit URL must NOT match Circle Connect exit',
       );
 
       // 2. Professional Space dedicated exit URL:
@@ -508,7 +603,8 @@ void main() {
           Uri.parse('https://efactor.tech/index.php/grid_chat?app=exit'),
         ),
         isFalse,
-        reason: 'Circle Connect exit URL must NOT match Professional Space exit',
+        reason:
+            'Circle Connect exit URL must NOT match Professional Space exit',
       );
       expect(
         GridInAppWebViewPage.isProfessionalSpaceExitUrl(
@@ -519,27 +615,62 @@ void main() {
       );
     });
 
-    test('isProfessionalSpaceRootUrl accurately identifies root feed vs subpages', () {
+    test(
+        'isProfessionalSpaceRootUrl accurately identifies root feed vs subpages',
+        () {
       // Root paths:
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid')), isTrue);
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/')), isTrue);
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/grid')), isTrue);
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/grid/')), isTrue);
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid?grid_sso=xyz123')), isTrue);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/index.php/grid')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/index.php/grid/')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/grid')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/grid/')),
+          isTrue);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/index.php/grid?grid_sso=xyz123')),
+          isTrue);
 
       // Subpages (should NOT be treated as root):
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/team')), isFalse);
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/profile')), isFalse);
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/settings')), isFalse);
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid/jobs')), isFalse);
-      expect(GridInAppWebViewPage.isProfessionalSpaceRootUrl(Uri.parse('https://efactor.tech/index.php/grid-chat')), isFalse);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/index.php/grid/team')),
+          isFalse);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/index.php/grid/profile')),
+          isFalse);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/index.php/grid/settings')),
+          isFalse);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/index.php/grid/jobs')),
+          isFalse);
+      expect(
+          GridInAppWebViewPage.isProfessionalSpaceRootUrl(
+              Uri.parse('https://efactor.tech/index.php/grid-chat')),
+          isFalse);
     });
 
-    test('isFileDownloadUrl detects résumés, message attachments, and document files', () {
+    test(
+        'isFileDownloadUrl detects résumés, message attachments, and document files',
+        () {
       // 1. Résumé download endpoint (PDF)
       expect(
         GridInAppWebViewPage.isFileDownloadUrl(
-          Uri.parse('https://efactor.tech/index.php/grid/api/jobs/applications/102/resume'),
+          Uri.parse(
+              'https://efactor.tech/index.php/grid/api/jobs/applications/102/resume'),
         ),
         isTrue,
       );
@@ -547,7 +678,8 @@ void main() {
       // 2. Message attachment endpoint
       expect(
         GridInAppWebViewPage.isFileDownloadUrl(
-          Uri.parse('https://efactor.tech/index.php/grid/api/messages/attachment/45'),
+          Uri.parse(
+              'https://efactor.tech/index.php/grid/api/messages/attachment/45'),
         ),
         isTrue,
       );
@@ -597,7 +729,9 @@ void main() {
       );
     });
 
-    test('isGridExitTrigger ignores Live, Channels, Moments, Calls subtabs and permits Grid exit on Chats/Root', () {
+    test(
+        'isGridExitTrigger ignores Live, Channels, Moments, Calls subtabs and permits Grid exit on Chats/Root',
+        () {
       // 1. Live tab and Live header variations must NOT trigger exit
       expect(
         GridInAppWebViewPage.isGridExitTrigger(activeTab: 'live'),
@@ -616,17 +750,20 @@ void main() {
         isFalse,
       );
       expect(
-        GridInAppWebViewPage.isGridExitTrigger(url: 'https://efactor.tech/index.php/grid-chat?tab=live'),
+        GridInAppWebViewPage.isGridExitTrigger(
+            url: 'https://efactor.tech/index.php/grid-chat?tab=live'),
         isFalse,
       );
       expect(
-        GridInAppWebViewPage.isGridExitTrigger(url: 'https://efactor.tech/index.php/grid-chat#live'),
+        GridInAppWebViewPage.isGridExitTrigger(
+            url: 'https://efactor.tech/index.php/grid-chat#live'),
         isFalse,
       );
 
       // 2. Channels, Moments, Calls subtabs must NOT trigger exit
       expect(
-        GridInAppWebViewPage.isGridExitTrigger(activeTab: 'channels', headerText: 'Channels'),
+        GridInAppWebViewPage.isGridExitTrigger(
+            activeTab: 'channels', headerText: 'Channels'),
         isFalse,
       );
       expect(
@@ -759,31 +896,41 @@ void main() {
   });
 
   group('Grid SSO Token Extraction & Navigation Resolution', () {
-    test('extractSsoToken accurately extracts token from content, actions, and components', () {
+    test(
+        'extractSsoToken accurately extracts token from content, actions, and components',
+        () {
       final mockLiveSchema = <String, dynamic>{
         'content': <String, dynamic>{
           'featureCards': <dynamic>[
             <String, dynamic>{
               'id': 'professional-space',
-              'url': 'https://efactor.tech/index.php/grid?grid_sso=token_live_12345',
+              'url':
+                  'https://efactor.tech/index.php/grid?grid_sso=token_live_12345',
             },
           ],
         },
         'schema': <String, dynamic>{
           'actions': <String, dynamic>{
             'grid-open-professional-space': <String, dynamic>{
-              'url': 'https://efactor.tech/index.php/grid?grid_sso=token_live_12345',
+              'url':
+                  'https://efactor.tech/index.php/grid?grid_sso=token_live_12345',
             },
           },
         },
       };
 
-      expect(GridSchemaRepository.extractSsoToken(mockLiveSchema), 'token_live_12345');
-      expect(GridSchemaRepository.extractSsoToken(<String, dynamic>{'grid_sso': 'token_direct'}), 'token_direct');
+      expect(GridSchemaRepository.extractSsoToken(mockLiveSchema),
+          'token_live_12345');
+      expect(
+          GridSchemaRepository.extractSsoToken(
+              <String, dynamic>{'grid_sso': 'token_direct'}),
+          'token_direct');
       expect(GridSchemaRepository.extractSsoToken(<String, dynamic>{}), isNull);
     });
 
-    test('resolveAuthenticatedUri attaches grid_sso to bare Grid and Circle Connect URLs', () async {
+    test(
+        'resolveAuthenticatedUri attaches grid_sso to bare Grid and Circle Connect URLs',
+        () async {
       final repo = GridSchemaRepository(
         accessToken: 'test_token',
         userId: 707,
@@ -794,31 +941,37 @@ void main() {
           'featureCards': <dynamic>[
             <String, dynamic>{
               'id': 'professional-space',
-              'url': 'https://efactor.tech/index.php/grid?grid_sso=auth_token_abc',
+              'url':
+                  'https://efactor.tech/index.php/grid?grid_sso=auth_token_abc',
             },
           ],
         },
       };
 
       final bareProfUri = Uri.parse('https://efactor.tech/index.php/grid');
-      final resolvedProf = await repo.resolveAuthenticatedUri(bareProfUri, activeSchema: mockLiveSchema);
+      final resolvedProf = await repo.resolveAuthenticatedUri(bareProfUri,
+          activeSchema: mockLiveSchema);
       expect(resolvedProf.queryParameters['grid_sso'], 'auth_token_abc');
       expect(resolvedProf.path, '/index.php/grid');
 
       final bareChatUri = Uri.parse('https://efactor.tech/index.php/grid-chat');
-      final resolvedChat = await repo.resolveAuthenticatedUri(bareChatUri, activeSchema: mockLiveSchema);
+      final resolvedChat = await repo.resolveAuthenticatedUri(bareChatUri,
+          activeSchema: mockLiveSchema);
       expect(resolvedChat.queryParameters['grid_sso'], 'auth_token_abc');
       expect(resolvedChat.path, '/index.php/grid-chat');
 
       // External URLs must remain untouched
       final extUri = Uri.parse('https://google.com/search');
-      final resolvedExt = await repo.resolveAuthenticatedUri(extUri, activeSchema: mockLiveSchema);
+      final resolvedExt = await repo.resolveAuthenticatedUri(extUri,
+          activeSchema: mockLiveSchema);
       expect(resolvedExt.queryParameters.containsKey('grid_sso'), isFalse);
     });
 
-    test('GridSduiState prefers action URL with grid_sso over bare extra url', () async {
+    test('GridSduiState prefers action URL with grid_sso over bare extra url',
+        () async {
       final schemaFile = File('assets/branding/grid.json');
-      final schema = jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
+      final schema =
+          jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
       final state = GridSduiState(schema);
 
       Uri? openedUri;
@@ -831,7 +984,8 @@ void main() {
       await state.dispatch(
         'grid-open-professional-space',
         extra: <String, dynamic>{
-          'url': 'https://efactor.tech/index.php/grid?grid_sso=signed_token_999',
+          'url':
+              'https://efactor.tech/index.php/grid?grid_sso=signed_token_999',
         },
       );
 
@@ -839,8 +993,11 @@ void main() {
       expect(openedUri!.queryParameters['grid_sso'], 'signed_token_999');
     });
 
-    test('GridWebSnapshot.normalizeHtml properly converts Unicode escaped entities from WebView to real HTML', () {
-      const rawJsEscapedHtml = r'\u003C!-- Installable to phone --\u003E\u003Clink rel=\"stylesheet\" href=\"/test.css\"\u003E\u003Cdiv\u003EHello\u003C/div\u003E';
+    test(
+        'GridWebSnapshot.normalizeHtml properly converts Unicode escaped entities from WebView to real HTML',
+        () {
+      const rawJsEscapedHtml =
+          r'\u003C!-- Installable to phone --\u003E\u003Clink rel=\"stylesheet\" href=\"/test.css\"\u003E\u003Cdiv\u003EHello\u003C/div\u003E';
       final cleaned = GridWebSnapshot.normalizeHtml(rawJsEscapedHtml);
       expect(cleaned, contains('<!-- Installable to phone -->'));
       expect(cleaned, contains('<link rel="stylesheet" href="/test.css">'));
@@ -848,8 +1005,11 @@ void main() {
       expect(cleaned.contains(r'\u003C'), isFalse);
     });
 
-    test('GridWebSnapshot.stripScripts removes script tags even after normalizing escaped HTML', () {
-      const escapedWithScript = r'\u003Cscript src=\"https://cdn.tailwindcss.com\"\u003E\u003C/script\u003E\u003Cdiv\u003EContent\u003C/div\u003E';
+    test(
+        'GridWebSnapshot.stripScripts removes script tags even after normalizing escaped HTML',
+        () {
+      const escapedWithScript =
+          r'\u003Cscript src=\"https://cdn.tailwindcss.com\"\u003E\u003C/script\u003E\u003Cdiv\u003EContent\u003C/div\u003E';
       final stripped = GridWebSnapshot.stripScripts(escapedWithScript);
       expect(stripped, contains('<div>Content</div>'));
       expect(stripped.contains('tailwindcss.com'), isFalse);
@@ -873,13 +1033,15 @@ void main() {
 
       final oldSchema = <String, dynamic>{
         '_clientGridSchemaCacheHit': true,
-        '_clientGridSchemaCachedAtMs':
-            DateTime.now().subtract(const Duration(minutes: 20)).millisecondsSinceEpoch,
+        '_clientGridSchemaCachedAtMs': DateTime.now()
+            .subtract(const Duration(minutes: 20))
+            .millisecondsSinceEpoch,
       };
       expect(GridSchemaRepository.isFreshCache(oldSchema), isFalse);
     });
 
-    test('revalidate() detects server updates and returns changed: true', () async {
+    test('revalidate() detects server updates and returns changed: true',
+        () async {
       final initialSchema = <String, dynamic>{
         'schemaVersion': '1.0.0',
         'page': <String, dynamic>{'title': 'Initial Grid'},
@@ -917,7 +1079,9 @@ void main() {
       expect(result.schema['page']['title'], 'Updated Live Grid from Web');
     });
 
-    test('revalidate() retains cache and returns changed: false on server 500 error', () async {
+    test(
+        'revalidate() retains cache and returns changed: false on server 500 error',
+        () async {
       final cachedSchema = <String, dynamic>{
         'schemaVersion': '1.0.0',
         'page': <String, dynamic>{'title': 'Existing Offline Grid'},
@@ -943,7 +1107,9 @@ void main() {
       expect(result.schema['page']['title'], 'Existing Offline Grid');
     });
 
-    test('resolveChatSwipeTarget maps left-to-right to Moments and right-to-left to Channels', () {
+    test(
+        'resolveChatSwipeTarget maps left-to-right to Moments and right-to-left to Channels',
+        () {
       // Swiping left-to-right (dx > 50) -> Moments
       expect(
         GridInAppWebViewPage.resolveChatSwipeTarget(dx: 60),
@@ -969,12 +1135,17 @@ void main() {
       );
     });
 
-    test('isSafeEfactorUrl accepts efactor.tech hosts and rejects untrusted origins', () {
-      expect(isSafeEfactorUrl('https://efactor.tech/index.php/grid/post/123'), isTrue);
-      expect(isSafeEfactorUrl('https://app.efactor.tech/notifications'), isTrue);
+    test(
+        'isSafeEfactorUrl accepts efactor.tech hosts and rejects untrusted origins',
+        () {
+      expect(isSafeEfactorUrl('https://efactor.tech/index.php/grid/post/123'),
+          isTrue);
+      expect(
+          isSafeEfactorUrl('https://app.efactor.tech/notifications'), isTrue);
       expect(isSafeEfactorUrl('http://efactor.tech/grid'), isTrue);
       expect(isSafeEfactorUrl('https://evil.com/hack'), isFalse);
-      expect(isSafeEfactorUrl('https://efactor.tech.attacker.com/post'), isFalse);
+      expect(
+          isSafeEfactorUrl('https://efactor.tech.attacker.com/post'), isFalse);
       expect(isSafeEfactorUrl('javascript:alert(1)'), isFalse);
       expect(isSafeEfactorUrl(''), isFalse);
     });
@@ -985,12 +1156,14 @@ void main() {
         isFalse,
       );
       expect(
-        await GridInAppWebViewPage.loadTargetUrl('https://efactor.tech/index.php/grid/post/99'),
+        await GridInAppWebViewPage.loadTargetUrl(
+            'https://efactor.tech/index.php/grid/post/99'),
         isTrue,
       );
     });
 
-    test('GridUnreadCountsService updates totalUnread and parses badge updates', () {
+    test('GridUnreadCountsService updates totalUnread and parses badge updates',
+        () {
       final service = GridUnreadCountsService.instance;
       service.updateUnreadCount(5);
       expect(service.totalUnread.value, equals(5));
@@ -1000,6 +1173,170 @@ void main() {
 
       service.updateUnreadCount('invalid');
       expect(service.totalUnread.value, equals(0));
+    });
+  });
+
+  group('GRID Header Orbit Globe & Duplicate Suppression', () {
+    testWidgets('Header renders 92px globe on hero right with welcome text',
+        (tester) async {
+      final schema = <String, dynamic>{
+        'rootComponentId': 'grid-page-header',
+        'designTokens': <String, dynamic>{
+          'colors': <String, dynamic>{
+            'textPrimary': '#2e1065',
+            'textSecondary': '#6b7280',
+            'accent': '#7c3aed',
+            'surface': '#ffffff',
+            'onAccent': '#ffffff',
+          },
+          'typography': <String, dynamic>{
+            'pageTitle': <String, dynamic>{'size': 26.0},
+            'pageSubtitle': <String, dynamic>{'size': 13.0},
+          },
+        },
+        'components': <String, dynamic>{
+          'grid-page-header': <String, dynamic>{
+            'id': 'grid-page-header',
+            'type': 'pageHeader',
+            'eyebrow': 'Welcome to GRID',
+            'title': 'Grid',
+            'subtitle': 'Your professional network space',
+            'tagline': 'Connect. Collaborate. Grow Together.',
+            'orbitGlobeUrl': 'https://efactor.tech/assets/grid-orbit-globe.svg',
+            'orbitGlobeImageUrl':
+                'https://efactor.tech/assets/images/grid-orbit-globe.png',
+            'orbitGlobePlacement': 'heroRight',
+            'appearance': <String, dynamic>{'logoHeight': 32.0},
+          },
+        },
+      };
+
+      final state = GridSduiState(schema);
+      final renderer = GridSduiRenderer(state);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(builder: (context) => renderer.buildRoot(context)),
+          ),
+        ),
+      );
+
+      // Verify Welcome text elements
+      expect(find.text('WELCOME TO GRID'), findsOneWidget);
+      expect(find.text('Grid'), findsOneWidget);
+      expect(find.text('Your professional network space'), findsOneWidget);
+      expect(find.text('Connect. Collaborate. Grow Together.'), findsOneWidget);
+
+      // Verify 92x92 globe container size
+      final sizedBoxes = tester.widgetList<SizedBox>(find.byType(SizedBox));
+      final globeBox = sizedBoxes.firstWhere(
+        (box) => box.width == 92.0 && box.height == 92.0,
+      );
+      expect(globeBox.width, equals(92.0));
+      expect(globeBox.height, equals(92.0));
+
+      // Verify IgnorePointer wrapper for touch-through transparency
+      final ignorePointers =
+          tester.widgetList<IgnorePointer>(find.byType(IgnorePointer));
+      expect(ignorePointers.any((ip) => ip.ignoring), isTrue);
+
+      // In headless test environment, verifies CachedNetworkImage fallback
+      final images = tester
+          .widgetList<CachedNetworkImage>(find.byType(CachedNetworkImage));
+      expect(
+        images.any((img) =>
+            img.imageUrl ==
+            'https://efactor.tech/assets/images/grid-orbit-globe.png'),
+        isTrue,
+      );
+    });
+
+    testWidgets(
+        'Circle Connect featureCard suppresses duplicate globe when header has globe',
+        (tester) async {
+      final schema = <String, dynamic>{
+        'rootComponentId': 'grid-feature-circle-connect',
+        'designTokens': <String, dynamic>{
+          'colors': <String, dynamic>{
+            'textPrimary': '#1e1b4b',
+            'textSecondary': '#6b7280',
+            'accent': '#ea580c',
+            'surface': '#ffffff',
+            'onAccent': '#ffffff',
+          },
+          'typography': <String, dynamic>{
+            'pageSubtitle': <String, dynamic>{'size': 12.0},
+          },
+        },
+        'components': <String, dynamic>{
+          'grid-page-header': <String, dynamic>{
+            'id': 'grid-page-header',
+            'type': 'pageHeader',
+            'orbitGlobeUrl': 'https://efactor.tech/assets/grid-orbit-globe.svg',
+            'orbitGlobeImageUrl':
+                'https://efactor.tech/assets/images/grid-orbit-globe.png',
+          },
+          'grid-feature-circle-connect': <String, dynamic>{
+            'id': 'grid-feature-circle-connect',
+            'type': 'featureCard',
+            'style': 'softCard',
+            'title': 'Circle Connect',
+            'subtitle': 'Meaningful conversations. Stronger circles.',
+            'orbitGlobeImageUrl':
+                'https://efactor.tech/assets/images/grid-orbit-globe.png',
+            'color': '#ea580c',
+            'layout': <String, dynamic>{
+              'direction': 'vertical',
+              'minHeight': 168.0,
+            },
+            'appearance': <String, dynamic>{
+              'borderRadius': 16.0,
+              'iconSize': 42.0,
+              'titleFontSize': 15.0,
+              'subtitleFontSize': 12.0,
+              'padding': 12.0,
+            },
+          },
+        },
+      };
+
+      final state = GridSduiState(schema);
+      final renderer = GridSduiRenderer(state);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(builder: (context) => renderer.buildRoot(context)),
+          ),
+        ),
+      );
+
+      // Verify that the duplicate globe CachedNetworkImage is suppressed on the card
+      expect(find.byType(CachedNetworkImage), findsNothing);
+      expect(find.text('Circle Connect'), findsOneWidget);
+    });
+
+    test(
+        'Globe URL security whitelist permits approved URLs and rejects untrusted origins',
+        () {
+      bool isAllowedGlobeUrl(String rawUrl) {
+        final url = rawUrl.toLowerCase();
+        return url.contains('efactor.tech/assets/grid-orbit-globe.svg') ||
+            url.startsWith('about:blank');
+      }
+
+      expect(
+          isAllowedGlobeUrl('https://efactor.tech/assets/grid-orbit-globe.svg'),
+          isTrue);
+      expect(
+          isAllowedGlobeUrl('https://EFACTOR.TECH/ASSETS/GRID-ORBIT-GLOBE.SVG'),
+          isTrue);
+      expect(isAllowedGlobeUrl('about:blank'), isTrue);
+      expect(
+          isAllowedGlobeUrl('https://malicious-site.com/exploit.svg'), isFalse);
+      expect(isAllowedGlobeUrl('https://efactor.tech/vulnerabilities/evil.js'),
+          isFalse);
     });
   });
 }

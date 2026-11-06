@@ -434,8 +434,13 @@
       "grid-page-header": {
         "id": "grid-page-header",
         "type": "pageHeader",
+        "eyebrow": "Welcome to GRID",
         "title": "Grid",
         "subtitle": "Your professional network space",
+        "tagline": "Connect. Collaborate. Grow Together.",
+        "orbitGlobeUrl": "https://efactor.tech/assets/grid-orbit-globe.svg",
+        "orbitGlobeImageUrl": "https://efactor.tech/assets/images/grid-orbit-globe.png",
+        "orbitGlobePlacement": "heroRight",
         "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
         "image": "https://efactor.tech/assets/images/GRID_Logo.png",
         "designTokens": {

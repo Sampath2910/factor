@@ -47,7 +47,6 @@ class SchemaPullToRefresh extends StatelessWidget {
 
   Widget _fillViewport(BuildContext context, Widget child) {
     final media = MediaQuery.sizeOf(context);
-    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
     return LayoutBuilder(
       builder: (context, constraints) {
         // When a parent Scaffold uses resizeToAvoidBottomInset, maxHeight
@@ -58,14 +57,11 @@ class SchemaPullToRefresh extends StatelessWidget {
                 ? constraints.maxHeight + viewInsets.bottom
                 : media.height)
             .clamp(0.0, double.infinity);
-        final width = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : media.width;
+        final width =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : media.width;
         return ListView(
-          physics: AlwaysScrollableScrollPhysics(
-            parent: isIos
-                ? const BouncingScrollPhysics()
-                : const ClampingScrollPhysics(),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
           ),
           padding: EdgeInsets.zero,
           // Layout jumps from IME open must not dismiss the keyboard.

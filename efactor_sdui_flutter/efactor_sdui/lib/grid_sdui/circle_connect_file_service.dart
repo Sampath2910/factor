@@ -492,6 +492,27 @@ class CircleConnectFileService {
         debugPrint(
           '[CircleConnectFiles] openFile: path=$cleanPath, mime=$effectiveMime, exists=${file.existsSync()}',
         );
+        // 1. Primary path: Native FileProvider via platform channel (100% permission-free on SDK 36/Android 16)
+        try {
+          const channel = MethodChannel('tech.efactor/circle_connect');
+          final nativeResult = await channel.invokeMethod<Map>('openFile', {
+            'filePath': cleanPath,
+            'mimeType': effectiveMime,
+          });
+          if (nativeResult != null && nativeResult['success'] == true) {
+            return <String, dynamic>{
+              'success': true,
+              'message': 'done',
+              'type': 'done',
+              'localPath': cleanPath,
+              'mimeType': effectiveMime,
+            };
+          }
+        } catch (e) {
+          debugPrint('[CircleConnectFiles] native openFile error: $e');
+        }
+
+        // 2. Secondary fallback
         final result = await OpenFilex.open(
           cleanPath,
           type: effectiveMime,
@@ -508,7 +529,28 @@ class CircleConnectFileService {
           'mimeType': effectiveMime,
         };
       } else {
-        // iOS: Native Share Sheet with "Save to Files" / "Open With"
+        // iOS: Native QuickLook in-app preview via UIDocumentInteractionController (PDF, Word, Excel, PPT, ZIP, etc.)
+        try {
+          const channel = MethodChannel('tech.efactor/circle_connect');
+          final nativeResult = await channel.invokeMethod<Map>('openFile', {
+            'filePath': cleanPath,
+            'mimeType': effectiveMime,
+            'fileName': fileName ?? cleanPath.split('/').last,
+          });
+          if (nativeResult != null && nativeResult['success'] == true) {
+            return <String, dynamic>{
+              'success': true,
+              'message': 'done',
+              'type': nativeResult['type'] ?? 'preview',
+              'localPath': cleanPath,
+              'mimeType': effectiveMime,
+            };
+          }
+        } catch (e) {
+          debugPrint('[CircleConnectFiles] iOS native openFile error: $e');
+        }
+
+        // Secondary fallback on iOS: Native Share Sheet
         final xfile = XFile(
           cleanPath,
           mimeType: effectiveMime,

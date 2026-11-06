@@ -1,8 +1,11 @@
 import AudioToolbox
 import AVFoundation
 import Flutter
+import Photos
+import QuickLook
 import UIKit
 import UserNotifications
+import WebKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -11,6 +14,7 @@ import UserNotifications
   private var incomingRingPlayer: AVAudioPlayer?
   private var incomingRingTimer: Timer?
   private var isOngoingCallAudioActive = false
+  private var documentInteractionController: UIDocumentInteractionController?
 
   override func application(
     _ application: UIApplication,
@@ -52,11 +56,27 @@ import UserNotifications
       switch call.method {
       case "getCookies":
         let urlStr = (call.arguments as? [String: Any])?["url"] as? String ?? "https://efactor.tech"
-        if let url = URL(string: urlStr), let cookies = HTTPCookieStorage.shared.cookies(for: url) {
-          let cookieHeader = cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
-          result(cookieHeader)
-        } else {
-          result("")
+        let targetUrl = URL(string: urlStr)
+        let domain = targetUrl?.host ?? "efactor.tech"
+
+        WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+          let matched = cookies.filter { cookie in
+            if cookie.domain.hasPrefix(".") {
+              let cleanDomain = String(cookie.domain.dropFirst())
+              return domain == cleanDomain || domain.hasSuffix("." + cleanDomain)
+            }
+            return domain == cookie.domain || domain.hasSuffix("." + cookie.domain)
+          }
+
+          if !matched.isEmpty {
+            let cookieHeader = matched.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+            result(cookieHeader)
+          } else if let targetUrl = targetUrl, let sharedCookies = HTTPCookieStorage.shared.cookies(for: targetUrl), !sharedCookies.isEmpty {
+            let cookieHeader = sharedCookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+            result(cookieHeader)
+          } else {
+            result("")
+          }
         }
       case "saveImageToGallery":
         guard let args = call.arguments as? [String: Any],
@@ -64,6 +84,9 @@ import UserNotifications
           result(FlutterError(code: "INVALID_ARGS", message: "Missing image data", details: nil))
           return
         }
+        let album = (args["album"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let albumName = (album != nil && !album!.isEmpty) ? album! : "Circle Connect"
+
         var cleanBase64 = base64Str.trimmingCharacters(in: .whitespacesAndNewlines)
         if let commaIndex = cleanBase64.firstIndex(of: ",") {
           cleanBase64 = String(cleanBase64[cleanBase64.index(after: commaIndex)...])
@@ -73,8 +96,18 @@ import UserNotifications
           result(FlutterError(code: "DECODE_ERROR", message: "Failed to decode Base64 image", details: nil))
           return
         }
-        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        result(true)
+
+        self.saveAssetToAlbum(albumName: albumName, isVideo: false, fileUrl: nil, image: image) { success, error in
+          DispatchQueue.main.async {
+            if success {
+              result(true)
+            } else {
+              // Fallback to standard album
+              UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+              result(true)
+            }
+          }
+        }
       case "saveVideoToGallery":
         guard let args = call.arguments as? [String: Any],
               let filePath = args["filePath"] as? String else {
@@ -85,12 +118,29 @@ import UserNotifications
           result(FlutterError(code: "FILE_NOT_FOUND", message: "Video file not found at path: \(filePath)", details: nil))
           return
         }
-        if UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(filePath) {
-          UISaveVideoAtPathToSavedPhotosAlbum(filePath, nil, nil, nil)
-          result(true)
-        } else {
-          result(FlutterError(code: "INCOMPATIBLE_VIDEO", message: "Video format is not compatible with Photos album", details: nil))
+        let album = (args["album"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let albumName = (album != nil && !album!.isEmpty) ? album! : "Circle Connect"
+        let fileUrl = URL(fileURLWithPath: filePath)
+
+        self.saveAssetToAlbum(albumName: albumName, isVideo: true, fileUrl: fileUrl, image: nil) { success, error in
+          DispatchQueue.main.async {
+            if success {
+              result(true)
+            } else if UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(filePath) {
+              UISaveVideoAtPathToSavedPhotosAlbum(filePath, nil, nil, nil)
+              result(true)
+            } else {
+              result(FlutterError(code: "SAVE_FAILED", message: error?.localizedDescription ?? "Could not save video", details: nil))
+            }
+          }
         }
+      case "openFile":
+        guard let args = call.arguments as? [String: Any],
+              let filePath = args["filePath"] as? String else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing file path", details: nil))
+          return
+        }
+        self.openFileWithDocumentInteraction(filePath: filePath, result: result)
       case "startIncomingRing":
         self.startIncomingRing()
         result(true)
@@ -175,6 +225,161 @@ import UserNotifications
     incomingRingPlayer = nil
   }
 
+  private func openFileWithDocumentInteraction(filePath: String, result: @escaping FlutterResult) {
+    let fileUrl = URL(fileURLWithPath: filePath)
+    guard FileManager.default.fileExists(atPath: filePath) else {
+      result(FlutterError(code: "FILE_NOT_FOUND", message: "File not found: \(filePath)", details: nil))
+      return
+    }
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self, let rootVC = self.window?.rootViewController else {
+        result(FlutterError(code: "NO_VIEW_CONTROLLER", message: "No root view controller", details: nil))
+        return
+      }
+
+      self.documentInteractionController = UIDocumentInteractionController(url: fileUrl)
+      self.documentInteractionController?.delegate = self
+
+      // Attempt native QuickLook in-app document preview first
+      let presented = self.documentInteractionController?.presentPreview(animated: true) ?? false
+      if presented {
+        result(["success": true, "type": "preview"])
+      } else {
+        // If in-app preview is not supported for this specific file, present Open In menu
+        let rect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
+        let menuPresented = self.documentInteractionController?.presentOpenInMenu(from: rect, in: rootVC.view, animated: true) ?? false
+        result(["success": menuPresented, "type": menuPresented ? "menu" : "failed"])
+      }
+    }
+  }
+
+  private func saveAssetToAlbum(albumName: String, isVideo: Bool, fileUrl: URL?, image: UIImage?, completion: @escaping (Bool, Error?) -> Void) {
+    PHPhotoLibrary.requestAuthorization { status in
+      guard status == .authorized || status == .limited else {
+        completion(false, NSError(domain: "CircleConnect", code: 403, userInfo: [NSLocalizedDescriptionKey: "Photo library access denied"]))
+        return
+      }
+
+      // Find or create named album
+      var albumPlaceholder: PHObjectPlaceholder?
+      let fetchOptions = PHFetchOptions()
+      fetchOptions.predicate = NSPredicate(format: "title = %@", albumName)
+      let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: fetchOptions)
+
+      var targetCollection: PHAssetCollection? = collection.firstObject
+
+      func performSave(to album: PHAssetCollection?) {
+        PHPhotoLibrary.shared().performChanges({
+          var assetPlaceholder: PHObjectPlaceholder?
+          if isVideo, let url = fileUrl {
+            let request = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+            assetPlaceholder = request?.placeholderForCreatedAsset
+          } else if let img = image {
+            let request = PHAssetChangeRequest.creationRequestForAsset(from: img)
+            assetPlaceholder = request?.placeholderForCreatedAsset
+          }
+
+          if let album = album, let asset = assetPlaceholder {
+            let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
+            albumChangeRequest?.addAssets([asset] as NSArray)
+          }
+        }) { success, error in
+          completion(success, error)
+        }
+      }
+
+      if let target = targetCollection {
+        performSave(to: target)
+      } else {
+        // Create album first
+        PHPhotoLibrary.shared().performChanges({
+          let createAlbumRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: albumName)
+          albumPlaceholder = createAlbumRequest.placeholderForCreatedAssetCollection
+        }) { success, error in
+          if success, let placeholder = albumPlaceholder {
+            let collectionFetch = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
+            performSave(to: collectionFetch.firstObject)
+          } else {
+            // Fallback to saving to camera roll without album
+            performSave(to: nil)
+          }
+        }
+      }
+    }
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+  ) {
+    super.application(application, didReceiveRemoteNotification: userInfo, fetchCompletionHandler: { _ in })
+
+    let dataDict = (userInfo["data"] as? [String: Any]) ?? (userInfo as? [String: Any]) ?? [:]
+    let convId = (dataDict["conversation_id"] as? String)
+      ?? (dataDict["conversationId"] as? String)
+      ?? (dataDict["chat_id"] as? String)
+      ?? (dataDict["chatId"] as? String)
+      ?? ""
+    let msgId = (dataDict["message_id"] as? String)
+      ?? (dataDict["messageId"] as? String)
+      ?? (dataDict["msg_id"] as? String)
+      ?? (dataDict["msgId"] as? String)
+      ?? ""
+    let targetUrl = (dataDict["url"] as? String)
+      ?? (dataDict["target_url"] as? String)
+      ?? (dataDict["targetUrl"] as? String)
+
+    let cleanConvId = convId.trimmingCharacters(in: .whitespacesAndNewlines)
+    let cleanMsgId = msgId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !cleanConvId.isEmpty, !cleanMsgId.isEmpty else {
+      completionHandler(.noData)
+      return
+    }
+
+    let deviceKey = UserDefaults.standard.string(forKey: "flutter.efactor.circle_connect.device_key_unencrypted_cache")
+      ?? UserDefaults.standard.string(forKey: "efactor.circle_connect.device_key_unencrypted_cache")
+
+    guard let key = deviceKey?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty else {
+      NSLog("[AppDelegate] Native background push received, but no device key cached. Skipping native delivered POST.")
+      completionHandler(.noData)
+      return
+    }
+
+    var baseUrl = "https://efactor.tech/index.php/grid-chat/api"
+    if let hint = targetUrl, let url = URL(string: hint), let host = url.host, !host.isEmpty {
+      let scheme = url.scheme ?? "https"
+      baseUrl = "\(scheme)://\(host)/index.php/grid-chat/api"
+    }
+    guard let endpoint = URL(string: "\(baseUrl)/notification/action") else {
+      completionHandler(.noData)
+      return
+    }
+
+    var request = URLRequest(url: endpoint)
+    request.httpMethod = "POST"
+    request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+    request.setValue(key, forHTTPHeaderField: "X-Device-Key")
+    request.timeoutInterval = 10.0
+
+    let bodyString = "action=delivered&conversation_id=\(cleanConvId)&message_id=\(cleanMsgId)"
+    request.httpBody = bodyString.data(using: .utf8)
+
+    NSLog("[AppDelegate] Native background delivery POST dispatching to \(endpoint) for convId=\(cleanConvId) msgId=\(cleanMsgId)")
+    let task = URLSession.shared.dataTask(with: request) { _, response, error in
+      if let httpResp = response as? HTTPURLResponse {
+        NSLog("[AppDelegate] Native background delivery POST completed: status=\(httpResp.statusCode)")
+        completionHandler(.newData)
+      } else {
+        NSLog("[AppDelegate] Native background delivery POST failed: \(error?.localizedDescription ?? "unknown error")")
+        completionHandler(.failed)
+      }
+    }
+    task.resume()
+  }
+
   override func application(
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
@@ -191,5 +396,15 @@ import UserNotifications
       let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: controller.binaryMessenger)
       channel.invokeMethod("openSettingsUrl", arguments: ["url": "https://efactor.tech/index.php/grid-chat/settings"])
     }
+  }
+}
+
+extension AppDelegate: UIDocumentInteractionControllerDelegate {
+  public func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
+    return window?.rootViewController ?? UIViewController()
+  }
+
+  public func documentInteractionControllerDidEndPreview(_ controller: UIDocumentInteractionController) {
+    documentInteractionController = nil
   }
 }

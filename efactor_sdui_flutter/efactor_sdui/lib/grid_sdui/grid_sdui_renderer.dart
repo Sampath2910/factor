@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../home_sdui/home_icon_resolver.dart';
 import '../sdui/schema_guard.dart';
@@ -75,7 +76,9 @@ class GridSduiRenderer {
     }
 
     Widget list = ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       padding: padding,
       itemCount: widgets.length,
       separatorBuilder: (_, __) => SizedBox(height: gap),
@@ -97,6 +100,16 @@ class GridSduiRenderer {
   Widget _pageHeader(BuildContext context, Map<String, dynamic> c) {
     final subtitle = c['subtitle']?.toString() ?? '';
     final logoUrl = c['logoUrl']?.toString() ?? c['image']?.toString() ?? '';
+    final eyebrow = c['eyebrow']?.toString() ?? '';
+    final title = c['title']?.toString() ?? 'Grid';
+    final tagline = c['tagline']?.toString() ?? '';
+    final orbitGlobeUrl =
+        (c['orbitGlobeUrl'] ?? c['globeUrl'])?.toString().trim() ?? '';
+    final orbitGlobeImageUrl =
+        (c['orbitGlobeImageUrl'] ?? c['globeImageUrl'])?.toString().trim() ??
+            '';
+    final hasGlobe = orbitGlobeUrl.isNotEmpty || orbitGlobeImageUrl.isNotEmpty;
+
     final typography = _map(c['typography']) ?? const <String, dynamic>{};
     final titleStyle = _typographyOrNull(
       typography['titleToken']?.toString() ?? 'pageTitle',
@@ -126,45 +139,110 @@ class GridSduiRenderer {
       );
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final accentColor = state.tokenColor('colors.accent') ??
+        state.tokenColor('colors.textPrimary') ??
+        const Color(0xFF7C3AED);
+
+    Widget brandWidget;
+    if (logoUrl.isNotEmpty) {
+      brandWidget = CachedNetworkImage(
+        imageUrl: logoUrl,
+        cacheManager: SduiNetworkImageCache.manager,
+        height: logoHeight,
+        fit: BoxFit.contain,
+        alignment: Alignment.centerLeft,
+        errorWidget: (_, __, ___) => Text(
+          title,
+          style: titleStyle,
+        ),
+      );
+    } else {
+      brandWidget = Text(title, style: titleStyle);
+    }
+
+    final topBar = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        brandWidget,
+        const Spacer(),
+        if (actions is List)
+          for (final raw in actions)
+            if (raw is Map) _headerAction(Map<String, dynamic>.from(raw)),
+      ],
+    );
+
+    final hasHeroContent = eyebrow.isNotEmpty ||
+        subtitle.isNotEmpty ||
+        tagline.isNotEmpty ||
+        hasGlobe;
+    if (!hasHeroContent) {
+      return topBar;
+    }
+
+    final heroRow = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              if (logoUrl.isNotEmpty)
-                CachedNetworkImage(
-                  imageUrl: logoUrl,
-                  cacheManager: SduiNetworkImageCache.manager,
-                  height: logoHeight,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.centerLeft,
-                  errorWidget: (_, __, ___) => Text(
-                    c['title']?.toString() ?? 'Grid',
-                    style: titleStyle,
+              if (eyebrow.isNotEmpty) ...<Widget>[
+                Text(
+                  eyebrow.toUpperCase(),
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.1,
                   ),
-                )
-              else
-                Text(c['title']?.toString() ?? '', style: titleStyle),
+                ),
+                const SizedBox(height: 4),
+              ],
+              if (logoUrl.isNotEmpty && title.isNotEmpty) ...<Widget>[
+                Text(title, style: titleStyle),
+                const SizedBox(height: 4),
+              ],
               if (subtitle.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 6),
                 Text(subtitle, style: subtitleStyle),
+              ],
+              if (tagline.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 4),
+                Text(
+                  tagline,
+                  style: subtitleStyle.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: subtitleStyle.color?.withValues(alpha: 0.85),
+                  ),
+                ),
               ],
             ],
           ),
         ),
-        if (actions is List)
-          for (final raw in actions)
-            if (raw is Map) _headerAction(Map<String, dynamic>.from(raw)),
+        if (hasGlobe) ...<Widget>[
+          const SizedBox(width: 8),
+          _GridOrbitGlobe(
+            orbitGlobeUrl: orbitGlobeUrl,
+            orbitGlobeImageUrl: orbitGlobeImageUrl,
+            size: 92.0,
+          ),
+        ],
+      ],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        topBar,
+        const SizedBox(height: 16),
+        heroRow,
       ],
     );
   }
 
   Widget _headerAction(Map<String, dynamic> action) {
     final type = action['type']?.toString();
-    final color = state.parseColor(action['color']) ??
-        state.tokenColor('colors.accent');
+    final color =
+        state.parseColor(action['color']) ?? state.tokenColor('colors.accent');
     if (color == null) {
       return SchemaIssueWidget(
         title: 'Schema color missing',
@@ -190,7 +268,8 @@ class GridSduiRenderer {
           controlId: action['id']?.toString(),
         );
       }
-      final appearance = _map(action['appearance']) ?? const <String, dynamic>{};
+      final appearance =
+          _map(action['appearance']) ?? const <String, dynamic>{};
       final layout = _map(action['layout']) ?? const <String, dynamic>{};
       final actionSize = _d(appearance['size'] ?? layout['width']) ?? 40.0;
       final imageUrl = (action['imageUrl'] ??
@@ -379,7 +458,8 @@ class GridSduiRenderer {
           child: Text(
             'No activity found for this category.',
             style: TextStyle(
-              color: state.tokenColor('colors.textSecondary') ?? const Color(0xFF64748B),
+              color: state.tokenColor('colors.textSecondary') ??
+                  const Color(0xFF64748B),
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -439,10 +519,9 @@ class GridSduiRenderer {
         start;
     final iconSize = _d(appearance['iconSize']);
     final titleSize = _d(appearance['titleFontSize']);
-    final subtitleSize = _d(appearance['subtitleFontSize']) ??
-        _tokenSize('pageSubtitle');
-    final paddingRaw =
-        _d(appearance['padding'] ?? appearance['titlePadding']);
+    final subtitleSize =
+        _d(appearance['subtitleFontSize']) ?? _tokenSize('pageSubtitle');
+    final paddingRaw = _d(appearance['padding'] ?? appearance['titlePadding']);
     final cardPadding =
         (paddingRaw == null || paddingRaw <= 0.0) ? 12.0 : paddingRaw;
     final accent = state.parseColor(c['color']) ??
@@ -477,13 +556,29 @@ class GridSduiRenderer {
     }
     final iconBox = iconSize;
     final glyphSize = iconSize * 0.5;
-    final direction = (layout['direction'] ?? 'vertical')
-        .toString()
-        .trim()
-        .toLowerCase();
+    final direction =
+        (layout['direction'] ?? 'vertical').toString().trim().toLowerCase();
     final isHorizontal = direction == 'horizontal' ||
         appearance['titlePosition'] == 'besideIcon' ||
         appearance['iconPosition'] == 'leading';
+
+    final pageHeader = state.component('grid-page-header');
+    final headerHasGlobe = pageHeader != null &&
+        ((pageHeader['orbitGlobeUrl'] ?? pageHeader['globeUrl'])
+                    ?.toString()
+                    .trim()
+                    .isNotEmpty ==
+                true ||
+            (pageHeader['orbitGlobeImageUrl'] ?? pageHeader['globeImageUrl'])
+                    ?.toString()
+                    .trim()
+                    .isNotEmpty ==
+                true);
+    String globeImageUrl =
+        (c['orbitGlobeImageUrl'] ?? c['globeImageUrl'] ?? '').toString().trim();
+    if (headerHasGlobe) {
+      globeImageUrl = ''; // Suppress second globe in Circle Connect
+    }
 
     Widget cardBody;
     if (isHorizontal) {
@@ -496,17 +591,20 @@ class GridSduiRenderer {
               '')
           .toString()
           .trim();
-      final avatarColor = state.parseColor(
-              iconMap?['backgroundColor'] ??
-                  iconMap?['color'] ??
-                  c['avatarColor']) ??
+      final avatarColor = state.parseColor(iconMap?['backgroundColor'] ??
+              iconMap?['color'] ??
+              c['avatarColor']) ??
           accent;
-      final avatarImageUrl = (iconMap?['imageUrl'] ??
+      var avatarImageUrl = (iconMap?['imageUrl'] ??
               iconMap?['avatarUrl'] ??
               c['imageUrl'] ??
               c['image'])
           ?.toString()
           .trim();
+      if ((avatarImageUrl == null || avatarImageUrl.isEmpty) &&
+          globeImageUrl.isNotEmpty) {
+        avatarImageUrl = globeImageUrl;
+      }
       final iconBorderRadius =
           _d(appearance['iconBorderRadius']) ?? (iconBox / 2.0);
       final hasAvatar = iconMap != null ||
@@ -654,20 +752,43 @@ class GridSduiRenderer {
       cardBody = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Container(
-            width: iconBox,
-            height: iconBox,
-            decoration: BoxDecoration(
-              color: iconOverlay.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(16),
+          if (globeImageUrl.isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: globeImageUrl,
+              cacheManager: SduiNetworkImageCache.manager,
+              width: iconBox,
+              height: iconBox,
+              fit: BoxFit.contain,
+              errorWidget: (_, __, ___) => Container(
+                width: iconBox,
+                height: iconBox,
+                decoration: BoxDecoration(
+                  color: iconOverlay.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.center,
+                child: FaIcon(
+                  icons.resolve(c['iconToken']?.toString()),
+                  size: glyphSize,
+                  color: accent,
+                ),
+              ),
+            )
+          else
+            Container(
+              width: iconBox,
+              height: iconBox,
+              decoration: BoxDecoration(
+                color: iconOverlay.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              alignment: Alignment.center,
+              child: FaIcon(
+                icons.resolve(c['iconToken']?.toString()),
+                size: glyphSize,
+                color: accent,
+              ),
             ),
-            alignment: Alignment.center,
-            child: FaIcon(
-              icons.resolve(c['iconToken']?.toString()),
-              size: glyphSize,
-              color: accent,
-            ),
-          ),
           const SizedBox(height: 14),
           Text(
             c['title']?.toString() ?? '',
@@ -704,8 +825,7 @@ class GridSduiRenderer {
                 child: Center(
                   child: FaIcon(
                     icons.resolve(
-                      c['actionArrowIconToken']?.toString() ??
-                          'chevron-right',
+                      c['actionArrowIconToken']?.toString() ?? 'chevron-right',
                     ),
                     size: 14,
                     color: onAccent,
@@ -741,8 +861,7 @@ class GridSduiRenderer {
             ),
           ),
           child: ConstrainedBox(
-            constraints:
-                BoxConstraints(minHeight: minHeight - cardPadding * 2),
+            constraints: BoxConstraints(minHeight: minHeight - cardPadding * 2),
             child: cardBody,
           ),
         ),
@@ -756,7 +875,8 @@ class GridSduiRenderer {
     final layout = _map(c['layout']) ?? const <String, dynamic>{};
     final bp = _breakpoint(context);
     final gap =
-        _d(_map(_map(layout['responsive'])?[bp])?['gap'] ?? layout['gap']) ?? 8.0;
+        _d(_map(_map(layout['responsive'])?[bp])?['gap'] ?? layout['gap']) ??
+            8.0;
 
     final appearance = _map(c['appearance']) ?? const <String, dynamic>{};
     final background = state.parseColor(appearance['backgroundColor']) ??
@@ -769,9 +889,12 @@ class GridSduiRenderer {
     final labelSize = _d(appearance['labelFontSize']) ?? 12.0;
     final paddingVertical = _d(appearance['paddingVertical']) ?? 14.0;
     final paddingHorizontal = _d(appearance['paddingHorizontal']) ?? 16.0;
-    final borderColor = state.tokenColor('colors.border') ?? const Color(0xFFE2E8F0);
-    final textPrimary = state.tokenColor('colors.textPrimary') ?? const Color(0xFF1E293B);
-    final textSecondary = state.tokenColor('colors.textSecondary') ?? const Color(0xFF64748B);
+    final borderColor =
+        state.tokenColor('colors.border') ?? const Color(0xFFE2E8F0);
+    final textPrimary =
+        state.tokenColor('colors.textPrimary') ?? const Color(0xFF1E293B);
+    final textSecondary =
+        state.tokenColor('colors.textSecondary') ?? const Color(0xFF64748B);
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -985,7 +1108,8 @@ class GridSduiRenderer {
                       height: 28,
                       child: Center(
                         child: FaIcon(
-                          icons.resolve(c['shareIconToken']?.toString() ?? 'share'),
+                          icons.resolve(
+                              c['shareIconToken']?.toString() ?? 'share'),
                           size: 14,
                           color: muted,
                         ),
@@ -1095,15 +1219,22 @@ class GridSduiRenderer {
 
     final rawFilters = c['filters'] ?? c['modes'];
     final filtersList = rawFilters is List
-        ? rawFilters.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList()
+        ? rawFilters
+            .whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList()
         : <Map<String, dynamic>>[];
 
     final activeFilterId = state.selectedFilter(sectionId);
 
     final headerBadge = _map(c['headerBadge']);
-    final badgeLabel = headerBadge?['label']?.toString().trim() ?? c['badge']?.toString().trim() ?? '';
-    final badgeBg = state.parseColor(headerBadge?['backgroundColor']) ?? const Color(0xFFDCFCE7);
-    final badgeFg = state.parseColor(headerBadge?['color']) ?? const Color(0xFF16A34A);
+    final badgeLabel = headerBadge?['label']?.toString().trim() ??
+        c['badge']?.toString().trim() ??
+        '';
+    final badgeBg = state.parseColor(headerBadge?['backgroundColor']) ??
+        const Color(0xFFDCFCE7);
+    final badgeFg =
+        state.parseColor(headerBadge?['color']) ?? const Color(0xFF16A34A);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1164,30 +1295,46 @@ class GridSduiRenderer {
                       final isSelected = fId == activeFilterId;
                       final label = filter['label']?.toString() ?? '';
                       final count = filter['count'];
-                      final countStr = (count != null && count is num && count > 0) ? ' $count' : '';
+                      final countStr =
+                          (count != null && count is num && count > 0)
+                              ? ' $count'
+                              : '';
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: Material(
-                          color: isSelected ? (accent ?? const Color(0xFF5B6CFF)) : Colors.transparent,
+                          color: isSelected
+                              ? (accent ?? const Color(0xFF5B6CFF))
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(20),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(20),
-                            onTap: () => state.setSelectedFilter(sectionId, fId),
+                            onTap: () =>
+                                state.setSelectedFilter(sectionId, fId),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 7),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: isSelected ? (accent ?? const Color(0xFF5B6CFF)) : (state.tokenColor('colors.border') ?? const Color(0xFFE2E8F0)),
+                                  color: isSelected
+                                      ? (accent ?? const Color(0xFF5B6CFF))
+                                      : (state.tokenColor('colors.border') ??
+                                          const Color(0xFFE2E8F0)),
                                   width: 1.2,
                                 ),
                               ),
                               child: Text(
                                 '$label$countStr',
                                 style: TextStyle(
-                                  color: isSelected ? Colors.white : (state.tokenColor('colors.textSecondary') ?? const Color(0xFF64748B)),
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (state.tokenColor(
+                                              'colors.textSecondary') ??
+                                          const Color(0xFF64748B)),
                                   fontSize: 13,
-                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -1214,8 +1361,8 @@ class GridSduiRenderer {
     final layout = _map(c['layout']) ?? const <String, dynamic>{};
     final radius = _d(appearance['borderRadius']);
     final minHeight = _d(layout['minHeight']);
-    final color = state.parseColor(c['color']) ??
-        state.tokenColor('colors.accent');
+    final color =
+        state.parseColor(c['color']) ?? state.tokenColor('colors.accent');
     final background = state.parseColor(appearance['backgroundColor']) ??
         state.tokenColor('colors.surface');
     final textPrimary = state.tokenColor('colors.textPrimary');
@@ -1430,7 +1577,8 @@ class GridSduiRenderer {
   }
 
   FontWeight _fontWeight(dynamic raw, {required FontWeight fallback}) {
-    final value = raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
+    final value =
+        raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
     return switch (value) {
       800 || 900 => FontWeight.w800,
       700 => FontWeight.w700,
@@ -1469,6 +1617,109 @@ class GridSduiRenderer {
     return SchemaIssueWidget(
       title: 'Schema issue',
       details: [message],
+    );
+  }
+}
+
+class _GridOrbitGlobe extends StatefulWidget {
+  const _GridOrbitGlobe({
+    required this.orbitGlobeUrl,
+    required this.orbitGlobeImageUrl,
+    this.size = 92.0,
+  });
+
+  final String orbitGlobeUrl;
+  final String orbitGlobeImageUrl;
+  final double size;
+
+  @override
+  State<_GridOrbitGlobe> createState() => _GridOrbitGlobeState();
+}
+
+class _GridOrbitGlobeState extends State<_GridOrbitGlobe> {
+  WebViewController? _controller;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _GridOrbitGlobe oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.orbitGlobeUrl != widget.orbitGlobeUrl) {
+      _initController();
+    }
+  }
+
+  void _initController() {
+    if (widget.orbitGlobeUrl.trim().isEmpty) return;
+
+    if (WebViewPlatform.instance == null) {
+      return;
+    }
+
+    try {
+      final controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(Colors.transparent)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onNavigationRequest: (NavigationRequest request) {
+              final url = request.url.toLowerCase();
+              if (url.contains('efactor.tech/assets/grid-orbit-globe.svg') ||
+                  url.startsWith('about:blank')) {
+                return NavigationDecision.navigate;
+              }
+              return NavigationDecision.prevent;
+            },
+            onPageFinished: (String _) {
+              _controller?.runJavaScript(
+                "if (document.documentElement) document.documentElement.style.backgroundColor = 'transparent';"
+                "if (document.body) document.body.style.backgroundColor = 'transparent';",
+              );
+            },
+            onWebResourceError: (WebResourceError _) {
+              if (mounted) {
+                setState(() => _hasError = true);
+              }
+            },
+          ),
+        );
+
+      controller.loadRequest(Uri.parse(widget.orbitGlobeUrl));
+      _controller = controller;
+    } catch (_) {
+      _hasError = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget content;
+    if (_controller != null && !_hasError && WebViewPlatform.instance != null) {
+      content = WebViewWidget(controller: _controller!);
+    } else if (widget.orbitGlobeImageUrl.trim().isNotEmpty) {
+      content = CachedNetworkImage(
+        imageUrl: widget.orbitGlobeImageUrl,
+        cacheManager: SduiNetworkImageCache.manager,
+        width: widget.size,
+        height: widget.size,
+        fit: BoxFit.contain,
+        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+      );
+    } else {
+      content = const SizedBox.shrink();
+    }
+
+    return IgnorePointer(
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: content,
+      ),
     );
   }
 }

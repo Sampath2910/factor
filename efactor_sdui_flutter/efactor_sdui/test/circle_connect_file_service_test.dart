@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:efactor_sdui/grid_sdui/circle_connect_file_service.dart';
@@ -171,6 +172,50 @@ void main() {
       );
       expect(result['success'], isFalse);
       expect(result['error'], contains('does not exist'));
+    });
+
+    test(
+        'openFile dispatches native tech.efactor/circle_connect openFile method',
+        () async {
+      String? invokedMethod;
+      dynamic invokedArguments;
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('tech.efactor/circle_connect'),
+        (call) async {
+          invokedMethod = call.method;
+          invokedArguments = call.arguments;
+          if (call.method == 'openFile') {
+            return <String, dynamic>{'success': true, 'type': 'done'};
+          }
+          return null;
+        },
+      );
+
+      final tempDir = Directory.systemTemp.createTempSync('cc_test_');
+      final testFile = File('${tempDir.path}/test_doc.pdf')
+        ..writeAsBytesSync(utf8.encode('PDF TEST CONTENT'));
+
+      final result = await CircleConnectFileService.instance.openFile(
+        localPath: testFile.path,
+        fileName: 'test_doc.pdf',
+        mimeType: 'application/pdf',
+      );
+
+      if (Platform.isAndroid) {
+        expect(invokedMethod, equals('openFile'));
+        expect(invokedArguments['filePath'], equals(testFile.path));
+        expect(invokedArguments['mimeType'], equals('application/pdf'));
+        expect(result['success'], isTrue);
+      }
+
+      tempDir.deleteSync(recursive: true);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('tech.efactor/circle_connect'),
+        null,
+      );
     });
   });
 }

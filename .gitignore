@@ -71,3 +71,9 @@ migrate_working_dir/
 # Scratch directories
 **/scratch/
 scratch/
+
+# Large local media & investigation artifacts
+*.mp4
+*.zip
+rotation-investigation/
+

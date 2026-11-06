@@ -446,6 +446,66 @@ void main() {
     });
 
     test(
+        'Dual storage fallback: when secure storage read fails/returns null, getDeviceKey reads from SharedPreferences',
+        () async {
+      final store = CircleConnectDeviceKeyStore(storage: mockStorage);
+
+      // Save key — writes to both secure storage and SharedPreferences
+      await store.setDeviceKey('gcdk_dual_storage_key_999', 'inst_dual_123');
+
+      // Verify both have it
+      expect(await store.getDeviceKey(), equals('gcdk_dual_storage_key_999'));
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString('efactor.circle_connect.device_key_unencrypted_cache'),
+        equals('gcdk_dual_storage_key_999'),
+      );
+
+      // Simulate Android Keystore being locked/unavailable in background isolate:
+      // clear the secure storage mock, leaving only SharedPreferences intact
+      mockSecureStore.clear();
+
+      // getDeviceKey must still return the key via SharedPreferences fallback!
+      final recoveredKey = await store.getDeviceKey();
+      expect(recoveredKey, equals('gcdk_dual_storage_key_999'));
+
+      // sendDelivered must succeed even when Keystore is locked/empty
+      http.Request? capturedRequest;
+      final mockClient = MockClient((request) async {
+        capturedRequest = request;
+        return http.Response(jsonEncode({'success': true}), 200);
+      });
+
+      final fallbackStore = CircleConnectDeviceKeyStore(
+        storage: mockStorage,
+        client: mockClient,
+      );
+
+      final delivered = await fallbackStore.sendDelivered(
+        conversationId: 'conv_bg_locked',
+        messageId: 'msg_bg_locked',
+      );
+
+      expect(delivered, isTrue);
+      expect(capturedRequest, isNotNull);
+      expect(capturedRequest!.headers['X-Device-Key'],
+          equals('gcdk_dual_storage_key_999'));
+      expect(capturedRequest!.bodyFields['action'], equals('delivered'));
+      expect(capturedRequest!.bodyFields['conversation_id'],
+          equals('conv_bg_locked'));
+      expect(
+          capturedRequest!.bodyFields['message_id'], equals('msg_bg_locked'));
+
+      // clearDeviceKey removes from both secure storage and SharedPreferences
+      await store.clearDeviceKey();
+      expect(await store.getDeviceKey(), isNull);
+      expect(
+        prefs.getString('efactor.circle_connect.device_key_unencrypted_cache'),
+        isNull,
+      );
+    });
+
+    test(
         'Darwin notification categories for Step 2: Reply (text), Mark as read, Mute',
         () {
       final categories = kDarwinNotificationCategories;

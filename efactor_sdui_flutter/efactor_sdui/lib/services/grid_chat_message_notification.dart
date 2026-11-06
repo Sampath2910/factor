@@ -110,10 +110,19 @@ class GridChatMessage {
         (data['notification_type'] ?? data['notificationType'] ?? '')
             .toString()
             .toLowerCase();
+    final hasConvAndMsg = (data.containsKey('conversation_id') ||
+            data.containsKey('conversationId') ||
+            data.containsKey('chat_id') ||
+            data.containsKey('chatId')) &&
+        (data.containsKey('message_id') ||
+            data.containsKey('messageId') ||
+            data.containsKey('msg_id') ||
+            data.containsKey('msgId'));
     return type == 'NEW_MESSAGE' ||
         type == 'CHAT_MESSAGE' ||
         type == 'MESSAGE' ||
-        notificationType == 'message';
+        notificationType == 'message' ||
+        hasConvAndMsg;
   }
 
   static bool isTruthyFlag(Object? raw) {

@@ -473,17 +473,48 @@ void notificationTapBackground(NotificationResponse response) async {
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
-  await PushNotificationBootstrap.refreshActiveChannels();
-  try {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp();
-    }
-  } catch (e) {
-    debugPrint('[PushBootstrap] Background Firebase.initializeApp: $e');
-  }
 
   final data = Map<String, dynamic>.from(message.data);
   final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+
+  // 1. CRITICAL: Extract conversation_id and message_id and fire delivery report
+  // IMMEDIATELY on line 1 of the background isolate, in parallel with all other work.
+  // This ensures the server registers message delivery and flips the sender's tick
+  // to grey double-tick (✓✓) within 1-2 seconds even if channel setup or notification
+  // building takes time.
+  final convId = (data['conversation_id'] ??
+          data['conversationId'] ??
+          data['chat_id'] ??
+          data['chatId'] ??
+          '')
+      .toString()
+      .trim();
+  final msgId = (data['message_id'] ??
+          data['messageId'] ??
+          data['msg_id'] ??
+          data['msgId'] ??
+          '')
+      .toString()
+      .trim();
+  final targetUrl =
+      (data['url'] ?? data['target_url'] ?? data['targetUrl'])?.toString();
+
+  final isMessagePush = convId.isNotEmpty &&
+      msgId.isNotEmpty &&
+      (GridChatMessage.isGridChatMessage(data) ||
+          type == 'NEW_MESSAGE' ||
+          type == 'MESSAGE' ||
+          type == 'CHAT_MESSAGE' ||
+          data.containsKey('conversation_id') ||
+          data.containsKey('conversationId'));
+
+  final Future<bool>? deliveryFuture = isMessagePush
+      ? CircleConnectDeviceKeyStore.instance.sendDelivered(
+          conversationId: convId,
+          messageId: msgId,
+          targetUrl: targetUrl,
+        )
+      : null;
 
   // Explicit, un-swallowable terminal diagnostic banner
   // ignore: avoid_print
@@ -492,10 +523,21 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 [FCM_DEBUG] >>> BACKGROUND FCM MESSAGE ARRIVED ON ANDROID! <<<
 Message ID: ${message.messageId}
 Detected Event/Type: $type
+ConvId: $convId | MsgId: $msgId | IsMessagePush: $isMessagePush
 Data Payload: $data
 System Notification Tray Payload: ${message.notification?.title} | ${message.notification?.body}
 ========================================================================
 ''');
+
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+  } catch (e) {
+    debugPrint('[PushBootstrap] Background Firebase.initializeApp: $e');
+  }
+
+  await PushNotificationBootstrap.refreshActiveChannels();
 
   final plugin = FlutterLocalNotificationsPlugin();
   const androidInit = AndroidInitializationSettings('ic_notification');
@@ -514,32 +556,6 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
 
   final android = plugin.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
-  for (final oldId in const [
-    'grid_calls',
-    'grid_calls_v2',
-    'grid_calls_v3',
-    'grid_calls_v4',
-    'grid_calls_v5',
-    'grid_calls_v6',
-    'grid_calls_v7',
-    'grid_calls_v8',
-    'grid_calls_v9',
-    'grid_calls_v10',
-    'grid_messages',
-    'grid_messages_v2',
-    'grid_messages_v3',
-    'grid_messages_v4',
-    'grid_messages_v5',
-    'grid_messages_v6',
-    'grid_messages_v7',
-    'grid_messages_v8',
-    'grid_messages_v9',
-    'grid_messages_v10',
-  ]) {
-    try {
-      await android?.deleteNotificationChannel(oldId);
-    } catch (_) {}
-  }
   await android?.createNotificationChannelGroup(kGroupGridChatMessages);
   await android?.createNotificationChannelGroup(kGroupGridChatActivity);
   for (final channel in kCircleConnectChannels.values) {
@@ -547,33 +563,37 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   }
   await android?.createNotificationChannel(kGridActivityChannel);
 
-  if (GridChatMessage.isGridChatMessage(data)) {
-    final convId = (data['conversation_id'] ??
-            data['conversationId'] ??
-            data['chat_id'] ??
-            data['chatId'] ??
-            '')
-        .toString()
-        .trim();
-    final msgId = (data['message_id'] ??
-            data['messageId'] ??
-            data['msg_id'] ??
-            data['msgId'] ??
-            '')
-        .toString()
-        .trim();
-    final targetUrl =
-        (data['url'] ?? data['target_url'] ?? data['targetUrl'])?.toString();
+  // Clean up legacy channels asynchronously in the background so it never blocks delivery or display
+  unawaited(() async {
+    for (final oldId in const [
+      'grid_calls',
+      'grid_calls_v2',
+      'grid_calls_v3',
+      'grid_calls_v4',
+      'grid_calls_v5',
+      'grid_calls_v6',
+      'grid_calls_v7',
+      'grid_calls_v8',
+      'grid_calls_v9',
+      'grid_calls_v10',
+      'grid_messages',
+      'grid_messages_v2',
+      'grid_messages_v3',
+      'grid_messages_v4',
+      'grid_messages_v5',
+      'grid_messages_v6',
+      'grid_messages_v7',
+      'grid_messages_v8',
+      'grid_messages_v9',
+      'grid_messages_v10',
+    ]) {
+      try {
+        await android?.deleteNotificationChannel(oldId);
+      } catch (_) {}
+    }
+  }());
 
-    // 1. Kick off delivery report HTTP request immediately
-    final deliveryFuture = (convId.isNotEmpty && msgId.isNotEmpty)
-        ? CircleConnectDeviceKeyStore.instance.sendDelivered(
-            conversationId: convId,
-            messageId: msgId,
-            targetUrl: targetUrl,
-          )
-        : Future<bool>.value(false);
-
+  if (isMessagePush || GridChatMessage.isGridChatMessage(data)) {
     // 2. Present notification locally without waiting for HTTP
     await GridChatMessageNotifications.instance.present(
       plugin,
@@ -582,11 +602,15 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
     );
 
     // 3. Keep background isolate alive until delivery HTTP call completes
-    try {
-      await deliveryFuture;
-    } catch (e) {
-      // ignore: avoid_print
-      print('[FCM_DEBUG] Background sendDelivered error: $e');
+    if (deliveryFuture != null) {
+      try {
+        final ok = await deliveryFuture;
+        // ignore: avoid_print
+        print('[FCM_DEBUG] Background sendDelivered completed: success=$ok');
+      } catch (e) {
+        // ignore: avoid_print
+        print('[FCM_DEBUG] Background sendDelivered error: $e');
+      }
     }
     return;
   }

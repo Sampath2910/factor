@@ -35,6 +35,7 @@ import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebView
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -341,6 +342,35 @@ class MainActivity : FlutterActivity() {
                     } catch (e: Exception) {
                         Log.e("MainActivity", "Error saving video to gallery", e)
                         result.error("SAVE_FAILED", e.message, null)
+                    }
+                }
+                "openFile" -> {
+                    val filePath = call.argument<String>("filePath") ?: ""
+                    val mimeType = call.argument<String>("mimeType") ?: "application/octet-stream"
+                    try {
+                        val file = File(filePath)
+                        if (!file.exists()) {
+                            result.error("FILE_NOT_FOUND", "File does not exist: $filePath", null)
+                            return@setMethodCallHandler
+                        }
+                        val contentUri = FileProvider.getUriForFile(
+                            applicationContext,
+                            "${applicationContext.packageName}.fileprovider",
+                            file
+                        )
+                        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(contentUri, mimeType)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        val chooser = Intent.createChooser(viewIntent, "Open with").apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(chooser)
+                        result.success(mapOf("success" to true, "type" to "done"))
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error opening file natively", e)
+                        result.error("OPEN_FAILED", e.message, null)
                     }
                 }
                 "saveFileToDownloads" -> {
