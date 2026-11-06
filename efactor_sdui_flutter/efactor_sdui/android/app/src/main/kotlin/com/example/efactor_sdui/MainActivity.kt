@@ -235,6 +235,7 @@ class MainActivity : FlutterActivity() {
                     val base64Data = call.argument<String>("base64") ?: ""
                     val fileName = call.argument<String>("fileName") ?: "grid-card.png"
                     val mimeType = call.argument<String>("mimeType") ?: "image/png"
+                    val album = call.argument<String>("album")?.takeIf { it.isNotBlank() } ?: "GRID"
                     try {
                         val cleanBase64 = if (base64Data.contains(",")) {
                             base64Data.substringAfter(",")
@@ -248,7 +249,7 @@ class MainActivity : FlutterActivity() {
                             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/GRID")
+                                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/" + album)
                                 put(MediaStore.MediaColumns.IS_PENDING, 1)
                             }
                         }
@@ -267,7 +268,7 @@ class MainActivity : FlutterActivity() {
                             result.success(true)
                         } else {
                             val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                            val gridDir = File(picturesDir, "GRID")
+                            val gridDir = File(picturesDir, album)
                             if (!gridDir.exists()) gridDir.mkdirs()
                             val destFile = File(gridDir, fileName)
                             FileOutputStream(destFile).use { fos ->
@@ -284,6 +285,61 @@ class MainActivity : FlutterActivity() {
                         }
                     } catch (e: Exception) {
                         Log.e("MainActivity", "Error saving image to gallery", e)
+                        result.error("SAVE_FAILED", e.message, null)
+                    }
+                }
+                "saveVideoToGallery" -> {
+                    val filePath = call.argument<String>("filePath") ?: ""
+                    val fileName = call.argument<String>("fileName") ?: "GRID-video.mp4"
+                    val mimeType = call.argument<String>("mimeType") ?: "video/mp4"
+                    val album = call.argument<String>("album")?.takeIf { it.isNotBlank() } ?: "Circle Connect"
+                    try {
+                        val sourceFile = File(filePath)
+                        if (!sourceFile.exists()) {
+                            result.error("FILE_NOT_FOUND", "Source video file does not exist: $filePath", null)
+                            return@setMethodCallHandler
+                        }
+
+                        val resolver = applicationContext.contentResolver
+                        val contentValues = ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/" + album)
+                                put(MediaStore.MediaColumns.IS_PENDING, 1)
+                            }
+                        }
+
+                        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+                        if (uri != null) {
+                            resolver.openOutputStream(uri)?.use { outputStream ->
+                                sourceFile.inputStream().use { inputStream ->
+                                    inputStream.copyTo(outputStream)
+                                }
+                                outputStream.flush()
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                contentValues.clear()
+                                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                                resolver.update(uri, contentValues, null, null)
+                            }
+                            result.success(true)
+                        } else {
+                            val moviesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+                            val targetDir = File(moviesDir, album)
+                            if (!targetDir.exists()) targetDir.mkdirs()
+                            val destFile = File(targetDir, fileName)
+                            sourceFile.copyTo(destFile, overwrite = true)
+                            MediaScannerConnection.scanFile(
+                                applicationContext,
+                                arrayOf(destFile.absolutePath),
+                                arrayOf(mimeType),
+                                null
+                            )
+                            result.success(true)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error saving video to gallery", e)
                         result.error("SAVE_FAILED", e.message, null)
                     }
                 }

@@ -1294,6 +1294,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   var fcmToken = $tokenJson;
   window.__efactor_fcm_token = fcmToken;
   window.__efactor_can_save_image = true;
+  window.__efactor_can_save_video = true;
   window.__efactor_can_share = true;
   if (typeof window.gridNativePushTokenRefresh === 'function') {
     try { window.gridNativePushTokenRefresh(fcmToken); } catch(e) { console.error(e); }
@@ -2523,10 +2524,25 @@ Error: $error
         final fileName = data['fileName']?.toString() ?? 'grid-card.png';
         final mimeType = data['mimeType']?.toString() ?? 'image/png';
         final base64Data = data['base64']?.toString() ?? '';
+        final url = data['url']?.toString() ?? '';
+        final album = data['album']?.toString();
         _handleSaveCardImage(
           fileName: fileName,
           mimeType: mimeType,
           base64Data: base64Data,
+          url: url,
+          album: album,
+        );
+      } else if (action == 'saveVideo') {
+        final url = data['url']?.toString() ?? '';
+        final fileName = data['fileName']?.toString() ?? 'GRID-video.mp4';
+        final mimeType = data['mimeType']?.toString() ?? 'video/mp4';
+        final album = data['album']?.toString() ?? 'Circle Connect';
+        _handleSaveVideo(
+          url: url,
+          fileName: fileName,
+          mimeType: mimeType,
+          album: album,
         );
       }
     } catch (e) {
@@ -2561,26 +2577,54 @@ Error: $error
     required String fileName,
     required String mimeType,
     required String base64Data,
+    String? url,
+    String? album,
   }) {
     var cleanBase64 = base64Data.trim();
     if (cleanBase64.contains(',')) {
       cleanBase64 = cleanBase64.split(',').last.trim();
     }
-    if (cleanBase64.isEmpty) return;
+    final targetUrl = url?.trim() ?? '';
+    if (cleanBase64.isEmpty && targetUrl.isEmpty) return;
+
+    final effectiveAlbum =
+        (album != null && album.trim().isNotEmpty) ? album.trim() : 'GRID';
 
     unawaited(() async {
       try {
+        if (cleanBase64.isEmpty && targetUrl.isNotEmpty) {
+          // URL-based image save fallback
+          final cookies = await _getCookiesForEndpoint(targetUrl);
+          final headers = <String, String>{
+            if (cookies.isNotEmpty) 'Cookie': cookies,
+            if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
+              'Authorization': 'Bearer ${widget.accessToken}',
+            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+          };
+          final response =
+              await http.get(Uri.parse(targetUrl), headers: headers);
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            cleanBase64 = base64Encode(response.bodyBytes);
+          }
+        }
+
+        if (cleanBase64.isEmpty) return;
+
         const channel = MethodChannel('tech.efactor/circle_connect');
         final success = await channel.invokeMethod<bool>('saveImageToGallery', {
           'base64': cleanBase64,
           'fileName': fileName.isNotEmpty ? fileName : 'grid-card.png',
           'mimeType': mimeType.isNotEmpty ? mimeType : 'image/png',
+          'album': effectiveAlbum,
         });
         if (mounted && (success ?? false)) {
+          final feedback = effectiveAlbum != 'GRID'
+              ? 'Photo saved to $effectiveAlbum'
+              : 'Visiting card QR code saved to gallery';
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Visiting card QR code saved to gallery'),
-              duration: Duration(seconds: 2),
+            SnackBar(
+              content: Text(feedback),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -2596,12 +2640,97 @@ Error: $error
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('QR code saved: ${file.path.split('/').last}'),
+                content: Text('Saved to: ${file.path.split('/').last}'),
                 duration: const Duration(seconds: 2),
               ),
             );
           }
         } catch (_) {}
+      }
+    }());
+  }
+
+  void _handleSaveVideo({
+    required String url,
+    required String fileName,
+    required String mimeType,
+    required String album,
+  }) {
+    if (url.trim().isEmpty) return;
+
+    unawaited(() async {
+      final effectiveName =
+          fileName.trim().isNotEmpty ? fileName.trim() : 'GRID-video.mp4';
+      final effectiveAlbum =
+          album.trim().isNotEmpty ? album.trim() : 'Circle Connect';
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Saving video to $effectiveAlbum...'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      File? tempFile;
+      try {
+        final cookies = await _getCookiesForEndpoint(url);
+        final headers = <String, String>{
+          if (cookies.isNotEmpty) 'Cookie': cookies,
+          if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
+            'Authorization': 'Bearer ${widget.accessToken}',
+          'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+        };
+
+        final tempDir = await getTemporaryDirectory();
+        tempFile = File(
+            '${tempDir.path}/temp_${DateTime.now().millisecondsSinceEpoch}_$effectiveName');
+
+        final client = http.Client();
+        try {
+          final request = http.Request('GET', Uri.parse(url));
+          request.headers.addAll(headers);
+          final response = await client.send(request);
+
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final sink = tempFile.openWrite();
+            await response.stream.pipe(sink);
+            await sink.flush();
+            await sink.close();
+
+            const channel = MethodChannel('tech.efactor/circle_connect');
+            final success =
+                await channel.invokeMethod<bool>('saveVideoToGallery', {
+              'filePath': tempFile.path,
+              'fileName': effectiveName,
+              'mimeType': mimeType.isNotEmpty ? mimeType : 'video/mp4',
+              'album': effectiveAlbum,
+            });
+
+            if (mounted && (success ?? false)) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Video saved to $effectiveAlbum'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          } else {
+            debugPrint(
+                '[GridInAppWebView] saveVideo HTTP error: ${response.statusCode}');
+          }
+        } finally {
+          client.close();
+        }
+      } catch (e) {
+        debugPrint('[GridInAppWebView] saveVideo error: $e');
+      } finally {
+        if (tempFile != null && tempFile.existsSync()) {
+          try {
+            tempFile.deleteSync();
+          } catch (_) {}
+        }
       }
     }());
   }

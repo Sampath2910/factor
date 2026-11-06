@@ -75,6 +75,22 @@ import UserNotifications
         }
         UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
         result(true)
+      case "saveVideoToGallery":
+        guard let args = call.arguments as? [String: Any],
+              let filePath = args["filePath"] as? String else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing video file path", details: nil))
+          return
+        }
+        guard FileManager.default.fileExists(atPath: filePath) else {
+          result(FlutterError(code: "FILE_NOT_FOUND", message: "Video file not found at path: \(filePath)", details: nil))
+          return
+        }
+        if UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(filePath) {
+          UISaveVideoAtPathToSavedPhotosAlbum(filePath, nil, nil, nil)
+          result(true)
+        } else {
+          result(FlutterError(code: "INCOMPATIBLE_VIDEO", message: "Video format is not compatible with Photos album", details: nil))
+        }
       case "startIncomingRing":
         self.startIncomingRing()
         result(true)
