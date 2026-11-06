@@ -77,7 +77,8 @@ class CircleConnectDeviceKeyStore {
   }
 
   void _notifyKeyStatus(bool hasKey) {
-    for (final listener in List<void Function(bool hasKey)>.from(_keyStatusListeners)) {
+    for (final listener
+        in List<void Function(bool hasKey)>.from(_keyStatusListeners)) {
       try {
         listener(hasKey);
       } catch (e) {
@@ -189,7 +190,8 @@ class CircleConnectDeviceKeyStore {
       await _storage.delete(key: _kInstallationId);
       await _storage.delete(key: _kBaseUrl);
       _notifyKeyStatus(false);
-      debugPrint('[CircleConnectKeyStore] Device key cleared from secure storage.');
+      debugPrint(
+          '[CircleConnectKeyStore] Device key cleared from secure storage.');
     } catch (e) {
       debugPrint('[CircleConnectKeyStore] Error clearing device key: $e');
     }
@@ -310,8 +312,8 @@ class CircleConnectDeviceKeyStore {
   /// Contract:
   /// POST {base}/notification/action
   /// Header: X-Device-Key: <device key>
-  /// Content-Type: application/json
-  /// {"action": "delivered", "conversation_id": "...", "message_id": "..."}
+  /// Content-Type: application/x-www-form-urlencoded
+  /// Body: action=delivered&conversation_id=...&message_id=...
   Future<bool> sendDelivered({
     required String conversationId,
     required String messageId,
@@ -327,6 +329,9 @@ class CircleConnectDeviceKeyStore {
 
     final deviceKey = await getDeviceKey();
     if (deviceKey == null || deviceKey.isEmpty) {
+      debugPrint(
+        '[CircleConnectKeyStore] No device key available for sendDelivered; queuing action.',
+      );
       await _enqueueAction(<String, dynamic>{
         'action': 'delivered',
         'conversation_id': cleanConvId,
@@ -336,27 +341,38 @@ class CircleConnectDeviceKeyStore {
       return false;
     }
 
-    final body = jsonEncode(<String, dynamic>{
+    final body = <String, String>{
       'action': 'delivered',
       'conversation_id': cleanConvId,
       'message_id': cleanMsgId,
-    });
+    };
 
     final headers = <String, String>{
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
       'X-Device-Key': deviceKey,
     };
 
     try {
+      debugPrint(
+        '[CircleConnectKeyStore] sendDelivered dispatching to $endpoint '
+        'convId=$cleanConvId msgId=$cleanMsgId',
+      );
       final response = await _client
           .post(endpoint, headers: headers, body: body)
           .timeout(const Duration(seconds: 10));
 
       final statusCode = response.statusCode;
+      debugPrint(
+        '[CircleConnectKeyStore] sendDelivered response: $statusCode '
+        'convId=$cleanConvId msgId=$cleanMsgId (${response.body})',
+      );
       if (statusCode >= 200 && statusCode < 300) {
         return true;
       }
       if (statusCode == 401) {
+        debugPrint(
+          '[CircleConnectKeyStore] sendDelivered 401: Key revoked or invalid; clearing device key.',
+        );
         await clearDeviceKey(matchingKey: deviceKey);
         return false;
       }
@@ -370,7 +386,8 @@ class CircleConnectDeviceKeyStore {
         'base_url': baseUrl,
       });
       return false;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[CircleConnectKeyStore] sendDelivered exception: $e');
       await _enqueueAction(<String, dynamic>{
         'action': 'delivered',
         'conversation_id': cleanConvId,
@@ -665,14 +682,29 @@ class CircleConnectDeviceKeyStore {
             }
           }
 
-          final response = await _client.post(
-            endpoint,
-            headers: <String, String>{
-              'Content-Type': 'application/json',
-              'X-Device-Key': currentKey,
-            },
-            body: jsonEncode(payload),
-          ).timeout(const Duration(seconds: 10));
+          final response = action == 'delivered'
+              ? await _client.post(
+                  endpoint,
+                  headers: <String, String>{
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Device-Key': currentKey,
+                  },
+                  body: <String, String>{
+                    'action': action,
+                    'conversation_id': convId,
+                    if (msgId.isNotEmpty) 'message_id': msgId,
+                  },
+                ).timeout(const Duration(seconds: 10))
+              : await _client
+                  .post(
+                    endpoint,
+                    headers: <String, String>{
+                      'Content-Type': 'application/json',
+                      'X-Device-Key': currentKey,
+                    },
+                    body: jsonEncode(payload),
+                  )
+                  .timeout(const Duration(seconds: 10));
 
           if (response.statusCode == 401) {
             await clearDeviceKey(matchingKey: currentKey);

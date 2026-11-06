@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -114,7 +115,8 @@ class CircleConnectFileService {
           // Case-insensitively removes /files/documents or /files so no duplicate /documents directory is created.
           final mediaPath = dataPath
               .replaceFirst('/Android/data/', '/Android/media/')
-              .replaceAll(RegExp(r'/files(/documents)?', caseSensitive: false), '/Media/Documents');
+              .replaceAll(RegExp(r'/files(/documents)?', caseSensitive: false),
+                  '/Media/Documents');
           final dir = Directory(mediaPath);
           if (!dir.existsSync()) {
             dir.createSync(recursive: true);
@@ -122,7 +124,8 @@ class CircleConnectFileService {
           return dir;
         }
       } catch (e) {
-        debugPrint('[CircleConnectFiles] getExternalStorageDirectories error: $e');
+        debugPrint(
+            '[CircleConnectFiles] getExternalStorageDirectories error: $e');
       }
       final appDoc = await getApplicationDocumentsDirectory();
       final fallbackDir = Directory('${appDoc.path}/Media/Documents');
@@ -192,8 +195,7 @@ class CircleConnectFileService {
         final maxMb = (limit / (1024 * 1024)).toStringAsFixed(0);
         return <String, dynamic>{
           'success': false,
-          'error':
-              'File size ($mb MB) exceeds maximum limit of $maxMb MB.',
+          'error': 'File size ($mb MB) exceeds maximum limit of $maxMb MB.',
         };
       }
 
@@ -260,7 +262,8 @@ class CircleConnectFileService {
       }
 
       // Also check hashed URL filename to handle query-string variations
-      final hashName = '${cleanUrl.hashCode.abs().toRadixString(16)}_$effectiveName';
+      final hashName =
+          '${cleanUrl.hashCode.abs().toRadixString(16)}_$effectiveName';
       final hashCandidate = File('${docDir.path}/$hashName');
       if (hashCandidate.existsSync() && hashCandidate.lengthSync() > 0) {
         return <String, dynamic>{
@@ -419,7 +422,8 @@ class CircleConnectFileService {
         'size': receivedBytes,
       };
     } catch (e) {
-      if (e is http.ClientException && e.message.contains('Connection closed')) {
+      if (e is http.ClientException &&
+          e.message.contains('Connection closed')) {
         // Cancelled by user
         _emitEvent('fileDownloadCancelled', {
           'downloadId': downloadId,
@@ -551,12 +555,35 @@ class CircleConnectFileService {
 
     final localPath = downloadResult['localPath'] as String;
     if (Platform.isAndroid) {
+      final effectiveName = (fileName != null && fileName.trim().isNotEmpty)
+          ? _sanitizeFileName(fileName, 'dat')
+          : localPath.split('/').last;
+      final effectiveMime = (mimeType != null && mimeType.trim().isNotEmpty)
+          ? mimeType.trim()
+          : resolveMimeType(effectiveName);
+
+      try {
+        const channel = MethodChannel('tech.efactor/circle_connect');
+        final success =
+            await channel.invokeMethod<bool>('saveFileToDownloads', {
+          'filePath': localPath,
+          'fileName': effectiveName,
+          'mimeType': effectiveMime,
+        });
+        if (success == true) {
+          return <String, dynamic>{
+            'success': true,
+            'fileName': effectiveName,
+            'localPath': localPath,
+          };
+        }
+      } catch (e) {
+        debugPrint('[CircleConnectFiles] native saveFileToDownloads error: $e');
+      }
+
       try {
         final downloadDir = Directory('/storage/emulated/0/Download');
         if (downloadDir.existsSync()) {
-          final effectiveName = (fileName != null && fileName.trim().isNotEmpty)
-              ? _sanitizeFileName(fileName, 'dat')
-              : localPath.split('/').last;
           final target = File('${downloadDir.path}/$effectiveName');
           File(localPath).copySync(target.path);
           return <String, dynamic>{
@@ -631,8 +658,7 @@ class CircleConnectFileService {
         StreamTransformer.fromHandlers(
           handleData: (chunk, sink) {
             bytesSent += chunk.length;
-            final progress =
-                ((bytesSent / size) * 100).clamp(0.0, 100.0);
+            final progress = ((bytesSent / size) * 100).clamp(0.0, 100.0);
             _emitEvent('fileUploadProgress', {
               'uploadId': uploadId,
               'fileName': fileName,
@@ -660,8 +686,9 @@ class CircleConnectFileService {
         String? remoteUrl;
         try {
           final decoded = jsonDecode(responseBody) as Map<String, dynamic>;
-          remoteUrl = (decoded['url'] ?? decoded['file_url'] ?? decoded['remoteUrl'])
-              ?.toString();
+          remoteUrl =
+              (decoded['url'] ?? decoded['file_url'] ?? decoded['remoteUrl'])
+                  ?.toString();
         } catch (_) {}
 
         _emitEvent('fileUploadCompleted', {

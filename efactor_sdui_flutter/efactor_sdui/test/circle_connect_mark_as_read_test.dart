@@ -21,7 +21,8 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
     });
 
-    test('Device key and installation ID are stored and retrieved securely', () async {
+    test('Device key and installation ID are stored and retrieved securely',
+        () async {
       final store = CircleConnectDeviceKeyStore(storage: mockStorage);
 
       expect(await store.getDeviceKey(), isNull);
@@ -44,7 +45,9 @@ void main() {
       expect(await store.getDeviceKey(), isNull);
     });
 
-    test('markAsRead sends POST {base}/notification/action with X-Device-Key and JSON body', () async {
+    test(
+        'markAsRead sends POST {base}/notification/action with X-Device-Key and JSON body',
+        () async {
       http.Request? capturedRequest;
 
       final mockClient = MockClient((request) async {
@@ -75,11 +78,14 @@ void main() {
       expect(capturedRequest!.method, equals('POST'));
       expect(
         capturedRequest!.url.toString(),
-        equals('https://efactor.tech/index.php/grid-chat/api/notification/action'),
+        equals(
+            'https://efactor.tech/index.php/grid-chat/api/notification/action'),
       );
-      expect(capturedRequest!.headers['X-Device-Key'], equals('gcdk_valid_key'));
+      expect(
+          capturedRequest!.headers['X-Device-Key'], equals('gcdk_valid_key'));
       expect(capturedRequest!.headers.containsKey('Authorization'), isFalse);
-      expect(capturedRequest!.headers['Content-Type'], contains('application/json'));
+      expect(capturedRequest!.headers['Content-Type'],
+          contains('application/json'));
 
       final body = jsonDecode(capturedRequest!.body) as Map<String, dynamic>;
       expect(body['action'], equals('read'));
@@ -110,7 +116,9 @@ void main() {
       expect(await store.getDeviceKey(), isNull);
     });
 
-    test('markAsRead queues action to offline queue when network fails and flush retries', () async {
+    test(
+        'markAsRead queues action to offline queue when network fails and flush retries',
+        () async {
       var callCount = 0;
       final mockClient = MockClient((request) async {
         callCount++;
@@ -143,11 +151,14 @@ void main() {
       // Flush queue when network is restored
       await store.flushOfflineQueue();
 
-      final queueAfter = prefs.getStringList('circle_connect_offline_read_queue');
+      final queueAfter =
+          prefs.getStringList('circle_connect_offline_read_queue');
       expect(queueAfter, isEmpty);
     });
 
-    test('revokeOnLogout sends POST {base}/notification/device_key/revoke and clears key', () async {
+    test(
+        'revokeOnLogout sends POST {base}/notification/device_key/revoke and clears key',
+        () async {
       http.Request? revokeRequest;
 
       final mockClient = MockClient((request) async {
@@ -174,7 +185,8 @@ void main() {
       expect(await store.getDeviceKey(), isNull);
     });
 
-    test('hasDeviceKey returns accurate status and listeners are notified', () async {
+    test('hasDeviceKey returns accurate status and listeners are notified',
+        () async {
       final store = CircleConnectDeviceKeyStore(storage: mockStorage);
       final notifications = <bool>[];
       store.addKeyStatusListener((hasKey) => notifications.add(hasKey));
@@ -190,7 +202,9 @@ void main() {
       expect(notifications, equals([true, false]));
     });
 
-    test('401 response deletes key only if it matches the key that request used (in-flight race condition)', () async {
+    test(
+        '401 response deletes key only if it matches the key that request used (in-flight race condition)',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(jsonEncode({'error': 'Unauthorized'}), 401);
       });
@@ -221,7 +235,8 @@ void main() {
       expect(await store.getDeviceKey(), isNull);
     });
 
-    test('flushOfflineQueue uses the current stored key, not the queued key', () async {
+    test('flushOfflineQueue uses the current stored key, not the queued key',
+        () async {
       String? usedKey;
       final mockClient = MockClient((request) async {
         usedKey = request.headers['X-Device-Key'];
@@ -253,17 +268,23 @@ void main() {
 
       // Verified: used the current stored key!
       expect(usedKey, equals('fresh_key_after_open'));
-      final queueAfter = prefs.getStringList('circle_connect_offline_read_queue');
+      final queueAfter =
+          prefs.getStringList('circle_connect_offline_read_queue');
       expect(queueAfter, isEmpty);
     });
 
     test('generateUuidV4 produces valid lowercase RFC 4122 version 4 UUID', () {
       final uuid = CircleConnectDeviceKeyStore.generateUuidV4();
       expect(uuid.length, equals(36));
-      expect(uuid, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
+      expect(
+          uuid,
+          matches(RegExp(
+              r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
     });
 
-    test('sendDelivered dispatches action: delivered with conversation_id and message_id', () async {
+    test(
+        'sendDelivered dispatches action: delivered with conversation_id and message_id as form-url-encoded',
+        () async {
       http.Request? capturedRequest;
       final mockClient = MockClient((request) async {
         capturedRequest = request;
@@ -283,14 +304,17 @@ void main() {
 
       expect(success, isTrue);
       expect(capturedRequest, isNotNull);
-      expect(capturedRequest!.headers['X-Device-Key'], equals('gcdk_delivered_key'));
-      final body = jsonDecode(capturedRequest!.body) as Map<String, dynamic>;
-      expect(body['action'], equals('delivered'));
-      expect(body['conversation_id'], equals('conv_7'));
-      expect(body['message_id'], equals('msg_812'));
+      expect(capturedRequest!.headers['X-Device-Key'],
+          equals('gcdk_delivered_key'));
+      expect(capturedRequest!.headers['Content-Type'],
+          contains('application/x-www-form-urlencoded'));
+      expect(capturedRequest!.bodyFields['action'], equals('delivered'));
+      expect(capturedRequest!.bodyFields['conversation_id'], equals('conv_7'));
+      expect(capturedRequest!.bodyFields['message_id'], equals('msg_812'));
     });
 
-    test('sendReply dispatches action: reply with text and client_id', () async {
+    test('sendReply dispatches action: reply with text and client_id',
+        () async {
       http.Request? capturedRequest;
       final mockClient = MockClient((request) async {
         capturedRequest = request;
@@ -323,10 +347,15 @@ void main() {
       expect((body['client_id'] as String).length, equals(36));
     });
 
-    test('sendReply on 403 extracts server error message for blocked contact or read-only group', () async {
+    test(
+        'sendReply on 403 extracts server error message for blocked contact or read-only group',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(
-          jsonEncode({'message': 'You have blocked this contact. Unblock to send a message.'}),
+          jsonEncode({
+            'message':
+                'You have blocked this contact. Unblock to send a message.'
+          }),
           403,
         );
       });
@@ -345,7 +374,8 @@ void main() {
 
       expect(result.success, isFalse);
       expect(result.statusCode, equals(403));
-      expect(result.errorMessage, equals('You have blocked this contact. Unblock to send a message.'));
+      expect(result.errorMessage,
+          equals('You have blocked this contact. Unblock to send a message.'));
     });
 
     test('muteChat dispatches action: mute with conversation_id', () async {
@@ -373,11 +403,14 @@ void main() {
       expect(body['conversation_id'], equals('conv_7'));
     });
 
-    test('flushOfflineQueue preserves reply client_id during retries for idempotency', () async {
+    test(
+        'flushOfflineQueue preserves reply client_id during retries for idempotency',
+        () async {
       Map<String, dynamic>? lastBody;
       final mockClient = MockClient((request) async {
         lastBody = jsonDecode(request.body) as Map<String, dynamic>;
-        return http.Response(jsonEncode({'success': true, 'duplicate': true}), 200);
+        return http.Response(
+            jsonEncode({'success': true, 'duplicate': true}), 200);
       });
 
       final store = CircleConnectDeviceKeyStore(
@@ -407,11 +440,14 @@ void main() {
       expect(lastBody!['client_id'], equals(fixedClientId));
       expect(lastBody!['text'], equals('Retried message'));
 
-      final queueAfter = prefs.getStringList('circle_connect_offline_read_queue');
+      final queueAfter =
+          prefs.getStringList('circle_connect_offline_read_queue');
       expect(queueAfter, isEmpty);
     });
 
-    test('Darwin notification categories for Step 2: Reply (text), Mark as read, Mute', () {
+    test(
+        'Darwin notification categories for Step 2: Reply (text), Mark as read, Mute',
+        () {
       final categories = kDarwinNotificationCategories;
 
       final messagesCat = categories.firstWhere(

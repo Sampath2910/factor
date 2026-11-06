@@ -47,10 +47,12 @@ const AndroidNotificationChannel kMessagesChannel = AndroidNotificationChannel(
 );
 
 /// Notification channel for Professional Space (GRID) social activity, posts, comments, connections.
-const AndroidNotificationChannel kGridActivityChannel = AndroidNotificationChannel(
+const AndroidNotificationChannel kGridActivityChannel =
+    AndroidNotificationChannel(
   'grid_activity',
   'Professional Space',
-  description: 'Notifications for posts, comments, connections, and activity in Professional Space',
+  description:
+      'Notifications for posts, comments, connections, and activity in Professional Space',
   importance: Importance.high,
   playSound: true,
   enableVibration: true,
@@ -68,7 +70,8 @@ const AndroidNotificationChannelGroup kGroupGridChatActivity =
     AndroidNotificationChannelGroup(
   'grid_chat_activity',
   'GRID Chat activity',
-  description: 'Activity, mentions, reactions, and social updates from Circle Connect',
+  description:
+      'Activity, mentions, reactions, and social updates from Circle Connect',
 );
 
 /// Group 1: GRID Chat messages
@@ -237,7 +240,8 @@ const Map<String, AndroidNotificationChannel> kCircleConnectChannels = {
 };
 
 /// Resolves the effective Android notification channel id from push data key `channel`.
-String resolveCircleConnectChannelId(String? rawChannel, {String fallback = 'mentions'}) {
+String resolveCircleConnectChannelId(String? rawChannel,
+    {String fallback = 'mentions'}) {
   final clean = rawChannel?.trim().toLowerCase();
   if (clean == null || clean.isEmpty) return fallback;
   if (kCircleConnectChannels.containsKey(clean)) return clean;
@@ -256,6 +260,7 @@ bool isSafeEfactorUrl(String url) {
 
 /// Checks whether an FCM push payload represents a Professional Space (GRID) event.
 bool isProfessionalSpacePush(Map<String, dynamic> data) {
+  if (GridChatMessage.isGridChatMessage(data)) return false;
   final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
   if (type == 'PROFESSIONAL_SPACE_EVENT') return true;
   final channel = (data['channel'] ?? '').toString().toLowerCase();
@@ -542,6 +547,50 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
   }
   await android?.createNotificationChannel(kGridActivityChannel);
 
+  if (GridChatMessage.isGridChatMessage(data)) {
+    final convId = (data['conversation_id'] ??
+            data['conversationId'] ??
+            data['chat_id'] ??
+            data['chatId'] ??
+            '')
+        .toString()
+        .trim();
+    final msgId = (data['message_id'] ??
+            data['messageId'] ??
+            data['msg_id'] ??
+            data['msgId'] ??
+            '')
+        .toString()
+        .trim();
+    final targetUrl =
+        (data['url'] ?? data['target_url'] ?? data['targetUrl'])?.toString();
+
+    // 1. Kick off delivery report HTTP request immediately
+    final deliveryFuture = (convId.isNotEmpty && msgId.isNotEmpty)
+        ? CircleConnectDeviceKeyStore.instance.sendDelivered(
+            conversationId: convId,
+            messageId: msgId,
+            targetUrl: targetUrl,
+          )
+        : Future<bool>.value(false);
+
+    // 2. Present notification locally without waiting for HTTP
+    await GridChatMessageNotifications.instance.present(
+      plugin,
+      data,
+      appResumed: false,
+    );
+
+    // 3. Keep background isolate alive until delivery HTTP call completes
+    try {
+      await deliveryFuture;
+    } catch (e) {
+      // ignore: avoid_print
+      print('[FCM_DEBUG] Background sendDelivered error: $e');
+    }
+    return;
+  }
+
   if (type == 'ACTIVITY') {
     // ignore: avoid_print
     print(
@@ -630,29 +679,6 @@ System Notification Tray Payload: ${message.notification?.title} | ${message.not
       ));
     }
     await showIncomingCallNotificationOnPlugin(plugin, call, rawData: data);
-    return;
-  }
-
-  if (GridChatMessage.isGridChatMessage(data)) {
-    final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
-        .toString()
-        .trim();
-    final msgId =
-        (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
-    if (convId.isNotEmpty && msgId.isNotEmpty) {
-      unawaited(
-        CircleConnectDeviceKeyStore.instance.sendDelivered(
-          conversationId: convId,
-          messageId: msgId,
-          targetUrl: data['url']?.toString(),
-        ),
-      );
-    }
-    await GridChatMessageNotifications.instance.present(
-      plugin,
-      data,
-      appResumed: false,
-    );
     return;
   }
 
@@ -928,10 +954,9 @@ Future<void> showActivityNotificationOnPlugin(
               DateTime.now().millisecondsSinceEpoch ~/ 1000))
       .abs();
   final avatarUrl = (data['actor_avatar'] ?? '').toString().trim();
-  final rawUrl =
-      (data['url'] ?? data['target_url'] ?? data['targetUrl'] ?? '')
-          .toString()
-          .trim();
+  final rawUrl = (data['url'] ?? data['target_url'] ?? data['targetUrl'] ?? '')
+      .toString()
+      .trim();
   final targetUrl = rawUrl.isNotEmpty
       ? rawUrl
       : 'https://efactor.tech/index.php/grid-chat?open=activity';
@@ -1062,13 +1087,9 @@ Future<void> showMessageNotificationOnPlugin(
   final channelId = rawChannel != null && rawChannel.trim().isNotEmpty
       ? resolveCircleConnectChannelId(
           rawChannel,
-          fallback: isGroup
-              ? kChannelGroupMessages.id
-              : kChannelMessages.id,
+          fallback: isGroup ? kChannelGroupMessages.id : kChannelMessages.id,
         )
-      : (isGroup
-          ? kChannelGroupMessages.id
-          : kChannelMessages.id);
+      : (isGroup ? kChannelGroupMessages.id : kChannelMessages.id);
   final targetChannel = kCircleConnectChannels[channelId] ??
       (isGroup ? kChannelGroupMessages : kChannelMessages);
 
@@ -1185,9 +1206,11 @@ String _defaultBodyForMessageType(String type) {
 /// Sends background Mark as read request using CircleConnect device key,
 /// with fallback to legacy cookie auth if no device key is stored yet.
 Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
-  final convId =
-      (data['conversation_id'] ?? data['conversationId'] ?? '').toString().trim();
-  final msgId = (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
+  final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
+      .toString()
+      .trim();
+  final msgId =
+      (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
   var targetUrl =
       (data['url'] ?? IncomingCallData.defaultCallUrl).toString().trim();
   if (targetUrl.isNotEmpty &&
@@ -1199,11 +1222,13 @@ Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
 
   // 1. Immediately cancel all notifications for this conversation
   if (convId.isNotEmpty) {
-    unawaited(PushNotificationBootstrap.instance.clearChatNotifications(convId));
+    unawaited(
+        PushNotificationBootstrap.instance.clearChatNotifications(convId));
   }
 
   // 2. Perform authenticated background Mark as Read via CircleConnectDeviceKeyStore
-  final handledByDeviceKey = await CircleConnectDeviceKeyStore.instance.markAsRead(
+  final handledByDeviceKey =
+      await CircleConnectDeviceKeyStore.instance.markAsRead(
     conversationId: convId,
     messageId: msgId,
     targetUrl: targetUrl,
@@ -1796,30 +1821,46 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
     }
 
     if (GridChatMessage.isGridChatMessage(data)) {
-      final convId = (data['conversation_id'] ?? data['conversationId'] ?? '')
+      final convId = (data['conversation_id'] ??
+              data['conversationId'] ??
+              data['chat_id'] ??
+              data['chatId'] ??
+              '')
           .toString()
           .trim();
-      final msgId =
-          (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
-      if (convId.isNotEmpty && msgId.isNotEmpty) {
-        unawaited(
-          CircleConnectDeviceKeyStore.instance.sendDelivered(
-            conversationId: convId,
-            messageId: msgId,
-            targetUrl: data['url']?.toString(),
-          ),
-        );
-      }
+      final msgId = (data['message_id'] ??
+              data['messageId'] ??
+              data['msg_id'] ??
+              data['msgId'] ??
+              '')
+          .toString()
+          .trim();
+      final targetUrl =
+          (data['url'] ?? data['target_url'] ?? data['targetUrl'])?.toString();
+
+      // 1. Kick off delivery report HTTP request immediately
+      final deliveryFuture = (convId.isNotEmpty && msgId.isNotEmpty)
+          ? CircleConnectDeviceKeyStore.instance.sendDelivered(
+              conversationId: convId,
+              messageId: msgId,
+              targetUrl: targetUrl,
+            )
+          : Future<bool>.value(false);
+
       final resumed =
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-      unawaited(
-        GridChatMessageNotifications.instance.present(
-          _local,
-          data,
-          appResumed: resumed,
-          activeConversationId: _activeConversationId,
-        ),
+      await GridChatMessageNotifications.instance.present(
+        _local,
+        data,
+        appResumed: resumed,
+        activeConversationId: _activeConversationId,
       );
+
+      try {
+        await deliveryFuture;
+      } catch (e) {
+        debugPrint('[PushBootstrap] Foreground sendDelivered error: $e');
+      }
       return;
     }
     if (type == 'ACTIVITY') {
@@ -1939,11 +1980,12 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
             await showReplyErrorNotification(
               _local,
               conversationId: convId,
-              errorMessage:
-                  result.errorMessage ?? 'Action not allowed or contact blocked.',
+              errorMessage: result.errorMessage ??
+                  'Action not allowed or contact blocked.',
             );
           } else {
-            final notifId = GridChatMessage.notificationIdForConversation(convId);
+            final notifId =
+                GridChatMessage.notificationIdForConversation(convId);
             final tag = (data['tag'] ?? 'conv-$convId').toString().trim();
             await _local.cancel(notifId, tag: tag);
             await _local.cancel(notifId);

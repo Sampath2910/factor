@@ -343,6 +343,64 @@ class MainActivity : FlutterActivity() {
                         result.error("SAVE_FAILED", e.message, null)
                     }
                 }
+                "saveFileToDownloads" -> {
+                    val filePath = call.argument<String>("filePath") ?: ""
+                    val fileName = call.argument<String>("fileName") ?: "document"
+                    val mimeType = call.argument<String>("mimeType") ?: "application/octet-stream"
+                    try {
+                        val sourceFile = File(filePath)
+                        if (!sourceFile.exists()) {
+                            result.error("FILE_NOT_FOUND", "Source file does not exist: $filePath", null)
+                            return@setMethodCallHandler
+                        }
+
+                        val resolver = applicationContext.contentResolver
+                        val contentValues = ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                                put(MediaStore.MediaColumns.IS_PENDING, 1)
+                            }
+                        }
+
+                        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                        } else {
+                            null
+                        }
+
+                        if (uri != null) {
+                            resolver.openOutputStream(uri)?.use { outputStream ->
+                                sourceFile.inputStream().use { inputStream ->
+                                    inputStream.copyTo(outputStream)
+                                }
+                                outputStream.flush()
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                contentValues.clear()
+                                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                                resolver.update(uri, contentValues, null, null)
+                            }
+                            result.success(true)
+                        } else {
+                            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                            val destFile = File(downloadsDir, fileName)
+                            sourceFile.copyTo(destFile, overwrite = true)
+                            MediaScannerConnection.scanFile(
+                                applicationContext,
+                                arrayOf(destFile.absolutePath),
+                                arrayOf(mimeType),
+                                null
+                            )
+                            result.success(true)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error saving file to Downloads", e)
+                        result.error("SAVE_FAILED", e.message, null)
+                    }
+                }
                 "canDrawOverlays" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         result.success(Settings.canDrawOverlays(this))

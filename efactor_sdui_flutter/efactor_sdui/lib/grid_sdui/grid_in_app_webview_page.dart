@@ -1295,6 +1295,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   window.__efactor_fcm_token = fcmToken;
   window.__efactor_can_save_image = true;
   window.__efactor_can_save_video = true;
+  window.__efactor_can_save_file = true;
+  window.__efactor_can_open_file = true;
   window.__efactor_can_share = true;
   if (typeof window.gridNativePushTokenRefresh === 'function') {
     try { window.gridNativePushTokenRefresh(fcmToken); } catch(e) { console.error(e); }
@@ -1717,6 +1719,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   }
   window.CircleConnectPush.systemSoundsSupported = true;
   window.CircleConnectPush.deviceKeySupported = true;
+  window.CircleConnectPush.openFileSupported = true;
+  window.CircleConnectPush.saveFileSupported = true;
   window.CircleConnectPush.hasDeviceKey = $hasDeviceKeyJs;
   window.CircleConnectPush._token = fcmToken;
   window.CircleConnectPush.getToken = function() {
@@ -1744,6 +1748,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     var api = window.CircleConnectPush;
     api.systemSoundsSupported = true;
     api.deviceKeySupported = true;
+    api.openFileSupported = true;
+    api.saveFileSupported = true;
     api.hasDeviceKey = $hasDeviceKeyJs;
     api.setDeviceKey = function(deviceKey, installationId) {
       api.hasDeviceKey = true;
@@ -2544,6 +2550,26 @@ Error: $error
           mimeType: mimeType,
           album: album,
         );
+      } else if (action == 'openFile') {
+        final url = data['url']?.toString() ?? '';
+        final localUrl = data['localUrl']?.toString();
+        final fileName = data['fileName']?.toString() ?? 'document';
+        final mimeType = data['mimeType']?.toString();
+        _handleOpenFile(
+          url: url,
+          localUrl: localUrl,
+          fileName: fileName,
+          mimeType: mimeType,
+        );
+      } else if (action == 'saveFile') {
+        final url = data['url']?.toString() ?? '';
+        final fileName = data['fileName']?.toString() ?? 'document';
+        final mimeType = data['mimeType']?.toString();
+        _handleSaveFile(
+          url: url,
+          fileName: fileName,
+          mimeType: mimeType,
+        );
       }
     } catch (e) {
       debugPrint(
@@ -2733,6 +2759,297 @@ Error: $error
         }
       }
     }());
+  }
+
+  void _handleOpenFile({
+    required String url,
+    String? localUrl,
+    required String fileName,
+    String? mimeType,
+  }) {
+    final cleanUrl = url.trim();
+    final cleanLocal = localUrl?.trim() ?? '';
+    final cleanName = fileName.trim().isNotEmpty
+        ? fileName.trim()
+        : (cleanUrl.isNotEmpty
+            ? cleanUrl.split('/').last.split('?').first
+            : 'document');
+    final effectiveMime = (mimeType != null && mimeType.trim().isNotEmpty)
+        ? mimeType.trim()
+        : CircleConnectFileService.resolveMimeType(cleanName);
+
+    unawaited(() async {
+      try {
+        String? resolvedLocalPath;
+
+        // 1. Check if localUrl was provided and exists
+        if (cleanLocal.isNotEmpty) {
+          final file = File(cleanLocal);
+          if (file.existsSync() && file.lengthSync() > 0) {
+            resolvedLocalPath = file.path;
+          }
+        }
+
+        // 2. Check if already cached in documents directory
+        if (resolvedLocalPath == null && cleanUrl.isNotEmpty) {
+          final cached = await CircleConnectFileService.instance.getCachedFile(
+            remoteUrl: cleanUrl,
+            fileName: cleanName,
+            mimeType: effectiveMime,
+          );
+          if (cached['isCached'] == true && cached['localPath'] != null) {
+            final f = File(cached['localPath'] as String);
+            if (f.existsSync() && f.lengthSync() > 0) {
+              resolvedLocalPath = f.path;
+            }
+          }
+        }
+
+        // 3. Download if not available locally
+        if (resolvedLocalPath == null) {
+          if (cleanUrl.isEmpty) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Cannot open file: URL is missing'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+            return;
+          }
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Opening $cleanName...'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+
+          final cookies = await _getCookiesForEndpoint(cleanUrl);
+          final headers = <String, String>{
+            if (cookies.isNotEmpty) 'Cookie': cookies,
+            if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
+              'Authorization': 'Bearer ${widget.accessToken}',
+            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+          };
+
+          final downloadResult =
+              await CircleConnectFileService.instance.downloadFile(
+            remoteUrl: cleanUrl,
+            downloadId: 'open_${DateTime.now().millisecondsSinceEpoch}',
+            fileName: cleanName,
+            mimeType: effectiveMime,
+            headers: headers.isNotEmpty ? headers : null,
+          );
+
+          if (downloadResult['success'] == true &&
+              downloadResult['localPath'] != null) {
+            resolvedLocalPath = downloadResult['localPath'] as String;
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Failed to download $cleanName: ${downloadResult["error"] ?? "Network error"}',
+                  ),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+            return;
+          }
+        }
+
+        // 4. Open file natively
+        final openResult = await CircleConnectFileService.instance.openFile(
+          localPath: resolvedLocalPath,
+          mimeType: effectiveMime,
+          fileName: cleanName,
+        );
+
+        // 5. If no app can open it, show toast and save to Downloads
+        final typeStr = openResult['type']?.toString().toLowerCase() ?? '';
+        final isNoApp = typeStr.contains('noapp') ||
+            typeStr.contains('activitynotfound') ||
+            (openResult['success'] != true &&
+                (openResult['message']
+                        ?.toString()
+                        .toLowerCase()
+                        .contains('no app') ??
+                    false));
+
+        if (isNoApp) {
+          debugPrint(
+            '[CircleConnectFiles] No app installed to open $cleanName, saving to Downloads',
+          );
+          await _saveLocalFileToDownloads(
+            localPath: resolvedLocalPath,
+            fileName: cleanName,
+            mimeType: effectiveMime,
+            toastMessage: 'No app to open this file. Saved to Downloads.',
+          );
+        }
+      } catch (e) {
+        debugPrint('[CircleConnectFiles] _handleOpenFile error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to open file: $e'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    }());
+  }
+
+  void _handleSaveFile({
+    required String url,
+    required String fileName,
+    String? mimeType,
+  }) {
+    final cleanUrl = url.trim();
+    if (cleanUrl.isEmpty) return;
+
+    final cleanName = fileName.trim().isNotEmpty
+        ? fileName.trim()
+        : cleanUrl.split('/').last.split('?').first;
+    final effectiveMime = (mimeType != null && mimeType.trim().isNotEmpty)
+        ? mimeType.trim()
+        : CircleConnectFileService.resolveMimeType(cleanName);
+
+    unawaited(() async {
+      try {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Saving $cleanName...'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+
+        // 1. Check local cache or download
+        String? localPath;
+        final cached = await CircleConnectFileService.instance.getCachedFile(
+          remoteUrl: cleanUrl,
+          fileName: cleanName,
+          mimeType: effectiveMime,
+        );
+        if (cached['isCached'] == true && cached['localPath'] != null) {
+          localPath = cached['localPath'] as String;
+        } else {
+          final cookies = await _getCookiesForEndpoint(cleanUrl);
+          final headers = <String, String>{
+            if (cookies.isNotEmpty) 'Cookie': cookies,
+            if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
+              'Authorization': 'Bearer ${widget.accessToken}',
+            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+          };
+
+          final downloadResult =
+              await CircleConnectFileService.instance.downloadFile(
+            remoteUrl: cleanUrl,
+            downloadId: 'save_${DateTime.now().millisecondsSinceEpoch}',
+            fileName: cleanName,
+            mimeType: effectiveMime,
+            headers: headers.isNotEmpty ? headers : null,
+          );
+
+          if (downloadResult['success'] == true &&
+              downloadResult['localPath'] != null) {
+            localPath = downloadResult['localPath'] as String;
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Failed to save $cleanName: ${downloadResult["error"] ?? "Network error"}',
+                  ),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+            return;
+          }
+        }
+
+        // 2. Save to Downloads (Android) or Share Sheet / Save to Files (iOS)
+        await _saveLocalFileToDownloads(
+          localPath: localPath,
+          fileName: cleanName,
+          mimeType: effectiveMime,
+          toastMessage: 'Saved to Downloads',
+        );
+      } catch (e) {
+        debugPrint('[CircleConnectFiles] _handleSaveFile error: $e');
+      }
+    }());
+  }
+
+  Future<void> _saveLocalFileToDownloads({
+    required String localPath,
+    required String fileName,
+    required String mimeType,
+    String toastMessage = 'Saved to Downloads',
+  }) async {
+    final file = File(localPath);
+    if (!file.existsSync()) return;
+
+    try {
+      if (Platform.isAndroid) {
+        bool success = false;
+        try {
+          const channel = MethodChannel('tech.efactor/circle_connect');
+          final result =
+              await channel.invokeMethod<bool>('saveFileToDownloads', {
+            'filePath': localPath,
+            'fileName': fileName,
+            'mimeType': mimeType,
+          });
+          success = result ?? false;
+        } catch (e) {
+          debugPrint(
+              '[CircleConnectFiles] native saveFileToDownloads error: $e');
+        }
+
+        if (!success) {
+          // Fallback to public Download directory
+          final downloadDir = Directory('/storage/emulated/0/Download');
+          if (downloadDir.existsSync()) {
+            final dest = File('${downloadDir.path}/$fileName');
+            file.copySync(dest.path);
+            success = true;
+          }
+        }
+
+        if (mounted && success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(toastMessage),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        // iOS: Native Share Sheet with "Save to Files" / "Open With"
+        final xfile = XFile(
+          localPath,
+          mimeType: mimeType,
+          name: fileName,
+        );
+        await SharePlus.instance.share(
+          ShareParams(
+            files: <XFile>[xfile],
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[CircleConnectFiles] _saveLocalFileToDownloads error: $e');
+    }
   }
 
   Future<void> _handleStartLiveLocation({

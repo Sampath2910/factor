@@ -45,7 +45,9 @@ void main() {
       );
     });
 
-    test('resolveMimeType resolves correct MIME types for all supported extensions', () {
+    test(
+        'resolveMimeType resolves correct MIME types for all supported extensions',
+        () {
       expect(
         CircleConnectFileService.resolveMimeType('test.pdf'),
         equals('application/pdf'),
@@ -56,7 +58,8 @@ void main() {
       );
       expect(
         CircleConnectFileService.resolveMimeType('test.docx'),
-        equals('application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        equals(
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
       );
       expect(
         CircleConnectFileService.resolveMimeType('test.txt'),
@@ -85,12 +88,14 @@ void main() {
     });
 
     test('getDocumentsDirectory creates and targets Media/Documents', () async {
-      final dir = await CircleConnectFileService.instance.getDocumentsDirectory();
+      final dir =
+          await CircleConnectFileService.instance.getDocumentsDirectory();
       expect(dir.existsSync(), isTrue);
       expect(dir.path.endsWith('Media/Documents'), isTrue);
     });
 
-    test('getCachedFile returns false when file has not been downloaded', () async {
+    test('getCachedFile returns false when file has not been downloaded',
+        () async {
       final result = await CircleConnectFileService.instance.getCachedFile(
         remoteUrl: 'https://efactor.tech/uploads/non_existent.pdf',
         fileName: 'non_existent.pdf',
@@ -99,8 +104,10 @@ void main() {
       expect(result['localPath'], isNull);
     });
 
-    test('getCachedFile returns true when file exists in documents directory', () async {
-      final dir = await CircleConnectFileService.instance.getDocumentsDirectory();
+    test('getCachedFile returns true when file exists in documents directory',
+        () async {
+      final dir =
+          await CircleConnectFileService.instance.getDocumentsDirectory();
       final testFile = File('${dir.path}/test_cached_doc.pdf');
       await testFile.writeAsString('Dummy PDF content');
 
@@ -129,10 +136,41 @@ void main() {
       CircleConnectFileService.instance.cancelDownload('test_dl_999');
 
       expect(emittedEvents.containsKey('fileDownloadCancelled'), isTrue);
-      expect(emittedEvents['fileDownloadCancelled']?['downloadId'], equals('test_dl_999'));
+      expect(emittedEvents['fileDownloadCancelled']?['downloadId'],
+          equals('test_dl_999'));
 
       // Clean up
       CircleConnectFileService.instance.onBridgeEvent = null;
+    });
+
+    test('resolveMimeType resolves PowerPoint, Excel, and archive extensions',
+        () {
+      expect(CircleConnectFileService.resolveMimeType('presentation.ppt'),
+          equals('application/vnd.ms-powerpoint'));
+      expect(
+          CircleConnectFileService.resolveMimeType('presentation.pptx'),
+          equals(
+              'application/vnd.openxmlformats-officedocument.presentationml.presentation'));
+      expect(CircleConnectFileService.resolveMimeType('sheet.xls'),
+          equals('application/vnd.ms-excel'));
+      expect(
+          CircleConnectFileService.resolveMimeType('sheet.xlsx'),
+          equals(
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+      expect(CircleConnectFileService.resolveMimeType('archive.zip'),
+          equals('application/zip'));
+      expect(CircleConnectFileService.resolveMimeType('notes.txt'),
+          equals('text/plain'));
+    });
+
+    test('openFile handles non-existent file cleanly with error result',
+        () async {
+      final result = await CircleConnectFileService.instance.openFile(
+        localPath: '/tmp/non_existent_file_path.pdf',
+        fileName: 'non_existent_file_path.pdf',
+      );
+      expect(result['success'], isFalse);
+      expect(result['error'], contains('does not exist'));
     });
   });
 }
