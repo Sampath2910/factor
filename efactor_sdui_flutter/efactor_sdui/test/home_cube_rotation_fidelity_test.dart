@@ -410,6 +410,20 @@ void main() {
         reason:
             'Rotating tile must be clipped to tile bounds by ClipRRect(16.0) to prevent overflowing into neighbors');
 
+    // The clip MUST use antiAliasWithSaveLayer. This flattens the
+    // perspective-transformed 3D cube into a 2D texture before clipping, which
+    // is the only way Impeller (iOS, Flutter 3.44+ — Skia removed, no opt-out)
+    // actually contains a 3D-perspective child. A plain antiAlias clip leaks on
+    // iOS. Android/Skia honors it identically.
+    final saveLayerClipFinder = find.byWidgetPredicate((widget) =>
+        (widget is ClipRRect &&
+            widget.clipBehavior == Clip.antiAliasWithSaveLayer) ||
+        (widget is ClipRect &&
+            widget.clipBehavior == Clip.antiAliasWithSaveLayer));
+    expect(saveLayerClipFinder, findsWidgets,
+        reason:
+            'Cube clip must use Clip.antiAliasWithSaveLayer so Impeller flattens then clips the 3D cube (contains it on iOS)');
+
     // Verify during mid-turn transition that the rotating cube remains clipped inside its tile bounds
     await tester.pump(const Duration(milliseconds: 3680));
     expect(clipFinder, findsWidgets,
@@ -607,8 +621,9 @@ void main() {
     await tester.pump();
 
     // iOS is fully unified with Android: the IDENTICAL perspective 3D cube,
-    // wrapped in a RepaintBoundary and clipped to the slot. (This requires the
-    // Skia renderer on iOS, forced via FLTEnableImpeller=false in Info.plist.)
+    // wrapped in a RepaintBoundary and clipped to the slot. Containment on iOS
+    // comes from the Clip.antiAliasWithSaveLayer clip (flatten-then-clip), NOT
+    // from a Skia fallback — Flutter 3.44 is Impeller-only on iOS.
     final iosBoundaries =
         tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
     expect(iosBoundaries, isNotEmpty,
@@ -704,7 +719,7 @@ void main() {
     expect(cubeTransforms, isNotEmpty,
         reason: 'iOS must render 3D perspective transforms like Android');
 
-    // 1. RepaintBoundary wraps the cube (Skia layer caching, like Android).
+    // 1. RepaintBoundary wraps the cube (layer caching, like Android).
     expect(find.byType(RepaintBoundary), findsWidgets,
         reason: 'iOS must wrap the cube in a RepaintBoundary like Android');
 

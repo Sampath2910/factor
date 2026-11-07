@@ -2485,9 +2485,10 @@ class HomeSduiRenderer {
     Widget child, [
     BuildContext? context,
   ]) {
-    // Clip every card to its rounded slot on both platforms. iOS rotating
-    // cards turn orthographically (perspective = 0), so Impeller honors this
-    // clip and the cube cannot bleed into neighbor tiles — matching Android.
+    // Clip every card to its rounded slot on both platforms. Uses
+    // antiAliasWithSaveLayer so a rotating cube inside is flattened to a 2D
+    // texture before clipping — the only way Impeller (iOS, Flutter 3.44+,
+    // Skia removed) contains a 3D-perspective child. Matches Android/Skia.
     final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
     if (overflow == 'visible' || overflow == 'none') {
       return child;
@@ -2497,12 +2498,15 @@ class HomeSduiRenderer {
     if (radius > 0) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: Clip.antiAliasWithSaveLayer,
         child: child,
       );
     }
 
-    return ClipRect(clipBehavior: Clip.antiAlias, child: child);
+    return ClipRect(
+      clipBehavior: Clip.antiAliasWithSaveLayer,
+      child: child,
+    );
   }
 
   ({int index, int count}) _cardStaggerSlot(Map<String, dynamic> c) {
@@ -5046,9 +5050,11 @@ class _RotatingCardState extends State<_RotatingCard>
 
     // Fully unified pipeline: iOS and Android render the IDENTICAL perspective
     // 3D cube, clipped to the slot, at full scale with the natural centre pivot.
-    // This is pixel-for-pixel the Android path. It requires the Skia renderer on
-    // iOS (Impeller cannot clip a 3D-perspective child), which the app forces via
-    // `FLTEnableImpeller=false` in ios/Runner/Info.plist.
+    // This is pixel-for-pixel the Android path. Containment on iOS does NOT rely
+    // on a Skia fallback (Flutter 3.44 is Impeller-only on iOS; FLTEnableImpeller
+    // is a no-op). Instead the enclosing clip uses Clip.antiAliasWithSaveLayer
+    // (see _buildCube / _clipToTileBounds): the perspective cube is flattened to
+    // a 2D texture first, then clipped — which Impeller contains correctly.
     final double effectivePerspective = perspective;
     const double containmentScale = 1.0;
     const double? centeringOverride = null;
@@ -5117,18 +5123,25 @@ class _RotatingCardState extends State<_RotatingCard>
       ],
     );
 
-    // Clip the cube to its rounded slot on BOTH platforms. On iOS the turn is
-    // orthographic (perspective = 0 above), so Impeller honors this clip and
-    // the cube stays inside its tile — matching the Android/Skia baseline.
+    // Clip the cube to its rounded slot on BOTH platforms. The clip uses
+    // antiAliasWithSaveLayer so the perspective-transformed cube is first
+    // flattened into a 2D offscreen texture and THEN clipped. This is the key
+    // to containment on iOS: Impeller does not clip a live 3D-perspective child
+    // against an ancestor ClipRRect, but it DOES clip a flattened saveLayer
+    // texture. Skia (Android) also honors this, so both platforms stay pixel
+    // identical with the full perspective geometry intact.
     Widget cube = RepaintBoundary(child: cubeStack);
     if (radius != null && radius > 0) {
       cube = ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: Clip.antiAliasWithSaveLayer,
         child: cube,
       );
     } else {
-      cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
+      cube = ClipRect(
+        clipBehavior: Clip.antiAliasWithSaveLayer,
+        child: cube,
+      );
     }
     return cube;
   }
