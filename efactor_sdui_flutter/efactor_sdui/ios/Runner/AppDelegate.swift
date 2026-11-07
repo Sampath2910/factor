@@ -276,8 +276,11 @@ import WebKit
             let request = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
             assetPlaceholder = request?.placeholderForCreatedAsset
           } else if let img = image {
+            // creationRequestForAsset(from:) returns a non-optional
+            // PHAssetChangeRequest on the current Photos SDK, so no optional
+            // chaining here (unlike the video variant above).
             let request = PHAssetChangeRequest.creationRequestForAsset(from: img)
-            assetPlaceholder = request?.placeholderForCreatedAsset
+            assetPlaceholder = request.placeholderForCreatedAsset
           }
 
           if let album = album, let asset = assetPlaceholder {

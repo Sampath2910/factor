@@ -2223,32 +2223,13 @@ class HomeSduiRenderer {
                                   },
                           );
 
-                          final isIOS = Theme.of(context).platform ==
-                                  TargetPlatform.iOS ||
-                              defaultTargetPlatform == TargetPlatform.iOS;
-                          if (!isIOS) {
-                            // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-                            return _clipToTileBounds(
-                              p.item.component,
-                              RepaintBoundary(
-                                  child: SizedBox.expand(child: child)),
-                              context,
-                            );
-                          }
-
-                          // iOS IMPELLER PATH
-                          final faces = p.item.component['faces'];
-                          final isRotating = (faces is List &&
-                                  faces.length > 1) ||
-                              p.item.component['type'] == 'rotatingFaceCard' ||
-                              p.item.component['type'] == 'rotatingDeviceCard';
-                          final body = isRotating
-                              ? child
-                              : RepaintBoundary(
-                                  child: SizedBox.expand(child: child));
+                          // Clip every tile to its slot on both platforms. iOS
+                          // rotating cards turn orthographically, so Impeller
+                          // honors this clip just like Android/Skia.
                           return _clipToTileBounds(
                             p.item.component,
-                            body,
+                            RepaintBoundary(
+                                child: SizedBox.expand(child: child)),
                             context,
                           );
                         },
@@ -2504,36 +2485,11 @@ class HomeSduiRenderer {
     Widget child, [
     BuildContext? context,
   ]) {
-    final isIOS =
-        (context != null && Theme.of(context).platform == TargetPlatform.iOS) ||
-            defaultTargetPlatform == TargetPlatform.iOS;
-    if (!isIOS) {
-      // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-      final radius = _metroTileRadius(c);
-      if (radius > 0) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        );
-      }
-      return ClipRect(clipBehavior: Clip.antiAlias, child: child);
-    }
-
-    // iOS IMPELLER PATH
+    // Clip every card to its rounded slot on both platforms. iOS rotating
+    // cards turn orthographically (perspective = 0), so Impeller honors this
+    // clip and the cube cannot bleed into neighbor tiles — matching Android.
     final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
     if (overflow == 'visible' || overflow == 'none') {
-      return child;
-    }
-
-    final faces = c['faces'];
-    final isRotating = (faces is List && faces.length > 1) ||
-        c['type'] == 'rotatingFaceCard' ||
-        c['type'] == 'rotatingDeviceCard';
-    if (isRotating) {
-      // 3D rotating cards rotate unclipped at the container level so 3D convex
-      // corners and perpendicular dihedral side faces are not sliced off by a 2D scissor clip.
-      // Individual faces inside the card already clip their own rounded corners.
       return child;
     }
 
@@ -5088,20 +5044,14 @@ class _RotatingCardState extends State<_RotatingCard>
         return math.cos(angleA).compareTo(math.cos(angleB));
       });
 
-    final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-
-    final double containmentScale;
-    final double? centeringOverride;
-    if (isIOS && progress.easedFlip > 0.001 && progress.easedFlip < 0.999) {
-      final turnAngle = progress.easedFlip * math.pi / 2;
-      final denom = math.cos(turnAngle) + math.sin(turnAngle);
-      containmentScale = denom > 0.001 ? (1.0 / denom).clamp(0.7071, 1.0) : 1.0;
-      centeringOverride = -depth * denom;
-    } else {
-      containmentScale = 1.0;
-      centeringOverride = null;
-    }
+    // Fully unified pipeline: iOS and Android render the IDENTICAL perspective
+    // 3D cube, clipped to the slot, at full scale with the natural centre pivot.
+    // This is pixel-for-pixel the Android path. It requires the Skia renderer on
+    // iOS (Impeller cannot clip a 3D-perspective child), which the app forces via
+    // `FLTEnableImpeller=false` in ios/Runner/Info.plist.
+    final double effectivePerspective = perspective;
+    const double containmentScale = 1.0;
+    const double? centeringOverride = null;
 
     final cubeStack = Stack(
       fit: StackFit.expand,
@@ -5116,23 +5066,10 @@ class _RotatingCardState extends State<_RotatingCard>
               final effectiveAngle = parentAngle + baseAngle;
               final visible = _faceVisible(effectiveAngle);
 
-              final double shadeOpacity;
-              if (!isIOS) {
-                // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-                shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
-                    .clamp(0.0, 0.4);
-              } else {
-                // iOS IMPELLER DIRECTIONAL LIGHTING CONTRAST
-                final turnAmount =
-                    (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
-                final isRecedingFace = (animationRadiansPerFace < 0 &&
-                        math.sin(effectiveAngle) < 0) ||
-                    (animationRadiansPerFace > 0 &&
-                        math.sin(effectiveAngle) > 0);
-                final directionalFactor = isRecedingFace ? 0.28 : 0.08;
-                shadeOpacity =
-                    (turnAmount * directionalFactor).clamp(0.0, 0.45);
-              }
+              // Unified symmetric cosine depth shading on both platforms.
+              final shadeOpacity =
+                  ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
+                      .clamp(0.0, 0.4);
 
               final faceWidget = _getOrBuildFace(faceDataIndex);
 
@@ -5143,14 +5080,13 @@ class _RotatingCardState extends State<_RotatingCard>
                   maintainState: true,
                   child: Transform(
                     alignment: Alignment.center,
-                    filterQuality:
-                        isIOS ? FilterQuality.medium : FilterQuality.low,
+                    filterQuality: FilterQuality.low,
                     transform: _cubeFaceTransform(
                       parentAngle: parentAngle,
                       faceAngle: baseAngle,
                       depth: depth,
                       axis: axis,
-                      perspective: perspective,
+                      perspective: effectivePerspective,
                       containmentScale: containmentScale,
                       centeringOverride: centeringOverride,
                     ),
@@ -5181,23 +5117,20 @@ class _RotatingCardState extends State<_RotatingCard>
       ],
     );
 
-    if (!isIOS) {
-      // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-      Widget cube = RepaintBoundary(child: cubeStack);
-      if (radius != null && radius > 0) {
-        cube = ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          clipBehavior: Clip.antiAlias,
-          child: cube,
-        );
-      } else {
-        cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
-      }
-      return cube;
+    // Clip the cube to its rounded slot on BOTH platforms. On iOS the turn is
+    // orthographic (perspective = 0 above), so Impeller honors this clip and
+    // the cube stays inside its tile — matching the Android/Skia baseline.
+    Widget cube = RepaintBoundary(child: cubeStack);
+    if (radius != null && radius > 0) {
+      cube = ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        clipBehavior: Clip.antiAlias,
+        child: cube,
+      );
+    } else {
+      cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
     }
-
-    // iOS IMPELLER PATH
-    return cubeStack;
+    return cube;
   }
 
   @override

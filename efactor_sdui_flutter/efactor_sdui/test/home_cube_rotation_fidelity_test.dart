@@ -606,17 +606,25 @@ void main() {
     );
     await tester.pump();
 
-    // On iOS, RepaintBoundary is bypassed around the cube (avoiding Impeller layer flattening / freeze),
-    // and 3D transforms render directly with perspective.
+    // iOS is fully unified with Android: the IDENTICAL perspective 3D cube,
+    // wrapped in a RepaintBoundary and clipped to the slot. (This requires the
+    // Skia renderer on iOS, forced via FLTEnableImpeller=false in Info.plist.)
+    final iosBoundaries =
+        tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
+    expect(iosBoundaries, isNotEmpty,
+        reason: 'iOS must wrap the cube in a RepaintBoundary like Android');
     final iosTransforms = tester.widgetList<Transform>(find.byType(Transform));
-    final iosCubeTransforms =
+    final iosPerspective =
         iosTransforms.where((t) => t.transform.entry(3, 2) != 0).toList();
-    expect(iosCubeTransforms, isNotEmpty,
-        reason: 'iOS Impeller pipeline must render 3D perspective transforms');
+    expect(iosPerspective, isNotEmpty,
+        reason:
+            'iOS must render the same 3D perspective transforms as Android');
+    expect(find.byType(ClipRRect), findsWidgets,
+        reason: 'iOS must clip the cube to its rounded slot like Android');
   });
 
   testWidgets(
-      'iOS Impeller zero-slicing parity: Mid-turn 45° rotation renders continuous 3D transforms without 2D scissor cuts or freezing',
+      'iOS unified-with-Android parity: Mid-turn 45° rotation is a full-scale perspective cube, clipped to the slot and wrapped in a RepaintBoundary',
       (tester) async {
     final faces = <Map<String, dynamic>>[
       <String, dynamic>{
@@ -687,40 +695,33 @@ void main() {
     expect(find.text('Face Beta'), findsOneWidget,
         reason: 'Face Beta must rotate in from the right simultaneously');
 
-    // Impeller zero-slicing verification:
-    // 1. Direct 3D perspective transforms are rendered
+    // Unified parity verification (iOS == Android: a full-scale perspective
+    // cube, clipped to the slot — no containment squish, no pivot pushback).
     final transforms = tester.widgetList<Transform>(find.byType(Transform));
+    // The cube faces carry the perspective entry (3,2).
     final cubeTransforms =
         transforms.where((t) => t.transform.entry(3, 2) != 0).toList();
     expect(cubeTransforms, isNotEmpty,
-        reason: '3D perspective transforms must be active during mid-turn');
+        reason: 'iOS must render 3D perspective transforms like Android');
 
-    // 2. RepaintBoundary is NOT present around the rotating card on iOS (no freezing)
-    expect(find.descendant(
-      of: find.byType(Transform).first,
-      matching: find.byType(RepaintBoundary),
-    ), findsNothing);
+    // 1. RepaintBoundary wraps the cube (Skia layer caching, like Android).
+    expect(find.byType(RepaintBoundary), findsWidgets,
+        reason: 'iOS must wrap the cube in a RepaintBoundary like Android');
 
-    // 3. Rotating cube Stack has clipBehavior: Clip.none so 3D dihedral sides and corners are intact
-    final stacks = tester.widgetList<Stack>(find.byType(Stack));
-    final unclippedStack = stacks.firstWhere(
-      (s) => s.clipBehavior == Clip.none,
-      orElse: () => throw StateError('No unclipped Stack found for 3D cube'),
-    );
-    expect(unclippedStack.clipBehavior, Clip.none,
-        reason: 'Stack must remain unclipped for 3D dihedral extrusion');
+    // 2. The cube is clipped to its rounded slot, so it cannot bleed into
+    //    neighbor tiles or protrude past its bounds (the regression guard).
+    expect(find.byType(ClipRRect), findsWidgets,
+        reason: 'iOS must clip the perspective cube to its slot like Android');
 
-    // 4. Fixed 1:1 vertical scale parity: Y-axis scale entry(1, 1) must remain strictly 1.0 (no vertical zoom in/out)
-    for (final ct in cubeTransforms) {
-      expect(ct.transform.entry(1, 1), closeTo(1.0, 0.001),
+    // 3. Full-scale geometry: vertical stays strictly 1.0 (no zoom) and the
+    //    horizontal axis is the true rotation foreshortening ~cos(angle),
+    //    NOT squished down to ~0.5 by a containment scale.
+    for (final t in cubeTransforms) {
+      expect(t.transform.entry(1, 1), closeTo(1.0, 0.001),
+          reason: 'vertical height must stay strictly 1.000 (no zoom)');
+      expect(t.transform.entry(0, 0).abs(), greaterThan(0.60),
           reason:
-              'Vertical height must remain strictly 1.000 (unscaled) to prevent zoom in/out');
-      expect(ct.transform.entry(0, 0).abs(), lessThan(0.70),
-          reason:
-              'Horizontal rotation axis must be scaled by containmentScale to keep cube in-box');
-      expect(ct.transform.entry(2, 3), lessThan(-30.0),
-          reason:
-              'Pivot must push back by -depth * (cos + sin) so front apex Z <= 0, keeping cube in-box');
+              'horizontal must be full-scale cos(angle), not squished to ~0.5');
     }
   });
 }
