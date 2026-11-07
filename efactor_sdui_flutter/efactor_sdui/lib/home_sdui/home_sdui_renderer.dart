@@ -2485,27 +2485,30 @@ class HomeSduiRenderer {
     Widget child, [
     BuildContext? context,
   ]) {
-    // Clip every card to its rounded slot on both platforms. Uses
-    // antiAliasWithSaveLayer so a rotating cube inside is flattened to a 2D
-    // texture before clipping — the only way Impeller (iOS, Flutter 3.44+,
-    // Skia removed) contains a 3D-perspective child. Matches Android/Skia.
+    // Clip every card to its rounded slot on both platforms. The child is first
+    // flattened (see _flattenForClip) so a rotating cube inside keeps its full
+    // 3D bulge, then a plain antiAlias ClipRRect clips the 2D result. This
+    // contains the cube on iOS/Impeller (Flutter 3.44+, Skia removed) without
+    // the gap that antiAliasWithSaveLayer leaves around the cube. Matches
+    // Android/Skia exactly.
     final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
     if (overflow == 'visible' || overflow == 'none') {
       return child;
     }
 
+    final flattened = _flattenForClip(child);
     final radius = _metroTileRadius(c);
     if (radius > 0) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        clipBehavior: Clip.antiAliasWithSaveLayer,
-        child: child,
+        clipBehavior: Clip.antiAlias,
+        child: flattened,
       );
     }
 
     return ClipRect(
-      clipBehavior: Clip.antiAliasWithSaveLayer,
-      child: child,
+      clipBehavior: Clip.antiAlias,
+      child: flattened,
     );
   }
 
@@ -5123,23 +5126,28 @@ class _RotatingCardState extends State<_RotatingCard>
       ],
     );
 
-    // Clip the cube to its rounded slot on BOTH platforms. The clip uses
-    // antiAliasWithSaveLayer so the perspective-transformed cube is first
-    // flattened into a 2D offscreen texture and THEN clipped. This is the key
-    // to containment on iOS: Impeller does not clip a live 3D-perspective child
-    // against an ancestor ClipRRect, but it DOES clip a flattened saveLayer
-    // texture. Skia (Android) also honors this, so both platforms stay pixel
-    // identical with the full perspective geometry intact.
-    Widget cube = RepaintBoundary(child: cubeStack);
+    // Contain the cube to its rounded slot on BOTH platforms WITHOUT distorting
+    // the 3D turn. Two steps:
+    //  1. Flatten the live perspective cube to a 2D raster at its FULL bulged
+    //     extent via an identity ColorFiltered. This forces an offscreen sized
+    //     to the painted (bulging) cube, so the near face keeps its real size.
+    //  2. Clip that 2D raster with a plain antiAlias ClipRRect.
+    // Why not Clip.antiAliasWithSaveLayer: on iOS/Impeller that path renders the
+    // 3D-perspective child shrunk-to-fit, which leaves dark gaps around the cube
+    // (the near face no longer fills the slot) — it does not match Android. A
+    // plain ClipRRect alone does not clip a live 3D child on Impeller (it bleeds
+    // into neighbors). Flattening first, then clipping the 2D texture, gives
+    // Android's exact look: near face fills the slot, overflow clipped, no gap.
+    Widget cube = _flattenForClip(RepaintBoundary(child: cubeStack));
     if (radius != null && radius > 0) {
       cube = ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        clipBehavior: Clip.antiAliasWithSaveLayer,
+        clipBehavior: Clip.antiAlias,
         child: cube,
       );
     } else {
       cube = ClipRect(
-        clipBehavior: Clip.antiAliasWithSaveLayer,
+        clipBehavior: Clip.antiAlias,
         child: cube,
       );
     }
@@ -5437,4 +5445,19 @@ class FaIconAdapter extends StatelessWidget {
   Widget build(BuildContext context) {
     return FaIcon(icon, color: color, size: size);
   }
+}
+
+/// Forces [child] to rasterize into a 2D offscreen at its full painted extent
+/// (including a rotating cube's 3D bulge) via an identity color filter. A plain
+/// ClipRRect placed OVER the result then clips a 2D texture, which Impeller
+/// contains correctly — without the shrink-to-fit distortion that
+/// Clip.antiAliasWithSaveLayer applies to a live 3D-perspective child (which on
+/// iOS/Impeller leaves dark gaps around the cube instead of filling the slot).
+Widget _flattenForClip(Widget child) {
+  return ColorFiltered(
+    // BlendMode.dst keeps the destination (child) pixels unchanged — a true
+    // identity — while still forcing the offscreen that flattens the 3D turn.
+    colorFilter: const ColorFilter.mode(Color(0x00000000), BlendMode.dst),
+    child: child,
+  );
 }

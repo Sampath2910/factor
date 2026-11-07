@@ -410,19 +410,24 @@ void main() {
         reason:
             'Rotating tile must be clipped to tile bounds by ClipRRect(16.0) to prevent overflowing into neighbors');
 
-    // The clip MUST use antiAliasWithSaveLayer. This flattens the
-    // perspective-transformed 3D cube into a 2D texture before clipping, which
-    // is the only way Impeller (iOS, Flutter 3.44+ — Skia removed, no opt-out)
-    // actually contains a 3D-perspective child. A plain antiAlias clip leaks on
-    // iOS. Android/Skia honors it identically.
-    final saveLayerClipFinder = find.byWidgetPredicate((widget) =>
+    // The rotating cube MUST be flattened to a 2D raster (ColorFiltered) BEFORE
+    // being clipped, so Impeller (iOS, Flutter 3.44+ — Skia removed, no opt-out)
+    // contains the 3D-perspective child. Flattening keeps the cube's full 3D
+    // bulge (near face fills the slot) and the plain antiAlias clip then clips
+    // the 2D texture. NOTE: Clip.antiAliasWithSaveLayer must NOT be used — on
+    // Impeller it shrinks the 3D child, leaving dark gaps around the cube.
+    final flattenFinder = find.byType(ColorFiltered);
+    expect(flattenFinder, findsWidgets,
+        reason:
+            'Cube must be flattened with ColorFiltered before clipping so Impeller contains the 3D cube without the saveLayer shrink/gap');
+    final noSaveLayerClip = find.byWidgetPredicate((widget) =>
         (widget is ClipRRect &&
             widget.clipBehavior == Clip.antiAliasWithSaveLayer) ||
         (widget is ClipRect &&
             widget.clipBehavior == Clip.antiAliasWithSaveLayer));
-    expect(saveLayerClipFinder, findsWidgets,
+    expect(noSaveLayerClip, findsNothing,
         reason:
-            'Cube clip must use Clip.antiAliasWithSaveLayer so Impeller flattens then clips the 3D cube (contains it on iOS)');
+            'Must NOT use Clip.antiAliasWithSaveLayer — it shrinks the 3D cube on Impeller and leaves gaps');
 
     // Verify during mid-turn transition that the rotating cube remains clipped inside its tile bounds
     await tester.pump(const Duration(milliseconds: 3680));
@@ -622,8 +627,9 @@ void main() {
 
     // iOS is fully unified with Android: the IDENTICAL perspective 3D cube,
     // wrapped in a RepaintBoundary and clipped to the slot. Containment on iOS
-    // comes from the Clip.antiAliasWithSaveLayer clip (flatten-then-clip), NOT
-    // from a Skia fallback — Flutter 3.44 is Impeller-only on iOS.
+    // comes from flattening the cube (ColorFiltered) then clipping the 2D result
+    // with a plain antiAlias clip, NOT from a Skia fallback — Flutter 3.44 is
+    // Impeller-only on iOS.
     final iosBoundaries =
         tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
     expect(iosBoundaries, isNotEmpty,
