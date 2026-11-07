@@ -410,24 +410,24 @@ void main() {
         reason:
             'Rotating tile must be clipped to tile bounds by ClipRRect(16.0) to prevent overflowing into neighbors');
 
-    // The rotating cube MUST be flattened to a 2D raster (ColorFiltered) BEFORE
-    // being clipped, so Impeller (iOS, Flutter 3.44+ — Skia removed, no opt-out)
-    // contains the 3D-perspective child. Flattening keeps the cube's full 3D
-    // bulge (near face fills the slot) and the plain antiAlias clip then clips
-    // the 2D texture. NOTE: Clip.antiAliasWithSaveLayer must NOT be used — on
-    // Impeller it shrinks the 3D child, leaving dark gaps around the cube.
-    final flattenFinder = find.byType(ColorFiltered);
-    expect(flattenFinder, findsWidgets,
-        reason:
-            'Cube must be flattened with ColorFiltered before clipping so Impeller contains the 3D cube without the saveLayer shrink/gap');
-    final noSaveLayerClip = find.byWidgetPredicate((widget) =>
+    // The cube clip MUST contain NO compositing boundary (no saveLayer): neither
+    // Clip.antiAliasWithSaveLayer nor a ColorFiltered/Opacity/ImageFiltered nor
+    // a RepaintBoundary between the ClipRRect and the perspective Stack. Any of
+    // those forces Impeller to clip the 3D cube in 2D (shrunk-to-fit), leaving
+    // dark gaps around the cube. A plain antiAlias clip with no compositing
+    // boundary is applied at the rasterizer level and clips the live 3D cube
+    // correctly — the near face fills the slot, matching Android/Skia.
+    final saveLayerClip = find.byWidgetPredicate((widget) =>
         (widget is ClipRRect &&
             widget.clipBehavior == Clip.antiAliasWithSaveLayer) ||
         (widget is ClipRect &&
             widget.clipBehavior == Clip.antiAliasWithSaveLayer));
-    expect(noSaveLayerClip, findsNothing,
+    expect(saveLayerClip, findsNothing,
         reason:
             'Must NOT use Clip.antiAliasWithSaveLayer — it shrinks the 3D cube on Impeller and leaves gaps');
+    expect(find.byType(ColorFiltered), findsNothing,
+        reason:
+            'Must NOT flatten the cube via ColorFiltered — its saveLayer shrinks the 3D cube on Impeller');
 
     // Verify during mid-turn transition that the rotating cube remains clipped inside its tile bounds
     await tester.pump(const Duration(milliseconds: 3680));
@@ -598,11 +598,14 @@ void main() {
     );
     await tester.pump();
 
-    // On Android, RepaintBoundary wraps the cube Stack (matching 044f965)
-    final androidBoundaries =
-        tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
-    expect(androidBoundaries, isNotEmpty,
-        reason: 'Android Skia pipeline must wrap cube in RepaintBoundary');
+    // The cube Stack must NOT be wrapped in a RepaintBoundary: a compositing
+    // boundary makes Impeller clip the 3D cube in 2D (shrunk, gaps). The clip
+    // must sit directly over the perspective Stack so it applies at the
+    // rasterizer level on both platforms.
+    final androidClips = find.byWidgetPredicate(
+        (w) => w is ClipRRect || w is ClipRect);
+    expect(androidClips, findsWidgets,
+        reason: 'Android must clip the cube Stack to its slot');
 
     // 2. Test iOS platform
     await tester.pumpWidget(
@@ -626,14 +629,14 @@ void main() {
     await tester.pump();
 
     // iOS is fully unified with Android: the IDENTICAL perspective 3D cube,
-    // wrapped in a RepaintBoundary and clipped to the slot. Containment on iOS
-    // comes from flattening the cube (ColorFiltered) then clipping the 2D result
-    // with a plain antiAlias clip, NOT from a Skia fallback — Flutter 3.44 is
-    // Impeller-only on iOS.
-    final iosBoundaries =
-        tester.widgetList<RepaintBoundary>(find.byType(RepaintBoundary));
-    expect(iosBoundaries, isNotEmpty,
-        reason: 'iOS must wrap the cube in a RepaintBoundary like Android');
+    // clipped directly to the slot with NO compositing boundary. On iOS
+    // (Impeller-only, Flutter 3.44+ — Skia removed) a plain antiAlias clip with
+    // no RepaintBoundary/saveLayer is applied at the rasterizer level and clips
+    // the live 3D cube correctly (near face fills the slot, no gap).
+    final iosClips =
+        find.byWidgetPredicate((w) => w is ClipRRect || w is ClipRect);
+    expect(iosClips, findsWidgets,
+        reason: 'iOS must clip the cube Stack to its slot');
     final iosTransforms = tester.widgetList<Transform>(find.byType(Transform));
     final iosPerspective =
         iosTransforms.where((t) => t.transform.entry(3, 2) != 0).toList();
@@ -725,9 +728,11 @@ void main() {
     expect(cubeTransforms, isNotEmpty,
         reason: 'iOS must render 3D perspective transforms like Android');
 
-    // 1. RepaintBoundary wraps the cube (layer caching, like Android).
-    expect(find.byType(RepaintBoundary), findsWidgets,
-        reason: 'iOS must wrap the cube in a RepaintBoundary like Android');
+    // 1. NO compositing boundary (RepaintBoundary/ColorFiltered) wraps the cube
+    //    — that would make Impeller clip the 3D cube in 2D (shrunk, gaps).
+    expect(find.byType(ColorFiltered), findsNothing,
+        reason:
+            'iOS must not flatten the cube (ColorFiltered saveLayer shrinks it)');
 
     // 2. The cube is clipped to its rounded slot, so it cannot bleed into
     //    neighbor tiles or protrude past its bounds (the regression guard).

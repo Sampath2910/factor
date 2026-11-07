@@ -2223,13 +2223,15 @@ class HomeSduiRenderer {
                                   },
                           );
 
-                          // Clip every tile to its slot on both platforms. iOS
-                          // rotating cards turn orthographically, so Impeller
-                          // honors this clip just like Android/Skia.
+                          // Clip every tile to its slot on both platforms. No
+                          // RepaintBoundary here: a compositing boundary would
+                          // force Impeller to clip the rotating 3D cube in 2D
+                          // (shrunk, with gaps). Without it the clip is applied
+                          // at the rasterizer level and clips the live 3D cube
+                          // correctly, matching Android/Skia.
                           return _clipToTileBounds(
                             p.item.component,
-                            RepaintBoundary(
-                                child: SizedBox.expand(child: child)),
+                            SizedBox.expand(child: child),
                             context,
                           );
                         },
@@ -2485,30 +2487,29 @@ class HomeSduiRenderer {
     Widget child, [
     BuildContext? context,
   ]) {
-    // Clip every card to its rounded slot on both platforms. The child is first
-    // flattened (see _flattenForClip) so a rotating cube inside keeps its full
-    // 3D bulge, then a plain antiAlias ClipRRect clips the 2D result. This
-    // contains the cube on iOS/Impeller (Flutter 3.44+, Skia removed) without
-    // the gap that antiAliasWithSaveLayer leaves around the cube. Matches
-    // Android/Skia exactly.
+    // Clip every card to its rounded slot on both platforms with a plain
+    // antiAlias ClipRRect applied directly over the child (NO RepaintBoundary /
+    // saveLayer in between — see the cube clip note in _buildCube). Without a
+    // compositing boundary, Impeller applies this clip at the rasterizer level
+    // and clips the live 3D cube correctly (no gap, no shrink), matching
+    // Android/Skia.
     final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
     if (overflow == 'visible' || overflow == 'none') {
       return child;
     }
 
-    final flattened = _flattenForClip(child);
     final radius = _metroTileRadius(c);
     if (radius > 0) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         clipBehavior: Clip.antiAlias,
-        child: flattened,
+        child: child,
       );
     }
 
     return ClipRect(
       clipBehavior: Clip.antiAlias,
-      child: flattened,
+      child: child,
     );
   }
 
@@ -5127,18 +5128,18 @@ class _RotatingCardState extends State<_RotatingCard>
     );
 
     // Contain the cube to its rounded slot on BOTH platforms WITHOUT distorting
-    // the 3D turn. Two steps:
-    //  1. Flatten the live perspective cube to a 2D raster at its FULL bulged
-    //     extent via an identity ColorFiltered. This forces an offscreen sized
-    //     to the painted (bulging) cube, so the near face keeps its real size.
-    //  2. Clip that 2D raster with a plain antiAlias ClipRRect.
-    // Why not Clip.antiAliasWithSaveLayer: on iOS/Impeller that path renders the
-    // 3D-perspective child shrunk-to-fit, which leaves dark gaps around the cube
-    // (the near face no longer fills the slot) — it does not match Android. A
-    // plain ClipRRect alone does not clip a live 3D child on Impeller (it bleeds
-    // into neighbors). Flattening first, then clipping the 2D texture, gives
-    // Android's exact look: near face fills the slot, overflow clipped, no gap.
-    Widget cube = _flattenForClip(RepaintBoundary(child: cubeStack));
+    // the 3D turn. The clip is a plain antiAlias ClipRRect applied DIRECTLY over
+    // the perspective Stack — crucially with NO RepaintBoundary (and no
+    // saveLayer) between the clip and the cube. A RepaintBoundary (or any
+    // saveLayer, incl. ColorFiltered / Clip.antiAliasWithSaveLayer) forces the
+    // cube into its own composited layer; Impeller then clips that layer in 2D
+    // and renders the 3D-perspective content shrunk-to-fit, leaving dark gaps
+    // around the cube. Without the RepaintBoundary the subtree does not need
+    // compositing, so ClipRRect applies the clip at the rasterizer level
+    // (canvas.clipRRect) and Impeller clips the live 3D cube correctly — the
+    // near face bulges to fill the slot and the overflow is clipped, exactly
+    // like Android/Skia. No gap, no distortion.
+    Widget cube = cubeStack;
     if (radius != null && radius > 0) {
       cube = ClipRRect(
         borderRadius: BorderRadius.circular(radius),
@@ -5445,19 +5446,4 @@ class FaIconAdapter extends StatelessWidget {
   Widget build(BuildContext context) {
     return FaIcon(icon, color: color, size: size);
   }
-}
-
-/// Forces [child] to rasterize into a 2D offscreen at its full painted extent
-/// (including a rotating cube's 3D bulge) via an identity color filter. A plain
-/// ClipRRect placed OVER the result then clips a 2D texture, which Impeller
-/// contains correctly — without the shrink-to-fit distortion that
-/// Clip.antiAliasWithSaveLayer applies to a live 3D-perspective child (which on
-/// iOS/Impeller leaves dark gaps around the cube instead of filling the slot).
-Widget _flattenForClip(Widget child) {
-  return ColorFiltered(
-    // BlendMode.dst keeps the destination (child) pixels unchanged — a true
-    // identity — while still forcing the offscreen that flattens the 3D turn.
-    colorFilter: const ColorFilter.mode(Color(0x00000000), BlendMode.dst),
-    child: child,
-  );
 }
