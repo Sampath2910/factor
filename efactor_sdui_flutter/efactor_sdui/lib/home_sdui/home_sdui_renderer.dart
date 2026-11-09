@@ -4935,7 +4935,7 @@ class _RotatingCardState extends State<_RotatingCard>
     required double faceAngle,
     required double depth,
     required String axis,
-    required double perspective,
+    double perspective = 0.0,
     double containmentScale = 1.0,
     double? centeringOverride,
   }) {
@@ -5090,13 +5090,12 @@ class _RotatingCardState extends State<_RotatingCard>
                   maintainState: true,
                   child: Transform(
                     alignment: Alignment.center,
-                    filterQuality: FilterQuality.low,
                     transform: _cubeFaceTransform(
                       parentAngle: parentAngle,
                       faceAngle: baseAngle,
                       depth: depth,
                       axis: axis,
-                      perspective: effectivePerspective,
+                      perspective: 0.0,
                       containmentScale: containmentScale,
                       centeringOverride: centeringOverride,
                     ),
@@ -5139,7 +5138,23 @@ class _RotatingCardState extends State<_RotatingCard>
     // (canvas.clipRRect) and Impeller clips the live 3D cube correctly — the
     // near face bulges to fill the slot and the overflow is clipped, exactly
     // like Android/Skia. No gap, no distortion.
-    Widget cube = cubeStack;
+    // Camera perspective is applied once as an outer transform over the whole
+    // rotating box, with each face doing only 3D affine rotateY + translateZ.
+    // This cleanly separates the 3D affine object space from the 2D projective
+    // camera, preventing Impeller's projection from distorting individual faces
+    // or de-centering the cube at mid-turn.
+    final outerTransform = Matrix4.identity();
+    if (effectivePerspective > 0) {
+      outerTransform.setEntry(3, 2, -effectivePerspective.abs());
+    }
+
+    final Widget scene = Transform(
+      alignment: Alignment.center,
+      transform: outerTransform,
+      child: cubeStack,
+    );
+
+    Widget cube = scene;
     if (radius != null && radius > 0) {
       cube = ClipRRect(
         borderRadius: BorderRadius.circular(radius),
