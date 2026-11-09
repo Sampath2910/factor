@@ -15,6 +15,7 @@ import WebKit
   private var incomingRingTimer: Timer?
   private var isOngoingCallAudioActive = false
   private var documentInteractionController: UIDocumentInteractionController?
+  private var previewAudioPlayer: AVAudioPlayer?
 
   override func application(
     _ application: UIApplication,
@@ -141,6 +142,49 @@ import WebKit
           return
         }
         self.openFileWithDocumentInteraction(filePath: filePath, result: result)
+      case "saveFileToDownloads":
+        guard let args = call.arguments as? [String: Any],
+              let filePath = args["filePath"] as? String,
+              !filePath.isEmpty else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing or empty filePath", details: nil))
+          return
+        }
+        let fileName = (args["fileName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedFileName = (fileName != nil && !fileName!.isEmpty) ? fileName! : URL(fileURLWithPath: filePath).lastPathComponent
+        let mimeType = (args["mimeType"] as? String) ?? "application/octet-stream"
+        self.saveFileToDocuments(filePath: filePath, fileName: resolvedFileName, mimeType: mimeType, result: result)
+      case "setAppSound":
+        let args = call.arguments as? [String: Any] ?? [:]
+        let kind = args["kind"] as? String ?? "ringtone"
+        let choice = args["choice"] as? String ?? "phone_default"
+        let uri = args["uri"] as? String ?? ""
+        let soundId = args["soundId"] as? String ?? ""
+        UserDefaults.standard.set(choice, forKey: "efactor_sound_\(kind)_choice")
+        UserDefaults.standard.set(uri, forKey: "efactor_sound_\(kind)_uri")
+        UserDefaults.standard.set(soundId, forKey: "efactor_sound_\(kind)_sound_id")
+        result([
+          "changed": true,
+          "kind": kind,
+          "choice": choice
+        ])
+      case "playAppSound":
+        let args = call.arguments as? [String: Any] ?? [:]
+        let kind = args["kind"] as? String ?? "ringtone"
+        self.playAppSound(kind: kind, result: result)
+      case "stopAppSound":
+        self.stopPreviewAudio()
+        result(true)
+      case "pickSystemSound":
+        let args = call.arguments as? [String: Any] ?? [:]
+        let kind = args["kind"] as? String ?? "ringtone"
+        let reqId = args["requestId"] as? String ?? ""
+        result([
+          "requestId": reqId,
+          "kind": kind,
+          "cancelled": true,
+          "unsupported": true,
+          "message": "System ringtone picker is not supported on iOS"
+        ])
       case "startIncomingRing":
         self.startIncomingRing()
         result(true)
@@ -254,6 +298,113 @@ import WebKit
     }
   }
 
+  private func saveFileToDocuments(
+    filePath: String,
+    fileName: String,
+    mimeType: String,
+    result: @escaping FlutterResult
+  ) {
+    guard FileManager.default.fileExists(atPath: filePath) else {
+      result(FlutterError(code: "FILE_NOT_FOUND", message: "Source file does not exist: \(filePath)", details: nil))
+      return
+    }
+
+    do {
+      let docsUrl = try FileManager.default.url(
+        for: .documentDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true
+      )
+      let destUrl = docsUrl.appendingPathComponent(fileName)
+
+      if FileManager.default.fileExists(atPath: destUrl.path) {
+        try FileManager.default.removeItem(at: destUrl)
+      }
+      try FileManager.default.copyItem(at: URL(fileURLWithPath: filePath), to: destUrl)
+
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, let rootVC = self.window?.rootViewController else {
+          result([
+            "success": true,
+            "type": "saved",
+            "localPath": destUrl.path,
+            "fileName": fileName,
+            "mimeType": mimeType
+          ])
+          return
+        }
+
+        // Present UIDocumentPickerViewController in export mode so user can save into Files app
+        if #available(iOS 14.0, *) {
+          let picker = UIDocumentPickerViewController(forExporting: [destUrl], asCopy: true)
+          picker.delegate = self
+          picker.modalPresentationStyle = .formSheet
+          rootVC.present(picker, animated: true) {
+            result([
+              "success": true,
+              "type": "saved",
+              "localPath": destUrl.path,
+              "fileName": fileName,
+              "mimeType": mimeType
+            ])
+          }
+        } else {
+          let activityVC = UIActivityViewController(activityItems: [destUrl], applicationActivities: nil)
+          if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = rootVC.view
+            popover.sourceRect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+          }
+          rootVC.present(activityVC, animated: true) {
+            result([
+              "success": true,
+              "type": "saved",
+              "localPath": destUrl.path,
+              "fileName": fileName,
+              "mimeType": mimeType
+            ])
+          }
+        }
+      }
+    } catch {
+      NSLog("[AppDelegate] saveFileToDocuments error: \(error.localizedDescription)")
+      result(FlutterError(code: "SAVE_FAILED", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func playAppSound(kind: String, result: @escaping FlutterResult) {
+    stopPreviewAudio()
+    let isRingtone = (kind == "ringtone")
+    if isRingtone {
+      if let url = Bundle.main.url(forResource: "call_ringtone", withExtension: "aiff") {
+        do {
+          let session = AVAudioSession.sharedInstance()
+          try session.setCategory(.playback, options: [.duckOthers])
+          try session.setActive(true)
+          let player = try AVAudioPlayer(contentsOf: url)
+          player.numberOfLoops = 0
+          player.play()
+          previewAudioPlayer = player
+          result(true)
+          return
+        } catch {
+          NSLog("[AppDelegate] playAppSound ringtone error: \(error.localizedDescription)")
+        }
+      }
+    } else {
+      AudioServicesPlaySystemSound(1007)
+      result(true)
+      return
+    }
+    result(false)
+  }
+
+  private func stopPreviewAudio() {
+    previewAudioPlayer?.stop()
+    previewAudioPlayer = nil
+  }
+
   private func saveAssetToAlbum(albumName: String, isVideo: Bool, fileUrl: URL?, image: UIImage?, completion: @escaping (Bool, Error?) -> Void) {
     PHPhotoLibrary.requestAuthorization { status in
       guard status == .authorized || status == .limited else {
@@ -277,7 +428,7 @@ import WebKit
             assetPlaceholder = request?.placeholderForCreatedAsset
           } else if let img = image {
             let request = PHAssetChangeRequest.creationRequestForAsset(from: img)
-            assetPlaceholder = request?.placeholderForCreatedAsset
+            assetPlaceholder = request.placeholderForCreatedAsset
           }
 
           if let album = album, let asset = assetPlaceholder {
@@ -406,5 +557,15 @@ extension AppDelegate: UIDocumentInteractionControllerDelegate {
 
   public func documentInteractionControllerDidEndPreview(_ controller: UIDocumentInteractionController) {
     documentInteractionController = nil
+  }
+}
+
+extension AppDelegate: UIDocumentPickerDelegate {
+  public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    NSLog("[AppDelegate] User saved document(s) to: \(urls)")
+  }
+
+  public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    NSLog("[AppDelegate] User cancelled document export picker (file remains in app Documents)")
   }
 }

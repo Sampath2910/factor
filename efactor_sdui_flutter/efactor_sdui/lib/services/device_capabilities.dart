@@ -100,4 +100,26 @@ class DeviceCapabilities {
     }
     return <String, String>{'platform': Platform.operatingSystem};
   }
+
+  /// Whether the platform supports saving files directly to a public Downloads directory.
+  /// On Android, saves to public Downloads folder via MediaStore.
+  /// On iOS, saves to app's Files Documents directory and presents Files document picker.
+  bool get supportsPublicDownloadsDirectory => Platform.isAndroid;
+
+  /// Whether the platform supports a native system sound / ringtone picker.
+  /// Android supports `RingtoneManager.ACTION_RINGTONE_PICKER`.
+  /// iOS has no public API for choosing system ringtones.
+  bool get supportsSystemSoundPicker => Platform.isAndroid;
+
+  /// Whether the platform has system alert window ("Display over other apps") permission.
+  bool get supportsOverlayPermission => Platform.isAndroid;
+
+  /// Whether the platform has OEM autostart settings (Vivo, Xiaomi, etc.).
+  bool get supportsAutostartSettings => Platform.isAndroid;
+
+  /// Whether the platform has battery optimization whitelist (Doze mode exemption).
+  bool get supportsBatteryOptimizationSettings => Platform.isAndroid;
+
+  /// Whether the platform supports full-screen intent permissions (Android 14+).
+  bool get supportsFullScreenIntentSettings => Platform.isAndroid;
 }

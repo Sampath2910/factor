@@ -1717,7 +1717,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   if (!window.CircleConnectPush) {
     window.CircleConnectPush = {};
   }
-  window.CircleConnectPush.systemSoundsSupported = true;
+  window.CircleConnectPush.systemSoundsSupported = ${Platform.isAndroid};
+  window.CircleConnectPush.systemSoundPickerSupported = ${Platform.isAndroid};
+  window.CircleConnectPush.overlayPermissionSupported = ${Platform.isAndroid};
+  window.CircleConnectPush.autostartSettingsSupported = ${Platform.isAndroid};
+  window.CircleConnectPush.batteryOptimizationSupported = ${Platform.isAndroid};
   window.CircleConnectPush.deviceKeySupported = true;
   window.CircleConnectPush.openFileSupported = true;
   window.CircleConnectPush.saveFileSupported = true;
@@ -1746,7 +1750,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
       window.CircleConnectPush = {};
     }
     var api = window.CircleConnectPush;
-    api.systemSoundsSupported = true;
+    api.systemSoundsSupported = ${Platform.isAndroid};
+    api.systemSoundPickerSupported = ${Platform.isAndroid};
+    api.overlayPermissionSupported = ${Platform.isAndroid};
+    api.autostartSettingsSupported = ${Platform.isAndroid};
+    api.batteryOptimizationSupported = ${Platform.isAndroid};
     api.deviceKeySupported = true;
     api.openFileSupported = true;
     api.saveFileSupported = true;
@@ -2355,6 +2363,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         final requestId = data['requestId']?.toString() ?? '';
         final currentUri = data['currentUri']?.toString() ?? '';
         unawaited(() async {
+          if (!Platform.isAndroid) {
+            final errJson = jsonEncode({
+              'requestId': requestId,
+              'cancelled': true,
+              'unsupported': true,
+              'message': 'System sound picker is not supported on iOS',
+            });
+            await _controller.runJavaScript(
+              "window.dispatchEvent(new CustomEvent('circleConnectSoundPicked', { detail: $errJson }));",
+            );
+            return;
+          }
           try {
             const channel = MethodChannel('tech.efactor/circle_connect');
             final result = await channel.invokeMethod<Map<dynamic, dynamic>>(
@@ -3000,41 +3020,43 @@ Error: $error
     if (!file.existsSync()) return;
 
     try {
-      if (Platform.isAndroid) {
-        bool success = false;
-        try {
-          const channel = MethodChannel('tech.efactor/circle_connect');
-          final result =
-              await channel.invokeMethod<bool>('saveFileToDownloads', {
-            'filePath': localPath,
-            'fileName': fileName,
-            'mimeType': mimeType,
-          });
-          success = result ?? false;
-        } catch (e) {
-          debugPrint(
-              '[CircleConnectFiles] native saveFileToDownloads error: $e');
-        }
+      bool success = false;
+      try {
+        const channel = MethodChannel('tech.efactor/circle_connect');
+        final result =
+            await channel.invokeMethod<dynamic>('saveFileToDownloads', {
+          'filePath': localPath,
+          'fileName': fileName,
+          'mimeType': mimeType,
+        });
+        success =
+            result == true || (result is Map && result['success'] == true);
+      } catch (e) {
+        debugPrint(
+            '[CircleConnectFiles] native saveFileToDownloads error: $e');
+      }
 
-        if (!success) {
-          // Fallback to public Download directory
-          final downloadDir = Directory('/storage/emulated/0/Download');
-          if (downloadDir.existsSync()) {
-            final dest = File('${downloadDir.path}/$fileName');
-            file.copySync(dest.path);
-            success = true;
-          }
+      if (!success && Platform.isAndroid) {
+        // Fallback to public Download directory
+        final downloadDir = Directory('/storage/emulated/0/Download');
+        if (downloadDir.existsSync()) {
+          final dest = File('${downloadDir.path}/$fileName');
+          file.copySync(dest.path);
+          success = true;
         }
+      }
 
-        if (mounted && success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(toastMessage),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
+      if (mounted && success) {
+        final message = Platform.isIOS && toastMessage == 'Saved to Downloads'
+            ? 'Saved to Files'
+            : toastMessage;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else if (!success && Platform.isIOS) {
         // iOS: Native Share Sheet with "Save to Files" / "Open With"
         final xfile = XFile(
           localPath,

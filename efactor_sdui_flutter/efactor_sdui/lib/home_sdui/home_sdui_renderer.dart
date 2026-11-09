@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/responsive_util.dart';
+import '../core/theme_controller.dart';
 import '../sdui/schema_guard.dart';
 import '../sdui/schema_runtime.dart';
 import '../sdui/sdui_network_image_cache.dart';
@@ -1013,6 +1015,22 @@ class HomeSduiRenderer {
     );
   }
 
+  /// Maps a schema theme-option `mode` string to the app-wide [AppThemeMode].
+  /// Returns null for unknown values (then only the server-driven path runs).
+  AppThemeMode? _appThemeModeFromString(String mode) {
+    switch (mode.trim().toLowerCase()) {
+      case 'dark':
+        return AppThemeMode.dark;
+      case 'light':
+        return AppThemeMode.light;
+      case 'system':
+      case 'auto':
+        return AppThemeMode.system;
+      default:
+        return null;
+    }
+  }
+
   Widget _themeModeSelector(BuildContext context, Map<String, dynamic> c) {
     final rawOptions = c['options'];
     if (rawOptions is! List || rawOptions.isEmpty) {
@@ -1159,7 +1177,16 @@ class HomeSduiRenderer {
           label: label,
           child: InkWell(
             borderRadius: BorderRadius.circular(rowRadius),
-            onTap: () => state.dispatchAction(actionId),
+            onTap: () {
+              // Keep the existing server-driven behavior, and also sync the
+              // app-wide ThemeController so the Flutter chrome and every other
+              // surface follow the chosen mode.
+              final appMode = _appThemeModeFromString(mode);
+              if (appMode != null) {
+                unawaited(ThemeController.instance.setMode(appMode));
+              }
+              state.dispatchAction(actionId);
+            },
             child: row,
           ),
         ),
