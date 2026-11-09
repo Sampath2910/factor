@@ -904,6 +904,42 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         final background = renderer.tokenColor('colors.pageBackground');
         final textScale = renderer.schemaTextScaleRange();
 
+        final history = state.readState('navigation.history');
+        final hasHistory = history is List && history.isNotEmpty;
+        final onPageBackground =
+            renderer.tokenColor('colors.textPrimary') ??
+            renderer.tokenColor('colors.text') ??
+            const Color(0xFF0F172A);
+
+        final PreferredSizeWidget? appBar = hasHistory
+            ? AppBar(
+                backgroundColor: background,
+                foregroundColor: onPageBackground,
+                elevation: 0,
+                scrolledUnderElevation: 0.5,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back',
+                  onPressed: () async {
+                    if (_isHandlingBack) return;
+                    _isHandlingBack = true;
+                    try {
+                      final handled = await state.back();
+                      if (!handled && context.mounted) {
+                        if (Navigator.of(context).canPop()) {
+                          Navigator.of(context).pop();
+                        }
+                      }
+                    } finally {
+                      if (mounted) {
+                        _isHandlingBack = false;
+                      }
+                    }
+                  },
+                ),
+              )
+            : null;
+
         Widget homeShell = PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, _) async {
@@ -926,8 +962,10 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
           },
           child: Scaffold(
             backgroundColor: background,
+            appBar: appBar,
             body: SafeArea(
               bottom: false,
+              top: !hasHistory,
               child: _buildShellBody(
                 context,
                 state: state,

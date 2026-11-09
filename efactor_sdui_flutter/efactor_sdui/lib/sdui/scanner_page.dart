@@ -257,7 +257,17 @@ class _ScannerPageState extends State<ScannerPage> {
                   controller: _controller,
                   onDetect: _onDetect,
                   errorBuilder: (context, error) {
-                    _error ??= error.errorDetails?.message ?? error.toString();
+                    final isDenied = error.errorCode ==
+                            MobileScannerErrorCode.permissionDenied ||
+                        error.toString().contains('permissionDenied');
+                    if (isDenied) {
+                      return _PermissionDenied(
+                        onOpenSettings: openAppSettings,
+                        onCancel: () => Navigator.of(context).pop(),
+                      );
+                    }
+                    _error ??= error.errorDetails?.message ??
+                        'Unable to access camera. Please restart scanner.';
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
