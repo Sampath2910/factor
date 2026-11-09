@@ -253,7 +253,7 @@ class SchemaRuntime {
       return '$count$separator$unit';
     }
 
-    return '$count UI';
+    return count == 1 ? '1 Control' : '$count Controls';
   }
 
   /// Control ids the published document wants rendered for a page.

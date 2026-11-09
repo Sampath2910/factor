@@ -1281,9 +1281,16 @@ Future<_InfoActionOutcome> _executeInfoAction({
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final backendMessage = _extractHttpErrorMessage(response);
-      final message = backendMessage == null
-          ? 'Request failed with HTTP ${response.statusCode}.'
-          : 'Request failed with HTTP ${response.statusCode}: $backendMessage';
+      final String message;
+      if (backendMessage != null && backendMessage.trim().isNotEmpty) {
+        message = backendMessage.trim();
+      } else if (response.statusCode == 404) {
+        message = 'Device or resource not found. Please try again.';
+      } else if (response.statusCode >= 500) {
+        message = 'Server is currently unavailable. Please try again later.';
+      } else {
+        message = 'Request could not be completed. Please try again.';
+      }
       if (context.mounted) {
         _showSnackBar(context, message, error: true);
       }

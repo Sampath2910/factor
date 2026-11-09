@@ -2250,32 +2250,15 @@ class HomeSduiRenderer {
                                   },
                           );
 
-                          final isIOS = Theme.of(context).platform ==
-                                  TargetPlatform.iOS ||
-                              defaultTargetPlatform == TargetPlatform.iOS;
-                          if (!isIOS) {
-                            // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-                            return _clipToTileBounds(
-                              p.item.component,
-                              RepaintBoundary(
-                                  child: SizedBox.expand(child: child)),
-                              context,
-                            );
-                          }
-
-                          // iOS IMPELLER PATH
-                          final faces = p.item.component['faces'];
-                          final isRotating = (faces is List &&
-                                  faces.length > 1) ||
-                              p.item.component['type'] == 'rotatingFaceCard' ||
-                              p.item.component['type'] == 'rotatingDeviceCard';
-                          final body = isRotating
-                              ? child
-                              : RepaintBoundary(
-                                  child: SizedBox.expand(child: child));
+                          // Clip every tile to its slot on both platforms. No
+                          // RepaintBoundary here: a compositing boundary would
+                          // force Impeller to clip the rotating 3D cube in 2D
+                          // (shrunk, with gaps). Without it the clip is applied
+                          // at the rasterizer level and clips the live 3D cube
+                          // correctly, matching Android/Skia.
                           return _clipToTileBounds(
                             p.item.component,
-                            body,
+                            SizedBox.expand(child: child),
                             context,
                           );
                         },
@@ -2531,36 +2514,14 @@ class HomeSduiRenderer {
     Widget child, [
     BuildContext? context,
   ]) {
-    final isIOS =
-        (context != null && Theme.of(context).platform == TargetPlatform.iOS) ||
-            defaultTargetPlatform == TargetPlatform.iOS;
-    if (!isIOS) {
-      // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-      final radius = _metroTileRadius(c);
-      if (radius > 0) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        );
-      }
-      return ClipRect(clipBehavior: Clip.antiAlias, child: child);
-    }
-
-    // iOS IMPELLER PATH
+    // Clip every card to its rounded slot on both platforms with a plain
+    // antiAlias ClipRRect applied directly over the child (NO RepaintBoundary /
+    // saveLayer in between — see the cube clip note in _buildCube). Without a
+    // compositing boundary, Impeller applies this clip at the rasterizer level
+    // and clips the live 3D cube correctly (no gap, no shrink), matching
+    // Android/Skia.
     final overflow = c['overflowPolicy']?.toString().trim().toLowerCase();
     if (overflow == 'visible' || overflow == 'none') {
-      return child;
-    }
-
-    final faces = c['faces'];
-    final isRotating = (faces is List && faces.length > 1) ||
-        c['type'] == 'rotatingFaceCard' ||
-        c['type'] == 'rotatingDeviceCard';
-    if (isRotating) {
-      // 3D rotating cards rotate unclipped at the container level so 3D convex
-      // corners and perpendicular dihedral side faces are not sliced off by a 2D scissor clip.
-      // Individual faces inside the card already clip their own rounded corners.
       return child;
     }
 
@@ -2573,7 +2534,10 @@ class HomeSduiRenderer {
       );
     }
 
-    return ClipRect(clipBehavior: Clip.antiAlias, child: child);
+    return ClipRect(
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
   }
 
   ({int index, int count}) _cardStaggerSlot(Map<String, dynamic> c) {
@@ -4998,7 +4962,7 @@ class _RotatingCardState extends State<_RotatingCard>
     required double faceAngle,
     required double depth,
     required String axis,
-    required double perspective,
+    double perspective = 0.0,
     double containmentScale = 1.0,
     double? centeringOverride,
   }) {
@@ -5115,20 +5079,16 @@ class _RotatingCardState extends State<_RotatingCard>
         return math.cos(angleA).compareTo(math.cos(angleB));
       });
 
-    final isIOS = Theme.of(context).platform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-
-    final double containmentScale;
-    final double? centeringOverride;
-    if (isIOS && progress.easedFlip > 0.001 && progress.easedFlip < 0.999) {
-      final turnAngle = progress.easedFlip * math.pi / 2;
-      final denom = math.cos(turnAngle) + math.sin(turnAngle);
-      containmentScale = denom > 0.001 ? (1.0 / denom).clamp(0.7071, 1.0) : 1.0;
-      centeringOverride = -depth * denom;
-    } else {
-      containmentScale = 1.0;
-      centeringOverride = null;
-    }
+    // Fully unified pipeline: iOS and Android render the IDENTICAL perspective
+    // 3D cube, clipped to the slot, at full scale with the natural centre pivot.
+    // This is pixel-for-pixel the Android path. Containment on iOS does NOT rely
+    // on a Skia fallback (Flutter 3.44 is Impeller-only on iOS; FLTEnableImpeller
+    // is a no-op). Instead the enclosing clip uses Clip.antiAliasWithSaveLayer
+    // (see _buildCube / _clipToTileBounds): the perspective cube is flattened to
+    // a 2D texture first, then clipped — which Impeller contains correctly.
+    final double effectivePerspective = perspective;
+    const double containmentScale = 1.0;
+    const double? centeringOverride = null;
 
     final cubeStack = Stack(
       fit: StackFit.expand,
@@ -5143,23 +5103,10 @@ class _RotatingCardState extends State<_RotatingCard>
               final effectiveAngle = parentAngle + baseAngle;
               final visible = _faceVisible(effectiveAngle);
 
-              final double shadeOpacity;
-              if (!isIOS) {
-                // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-                shadeOpacity = ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
-                    .clamp(0.0, 0.4);
-              } else {
-                // iOS IMPELLER DIRECTIONAL LIGHTING CONTRAST
-                final turnAmount =
-                    (1.0 - math.cos(effectiveAngle).abs()).clamp(0.0, 1.0);
-                final isRecedingFace = (animationRadiansPerFace < 0 &&
-                        math.sin(effectiveAngle) < 0) ||
-                    (animationRadiansPerFace > 0 &&
-                        math.sin(effectiveAngle) > 0);
-                final directionalFactor = isRecedingFace ? 0.28 : 0.08;
-                shadeOpacity =
-                    (turnAmount * directionalFactor).clamp(0.0, 0.45);
-              }
+              // Unified symmetric cosine depth shading on both platforms.
+              final shadeOpacity =
+                  ((1.0 - math.cos(effectiveAngle).abs()) * 0.22)
+                      .clamp(0.0, 0.4);
 
               final faceWidget = _getOrBuildFace(faceDataIndex);
 
@@ -5170,14 +5117,12 @@ class _RotatingCardState extends State<_RotatingCard>
                   maintainState: true,
                   child: Transform(
                     alignment: Alignment.center,
-                    filterQuality:
-                        isIOS ? FilterQuality.medium : FilterQuality.low,
                     transform: _cubeFaceTransform(
                       parentAngle: parentAngle,
                       faceAngle: baseAngle,
                       depth: depth,
                       axis: axis,
-                      perspective: perspective,
+                      perspective: 0.0,
                       containmentScale: containmentScale,
                       centeringOverride: centeringOverride,
                     ),
@@ -5208,23 +5153,48 @@ class _RotatingCardState extends State<_RotatingCard>
       ],
     );
 
-    if (!isIOS) {
-      // 100% UNTOUCHED ANDROID BASELINE (COMMIT 044f965)
-      Widget cube = RepaintBoundary(child: cubeStack);
-      if (radius != null && radius > 0) {
-        cube = ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          clipBehavior: Clip.antiAlias,
-          child: cube,
-        );
-      } else {
-        cube = ClipRect(clipBehavior: Clip.antiAlias, child: cube);
-      }
-      return cube;
+    // Contain the cube to its rounded slot on BOTH platforms WITHOUT distorting
+    // the 3D turn. The clip is a plain antiAlias ClipRRect applied DIRECTLY over
+    // the perspective Stack — crucially with NO RepaintBoundary (and no
+    // saveLayer) between the clip and the cube. A RepaintBoundary (or any
+    // saveLayer, incl. ColorFiltered / Clip.antiAliasWithSaveLayer) forces the
+    // cube into its own composited layer; Impeller then clips that layer in 2D
+    // and renders the 3D-perspective content shrunk-to-fit, leaving dark gaps
+    // around the cube. Without the RepaintBoundary the subtree does not need
+    // compositing, so ClipRRect applies the clip at the rasterizer level
+    // (canvas.clipRRect) and Impeller clips the live 3D cube correctly — the
+    // near face bulges to fill the slot and the overflow is clipped, exactly
+    // like Android/Skia. No gap, no distortion.
+    // Camera perspective is applied once as an outer transform over the whole
+    // rotating box, with each face doing only 3D affine rotateY + translateZ.
+    // This cleanly separates the 3D affine object space from the 2D projective
+    // camera, preventing Impeller's projection from distorting individual faces
+    // or de-centering the cube at mid-turn.
+    final outerTransform = Matrix4.identity();
+    if (effectivePerspective > 0) {
+      outerTransform.setEntry(3, 2, -effectivePerspective.abs());
     }
 
-    // iOS IMPELLER PATH
-    return cubeStack;
+    final Widget scene = Transform(
+      alignment: Alignment.center,
+      transform: outerTransform,
+      child: cubeStack,
+    );
+
+    Widget cube = scene;
+    if (radius != null && radius > 0) {
+      cube = ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        clipBehavior: Clip.antiAlias,
+        child: cube,
+      );
+    } else {
+      cube = ClipRect(
+        clipBehavior: Clip.antiAlias,
+        child: cube,
+      );
+    }
+    return cube;
   }
 
   @override

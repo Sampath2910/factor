@@ -1829,7 +1829,9 @@ class ParameterCard extends StatelessWidget {
         if (value == 1) return true;
         if (value == 0) return false;
       }
-      final text = value?.toString().trim().toLowerCase();
+      final rawText = value?.toString().trim().toLowerCase();
+      if (rawText == null || rawText.isEmpty) return null;
+      final text = rawText.replaceAll(RegExp(r'[\[\]]'), '').trim();
       if (<String>{'on', 'true', 'yes', '1', '01'}.contains(text)) return true;
       if (<String>{'off', 'false', 'no', '0', '00'}.contains(text)) {
         return false;
@@ -1985,7 +1987,10 @@ class ParameterCard extends StatelessWidget {
       if (label != null && label.toString().trim().isNotEmpty) {
         final labelStr = label.toString().trim();
         if (!RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(labelStr)) {
-          return labelStr;
+          final stripped = labelStr
+              .replaceAll(RegExp(r'^(\[[0-9a-fA-F]{2}\]\s*)+'), '')
+              .trim();
+          return stripped.isNotEmpty ? stripped : labelStr;
         }
       }
     }
@@ -2001,8 +2006,19 @@ class ParameterCard extends StatelessWidget {
           ? number.toInt().toString()
           : number.toString();
     }
-    final text = resolved.toString();
-    if (RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(text.trim())) {
+    final text = resolved.toString().trim();
+    if (RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(text)) {
+      return '';
+    }
+    // Strip leading bracketed hex/bytes prefix e.g. `[00][01] ON` -> `ON`
+    final stripped = text
+        .replaceAll(RegExp(r'^(\[[0-9a-fA-F]{2}\]\s*)+'), '')
+        .trim();
+    if (stripped.isNotEmpty) {
+      return stripped;
+    }
+    // If the text was ONLY a bracketed hex code (e.g. `[00]`), do not show raw hex
+    if (RegExp(r'^\[[0-9a-fA-F]{2}\]$').hasMatch(text)) {
       return '';
     }
     return text;

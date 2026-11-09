@@ -1264,10 +1264,21 @@ class IotSduiState extends ChangeNotifier {
           }
         }
         final backendMessage = _httpFailureMessage(response);
-        final message = backendMessage == null
-            ? 'IoT API "$sourceName" failed with HTTP ${response.statusCode}.'
-            : 'IoT API "$sourceName" failed with HTTP '
-                  '${response.statusCode}: $backendMessage';
+        logDebug(
+          '[IOT_SDUI][HTTP_FAIL] source="$sourceName" status=${response.statusCode} backendMessage="$backendMessage"',
+        );
+        final String message;
+        if (backendMessage != null && backendMessage.trim().isNotEmpty) {
+          message = backendMessage.trim();
+        } else if (response.statusCode == 404) {
+          message = 'Device not found. Please verify the ID and try again.';
+        } else if (response.statusCode == 401 || response.statusCode == 403) {
+          message = 'Session expired. Please log in again.';
+        } else if (response.statusCode >= 500) {
+          message = 'Server is currently unavailable. Please try again later.';
+        } else {
+          message = 'Request could not be completed. Please try again.';
+        }
         return reportError ? _fail(message) : _softFail(message);
       }
 

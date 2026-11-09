@@ -2230,15 +2230,69 @@ class _SchemaQrScannerSheetState extends State<_SchemaQrScannerSheet>
                                     controller: _controller,
                                     onDetect: _onDetect,
                                     errorBuilder: (context, error) {
+                                      final isPermissionDenied =
+                                          error.errorCode ==
+                                              MobileScannerErrorCode
+                                                  .permissionDenied ||
+                                          error
+                                              .toString()
+                                              .contains('permissionDenied');
+                                      if (isPermissionDenied) {
+                                        return Center(
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 24,
+                                            ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.no_photography_outlined,
+                                                  size: 48,
+                                                  color: materialTheme
+                                                      .colorScheme
+                                                      .onInverseSurface
+                                                      .withValues(alpha: 0.7),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                Text(
+                                                  'Camera permission is required to scan QR codes.',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    color: materialTheme
+                                                        .colorScheme
+                                                        .onInverseSurface,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 16),
+                                                FilledButton.icon(
+                                                  onPressed: openAppSettings,
+                                                  icon: const Icon(
+                                                    Icons.settings,
+                                                    size: 18,
+                                                  ),
+                                                  label: const Text(
+                                                    'Open Settings',
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }
                                       return Center(
-                                        child: Text(
-                                          error.errorDetails?.message ??
-                                              error.toString(),
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: materialTheme
-                                                .colorScheme
-                                                .onInverseSurface,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Text(
+                                            'Unable to access camera. Please restart scanner.',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: materialTheme
+                                                  .colorScheme
+                                                  .onInverseSurface,
+                                            ),
                                           ),
                                         ),
                                       );

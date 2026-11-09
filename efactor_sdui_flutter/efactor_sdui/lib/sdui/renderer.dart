@@ -2694,14 +2694,18 @@ class _ApiControlGroup extends StatelessWidget {
     final first = controls.first;
     final rawGroup = first['group'];
     final groupMap = _map(rawGroup);
-    final label =
+    final rawLabel =
         (groupMap['label'] ??
+                first['deviceFrame']?['name'] ??
                 first['parameter'] ??
-                first['parameterName'] ??
-                first['deviceFrame']?['name'])
+                first['parameterName'])
             ?.toString()
             .trim() ??
         '';
+    final label = rawLabel.replaceFirst(
+      RegExp(r'^Page\d+\.\s*', caseSensitive: false),
+      '',
+    );
 
     final designSystem = state
         .schema['extensions']?['universalUi']?['designSystem']?['componentStyles'];
