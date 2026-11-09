@@ -818,74 +818,98 @@ class _PushDiagnosticSheetState extends State<PushDiagnosticSheet> {
                           await _loadDiagnostics();
                         },
                       ),
-                      const Divider(color: borderCol, height: 16),
-                      _buildChecklistRow(
-                        title: 'Display over other apps (Floating Alert)',
-                        granted: _overlayGranted,
-                        onFix: () async {
-                          await CallPermissionHelper.openOverlaySettings();
-                          await Future<void>.delayed(
-                            const Duration(seconds: 1),
-                          );
-                          await _loadDiagnostics();
-                        },
-                      ),
-                      const Divider(color: borderCol, height: 16),
-                      ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                          'Call Channel Settings (calls)',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
+                      if (Platform.isAndroid) ...[
+                        const Divider(color: borderCol, height: 16),
+                        _buildChecklistRow(
+                          title: 'Display over other apps (Floating Alert)',
+                          granted: _overlayGranted,
+                          onFix: () async {
+                            await CallPermissionHelper.openOverlaySettings();
+                            await Future<void>.delayed(
+                              const Duration(seconds: 1),
+                            );
+                            await _loadDiagnostics();
+                          },
                         ),
-                        subtitle: const Text(
-                          'Ensure sound & lock screen banner are turned on',
-                          style: TextStyle(color: Colors.white60, fontSize: 11),
-                        ),
-                        trailing: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: primary,
-                            side: const BorderSide(color: borderCol),
+                        const Divider(color: borderCol, height: 16),
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'Call Channel Settings (calls)',
+                            style: TextStyle(color: Colors.white, fontSize: 13),
                           ),
-                          onPressed: () => CallPermissionHelper
-                              .openCallNotificationChannelSettings(),
-                          child: const Text('Configure'),
-                        ),
-                      ),
-                      const Divider(color: borderCol, height: 16),
-                      _buildChecklistRow(
-                        title: 'Battery Whitelist (Doze Exemption)',
-                        granted: _batteryIgnored,
-                        onFix: () async {
-                          await CallPermissionHelper.requestIgnoreBatteryOptimizations();
-                          await Future<void>.delayed(
-                            const Duration(seconds: 1),
-                          );
-                          await _loadDiagnostics();
-                        },
-                      ),
-                      const Divider(color: borderCol, height: 16),
-                      ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                          'OEM Autostart / Background Run',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                        subtitle: const Text(
-                          'Vivo, Xiaomi, Oppo background wake after swipe',
-                          style: TextStyle(color: Colors.white60, fontSize: 11),
-                        ),
-                        trailing: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: primary,
-                            side: const BorderSide(color: borderCol),
+                          subtitle: const Text(
+                            'Ensure sound & lock screen banner are turned on',
+                            style: TextStyle(color: Colors.white60, fontSize: 11),
                           ),
-                          onPressed: () =>
-                              CallPermissionHelper.openAutostartSettings(),
-                          child: const Text('Open'),
+                          trailing: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: primary,
+                              side: const BorderSide(color: borderCol),
+                            ),
+                            onPressed: () => CallPermissionHelper
+                                .openCallNotificationChannelSettings(),
+                            child: const Text('Configure'),
+                          ),
                         ),
-                      ),
+                        const Divider(color: borderCol, height: 16),
+                        _buildChecklistRow(
+                          title: 'Battery Whitelist (Doze Exemption)',
+                          granted: _batteryIgnored,
+                          onFix: () async {
+                            await CallPermissionHelper.requestIgnoreBatteryOptimizations();
+                            await Future<void>.delayed(
+                              const Duration(seconds: 1),
+                            );
+                            await _loadDiagnostics();
+                          },
+                        ),
+                        const Divider(color: borderCol, height: 16),
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'OEM Autostart / Background Run',
+                            style: TextStyle(color: Colors.white, fontSize: 13),
+                          ),
+                          subtitle: const Text(
+                            'Vivo, Xiaomi, Oppo background wake after swipe',
+                            style: TextStyle(color: Colors.white60, fontSize: 11),
+                          ),
+                          trailing: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: primary,
+                              side: const BorderSide(color: borderCol),
+                            ),
+                            onPressed: () =>
+                                CallPermissionHelper.openAutostartSettings(),
+                            child: const Text('Open'),
+                          ),
+                        ),
+                      ] else ...[
+                        const Divider(color: borderCol, height: 16),
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'iOS Notification & Sound Settings',
+                            style: TextStyle(color: Colors.white, fontSize: 13),
+                          ),
+                          subtitle: const Text(
+                            'Configure alerts, banners, and sounds in iOS Settings',
+                            style: TextStyle(color: Colors.white60, fontSize: 11),
+                          ),
+                          trailing: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: primary,
+                              side: const BorderSide(color: borderCol),
+                            ),
+                            onPressed: openAppSettings,
+                            child: const Text('Configure'),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -596,33 +596,36 @@ class CircleConnectFileService {
     }
 
     final localPath = downloadResult['localPath'] as String;
-    if (Platform.isAndroid) {
-      final effectiveName = (fileName != null && fileName.trim().isNotEmpty)
-          ? _sanitizeFileName(fileName, 'dat')
-          : localPath.split('/').last;
-      final effectiveMime = (mimeType != null && mimeType.trim().isNotEmpty)
-          ? mimeType.trim()
-          : resolveMimeType(effectiveName);
+    final effectiveName = (fileName != null && fileName.trim().isNotEmpty)
+        ? _sanitizeFileName(fileName, 'dat')
+        : localPath.split('/').last;
+    final effectiveMime = (mimeType != null && mimeType.trim().isNotEmpty)
+        ? mimeType.trim()
+        : resolveMimeType(effectiveName);
 
-      try {
-        const channel = MethodChannel('tech.efactor/circle_connect');
-        final success =
-            await channel.invokeMethod<bool>('saveFileToDownloads', {
-          'filePath': localPath,
+    try {
+      const channel = MethodChannel('tech.efactor/circle_connect');
+      final res = await channel.invokeMethod<dynamic>('saveFileToDownloads', {
+        'filePath': localPath,
+        'fileName': effectiveName,
+        'mimeType': effectiveMime,
+      });
+      final isSuccess = res == true || (res is Map && res['success'] == true);
+      if (isSuccess) {
+        final savedPath = (res is Map && res['localPath'] != null)
+            ? res['localPath'].toString()
+            : localPath;
+        return <String, dynamic>{
+          'success': true,
           'fileName': effectiveName,
-          'mimeType': effectiveMime,
-        });
-        if (success == true) {
-          return <String, dynamic>{
-            'success': true,
-            'fileName': effectiveName,
-            'localPath': localPath,
-          };
-        }
-      } catch (e) {
-        debugPrint('[CircleConnectFiles] native saveFileToDownloads error: $e');
+          'localPath': savedPath,
+        };
       }
+    } catch (e) {
+      debugPrint('[CircleConnectFiles] native saveFileToDownloads error: $e');
+    }
 
+    if (Platform.isAndroid) {
       try {
         final downloadDir = Directory('/storage/emulated/0/Download');
         if (downloadDir.existsSync()) {
@@ -641,7 +644,7 @@ class CircleConnectFileService {
         'path': localPath,
       };
     } else {
-      // iOS: Share sheet offers Save to Files
+      // iOS fallback: Share sheet offers Save to Files
       return openFile(
         localPath: localPath,
         mimeType: mimeType,
