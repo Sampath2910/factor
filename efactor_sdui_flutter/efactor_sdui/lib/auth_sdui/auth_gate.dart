@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/app_theme.dart';
+import '../core/theme_controller.dart';
 import '../sdui/schema_pull_to_refresh.dart';
 import '../sdui/sdui_network_image_cache.dart';
 import '../services/app_cache_manager.dart';
@@ -552,9 +554,18 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
     }
 
     return AnimatedBuilder(
-      animation: state,
+      animation: Listenable.merge([state, ThemeController.instance]),
       builder: (context, _) {
         final textTheme = _authTextTheme(state);
+        final lightTheme = AppTheme.light.copyWith(
+          splashFactory: InkRipple.splashFactory,
+          textTheme: textTheme,
+        );
+        final darkTheme = AppTheme.dark.copyWith(
+          splashFactory: InkRipple.splashFactory,
+          textTheme: textTheme,
+        );
+        final themeMode = ThemeController.instance.materialThemeMode;
 
         if (state.isAuthenticated) {
           // Keep the authenticated application inside a MaterialApp.
@@ -562,11 +573,9 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
             title: state.schema['app']?['name']?.toString() ?? '',
             debugShowCheckedModeBanner: false,
             navigatorKey: IncomingCallService.instance.navigatorKey,
-            theme: ThemeData(
-              useMaterial3: true,
-              splashFactory: InkRipple.splashFactory,
-              textTheme: textTheme,
-            ),
+            theme: lightTheme,
+            darkTheme: darkTheme,
+            themeMode: themeMode,
             home: widget.authenticatedBuilder(context, state),
           );
         }
@@ -575,11 +584,9 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
           title: state.schema['app']?['name']?.toString() ?? '',
           debugShowCheckedModeBanner: false,
           navigatorKey: IncomingCallService.instance.navigatorKey,
-          theme: ThemeData(
-            useMaterial3: true,
-            splashFactory: InkRipple.splashFactory,
-            textTheme: textTheme,
-          ),
+          theme: lightTheme,
+          darkTheme: darkTheme,
+          themeMode: themeMode,
           home: AuthRenderer(
             state,
             onPullRefresh: _pullRefreshAuthSchema,

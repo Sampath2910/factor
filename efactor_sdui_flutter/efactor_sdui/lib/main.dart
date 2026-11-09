@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'core/app_theme.dart';
+import 'core/theme_controller.dart';
 import 'auth_sdui/auth_gate.dart';
 import 'auth_sdui/auth_state.dart';
 import 'home_sdui/dynamic_home_sdui_page.dart';
@@ -25,6 +27,9 @@ import 'services/user_location_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Load the persisted theme choice (defaults to dark) before the first frame
+  // so there is no flash of the wrong theme at startup.
+  await ThemeController.instance.load();
   if (kDebugMode) {
     debugPrint = (String? message, {int? wrapWidth}) {
       if (message != null) {
@@ -626,19 +631,25 @@ class ConnectionEntryApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Device Connection',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        splashFactory: InkRipple.splashFactory,
-        textTheme: GoogleFonts.poppinsTextTheme(),
-      ),
-      home: ConnectionEntryScreen(
-        initialModelId: initialModelId,
-        initialNodeId: initialNodeId,
-        onConnect: onConnect,
-        onBack: onBack,
+    return ListenableBuilder(
+      listenable: ThemeController.instance,
+      builder: (context, _) => MaterialApp(
+        title: 'Device Connection',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light.copyWith(
+          textTheme:
+              GoogleFonts.poppinsTextTheme(AppTheme.light.textTheme),
+        ),
+        darkTheme: AppTheme.dark.copyWith(
+          textTheme: GoogleFonts.poppinsTextTheme(AppTheme.dark.textTheme),
+        ),
+        themeMode: ThemeController.instance.materialThemeMode,
+        home: ConnectionEntryScreen(
+          initialModelId: initialModelId,
+          initialNodeId: initialNodeId,
+          onConnect: onConnect,
+          onBack: onBack,
+        ),
       ),
     );
   }
