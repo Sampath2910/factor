@@ -784,6 +784,17 @@ class GridInAppWebViewPage extends StatefulWidget {
 class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     with WidgetsBindingObserver {
   late final WebViewController _controller;
+
+  /// Phase 1 (web-offline-first): when FALSE, the Flutter side no longer
+  /// restores a stripped DOM snapshot while offline. Instead it reloads the
+  /// real origin document so the Circle Connect Service Worker serves the
+  /// cached shell and React reads its own IndexedDB (CircleConnectDB).
+  ///
+  /// The old snapshot path stripped scripts (killing IndexedDB offline) and
+  /// could restore a previous account's HTML, violating account isolation.
+  /// Set this back to TRUE to fully restore the legacy snapshot behavior.
+  static const bool _restoreDomSnapshotOffline = false;
+
   var _loading = true;
   var _showingSnapshot = false;
   String? _error;
@@ -2265,9 +2276,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           unawaited(GridWebSnapshot.saveChannelsSnapshot(html));
         }
       } else if (action == 'recoverOfflineChannels') {
-        final online = await _isOnline();
-        if (!online) {
-          await _tryLoadSnapshot();
+        if (_restoreDomSnapshotOffline) {
+          final online = await _isOnline();
+          if (!online) {
+            await _tryLoadSnapshot();
+          }
         }
       } else if (action == 'switchTab') {
         final tab = data['tab']?.toString().toLowerCase();
@@ -3989,19 +4002,55 @@ Error: $error
     );
 
     if (!online) {
-      debugPrint('[GridInAppWebView] Offline detected during setup -> attempting snapshot restoration');
-      final restored = await _tryLoadSnapshot();
-      if (restored) {
-        debugPrint('[GridInAppWebView] Offline snapshot loaded successfully');
+      if (_restoreDomSnapshotOffline) {
+        // Legacy behavior: restore a stripped DOM snapshot.
+        debugPrint('[GridInAppWebView] Offline detected during setup -> attempting snapshot restoration (legacy)');
+        final restored = await _tryLoadSnapshot();
+        if (restored) {
+          debugPrint('[GridInAppWebView] Offline snapshot loaded successfully');
+          return;
+        }
+
+        debugPrint('[GridInAppWebView] No snapshot available -> presenting offline error state');
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = 'offline';
+        });
         return;
       }
 
-      debugPrint('[GridInAppWebView] No snapshot available -> presenting offline error state');
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = 'offline';
-      });
+      // Offline behavior differs per surface:
+      //
+      // - Circle Connect (chat) has a full in-page offline engine (Service
+      //   Worker + CircleConnectDB/IndexedDB), so we load the real origin
+      //   document and let it render cached chats (WhatsApp-style).
+      //
+      // - Professional Space (and any other web surface) has NO in-page offline
+      //   engine. Loading the live URL offline would just paint a blank page,
+      //   so instead we show a clean "no internet" state (LinkedIn-style).
+      if (!_isCircleConnect) {
+        debugPrint(
+          '[GridInAppWebView] Offline detected on a non-chat surface -> '
+          'showing clean offline state (LinkedIn-style): $_effectiveUri',
+        );
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = 'offline';
+        });
+        return;
+      }
+
+      // Phase 1 (web-offline-first): load the real origin document even while
+      // offline so the Circle Connect Service Worker serves its cached shell
+      // and React reads its own IndexedDB (CircleConnectDB). No DOM snapshot.
+      _showingSnapshot = false;
+      debugPrint(
+        '[GridInAppWebView] Offline detected -> loading live URL so the web '
+        'Service Worker/IndexedDB can serve offline: $_effectiveUri',
+      );
+      await _controller.loadRequest(_effectiveUri, headers: headers);
       return;
     }
     _showingSnapshot = false;
@@ -4172,6 +4221,9 @@ Error: $error
   }
 
   Future<void> _checkAndRecoverOfflineChannels() async {
+    // Phase 1: with the web-offline-first engine we let the page's own Service
+    // Worker / IndexedDB render offline. Do not overwrite it with a snapshot.
+    if (!_restoreDomSnapshotOffline) return;
     try {
       final online = await _isOnline();
       if (online) return;
@@ -4204,12 +4256,14 @@ Error: $error
       // Retain the cached snapshot view; do not overwrite with the error screen
       return;
     }
-    final isExplicitChannels = widget.uri.path.contains('channel') ||
-        widget.uri.fragment.contains('channel') ||
-        widget.uri.query.contains('channel');
-    if (isExplicitChannels) {
-      final restored = await _tryLoadSnapshot();
-      if (restored) return;
+    if (_restoreDomSnapshotOffline) {
+      final isExplicitChannels = widget.uri.path.contains('channel') ||
+          widget.uri.fragment.contains('channel') ||
+          widget.uri.query.contains('channel');
+      if (isExplicitChannels) {
+        final restored = await _tryLoadSnapshot();
+        if (restored) return;
+      }
     }
     if (!mounted) return;
     setState(() {
