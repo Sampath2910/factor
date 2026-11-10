@@ -28,7 +28,7 @@ import WebKit
     application.registerForRemoteNotifications()
 
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
-    if !isBridgeRegistered, let controller = (window?.rootViewController as? FlutterViewController) ?? (topViewController() as? FlutterViewController) {
+    if !isBridgeRegistered, let controller = window?.rootViewController as? FlutterViewController {
       GeneratedPluginRegistrant.register(with: self)
       wifiNativeBridge.register(with: controller.binaryMessenger)
       registerCircleConnectBridge(with: controller.binaryMessenger)
@@ -45,46 +45,6 @@ import WebKit
       registerCircleConnectBridge(with: messenger)
       isBridgeRegistered = true
     }
-  }
-
-  func ensureBridgeRegistered(with messenger: FlutterBinaryMessenger) {
-    guard !isBridgeRegistered else { return }
-    wifiNativeBridge.register(with: messenger)
-    registerCircleConnectBridge(with: messenger)
-    isBridgeRegistered = true
-  }
-
-  private func activeWindow() -> UIWindow? {
-    if let window = self.window {
-      return window
-    }
-    for scene in UIApplication.shared.connectedScenes {
-      if let windowScene = scene as? UIWindowScene {
-        for window in windowScene.windows where window.isKeyWindow {
-          return window
-        }
-        if let first = windowScene.windows.first {
-          return first
-        }
-      }
-    }
-    return nil
-  }
-
-  private func topViewController(base: UIViewController? = nil) -> UIViewController? {
-    let root = base ?? activeWindow()?.rootViewController ?? self.window?.rootViewController
-    guard let currentRoot = root else { return nil }
-
-    if let nav = currentRoot as? UINavigationController {
-      return topViewController(base: nav.visibleViewController ?? nav.topViewController)
-    }
-    if let tab = currentRoot as? UITabBarController {
-      return topViewController(base: tab.selectedViewController)
-    }
-    if let presented = currentRoot.presentedViewController, !presented.isBeingDismissed {
-      return topViewController(base: presented)
-    }
-    return currentRoot
   }
 
   private func registerCircleConnectBridge(with messenger: FlutterBinaryMessenger) {
@@ -317,8 +277,8 @@ import WebKit
     }
 
     DispatchQueue.main.async { [weak self] in
-      guard let self = self, let topVC = self.topViewController() else {
-        result(FlutterError(code: "NO_VIEW_CONTROLLER", message: "No view controller available", details: nil))
+      guard let self = self, let rootVC = self.window?.rootViewController else {
+        result(FlutterError(code: "NO_VIEW_CONTROLLER", message: "No root view controller", details: nil))
         return
       }
 
@@ -331,8 +291,8 @@ import WebKit
         result(["success": true, "type": "preview"])
       } else {
         // If in-app preview is not supported for this specific file, present Open In menu
-        let rect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-        let menuPresented = self.documentInteractionController?.presentOpenInMenu(from: rect, in: topVC.view, animated: true) ?? false
+        let rect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
+        let menuPresented = self.documentInteractionController?.presentOpenInMenu(from: rect, in: rootVC.view, animated: true) ?? false
         result(["success": menuPresented, "type": menuPresented ? "menu" : "failed"])
       }
     }
@@ -358,22 +318,54 @@ import WebKit
       )
       let destUrl = docsUrl.appendingPathComponent(fileName)
 
-      let srcUrl = URL(fileURLWithPath: filePath)
-      if srcUrl.standardizedFileURL.path != destUrl.standardizedFileURL.path {
-        if FileManager.default.fileExists(atPath: destUrl.path) {
-          try FileManager.default.removeItem(at: destUrl)
-        }
-        try FileManager.default.copyItem(at: srcUrl, to: destUrl)
+      if FileManager.default.fileExists(atPath: destUrl.path) {
+        try FileManager.default.removeItem(at: destUrl)
       }
+      try FileManager.default.copyItem(at: URL(fileURLWithPath: filePath), to: destUrl)
 
-      DispatchQueue.main.async {
-        result([
-          "success": true,
-          "type": "saved",
-          "localPath": destUrl.path,
-          "fileName": fileName,
-          "mimeType": mimeType
-        ])
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, let rootVC = self.window?.rootViewController else {
+          result([
+            "success": true,
+            "type": "saved",
+            "localPath": destUrl.path,
+            "fileName": fileName,
+            "mimeType": mimeType
+          ])
+          return
+        }
+
+        // Present UIDocumentPickerViewController in export mode so user can save into Files app
+        if #available(iOS 14.0, *) {
+          let picker = UIDocumentPickerViewController(forExporting: [destUrl], asCopy: true)
+          picker.delegate = self
+          picker.modalPresentationStyle = .formSheet
+          rootVC.present(picker, animated: true) {
+            result([
+              "success": true,
+              "type": "saved",
+              "localPath": destUrl.path,
+              "fileName": fileName,
+              "mimeType": mimeType
+            ])
+          }
+        } else {
+          let activityVC = UIActivityViewController(activityItems: [destUrl], applicationActivities: nil)
+          if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = rootVC.view
+            popover.sourceRect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+          }
+          rootVC.present(activityVC, animated: true) {
+            result([
+              "success": true,
+              "type": "saved",
+              "localPath": destUrl.path,
+              "fileName": fileName,
+              "mimeType": mimeType
+            ])
+          }
+        }
       }
     } catch {
       NSLog("[AppDelegate] saveFileToDocuments error: \(error.localizedDescription)")
@@ -414,48 +406,59 @@ import WebKit
   }
 
   private func saveAssetToAlbum(albumName: String, isVideo: Bool, fileUrl: URL?, image: UIImage?, completion: @escaping (Bool, Error?) -> Void) {
-    let performSaveDirectly = {
-      PHPhotoLibrary.shared().performChanges({
-        if isVideo, let url = fileUrl {
-          _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-        } else if let img = image {
-          _ = PHAssetChangeRequest.creationRequestForAsset(from: img)
+    PHPhotoLibrary.requestAuthorization { status in
+      guard status == .authorized || status == .limited else {
+        completion(false, NSError(domain: "CircleConnect", code: 403, userInfo: [NSLocalizedDescriptionKey: "Photo library access denied"]))
+        return
+      }
+
+      // Find or create named album
+      var albumPlaceholder: PHObjectPlaceholder?
+      let fetchOptions = PHFetchOptions()
+      fetchOptions.predicate = NSPredicate(format: "title = %@", albumName)
+      let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: fetchOptions)
+
+      var targetCollection: PHAssetCollection? = collection.firstObject
+
+      func performSave(to album: PHAssetCollection?) {
+        PHPhotoLibrary.shared().performChanges({
+          var assetPlaceholder: PHObjectPlaceholder?
+          if isVideo, let url = fileUrl {
+            let request = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+            assetPlaceholder = request?.placeholderForCreatedAsset
+          } else if let img = image {
+            // creationRequestForAsset(from:) returns a non-optional
+            // PHAssetChangeRequest on the current Photos SDK, so no optional
+            // chaining here (unlike the video variant above).
+            let request = PHAssetChangeRequest.creationRequestForAsset(from: img)
+            assetPlaceholder = request.placeholderForCreatedAsset
+          }
+
+          if let album = album, let asset = assetPlaceholder {
+            let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
+            albumChangeRequest?.addAssets([asset] as NSArray)
+          }
+        }) { success, error in
+          completion(success, error)
         }
-      }) { success, error in
-        if success {
-          completion(true, nil)
-        } else {
-          // UIKit standard fallback directly to Photos
-          DispatchQueue.main.async {
-            if isVideo, let url = fileUrl, UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(url.path) {
-              UISaveVideoAtPathToSavedPhotosAlbum(url.path, nil, nil, nil)
-              completion(true, nil)
-            } else if let img = image {
-              UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil)
-              completion(true, nil)
-            } else {
-              completion(false, error)
-            }
+      }
+
+      if let target = targetCollection {
+        performSave(to: target)
+      } else {
+        // Create album first
+        PHPhotoLibrary.shared().performChanges({
+          let createAlbumRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: albumName)
+          albumPlaceholder = createAlbumRequest.placeholderForCreatedAssetCollection
+        }) { success, error in
+          if success, let placeholder = albumPlaceholder {
+            let collectionFetch = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
+            performSave(to: collectionFetch.firstObject)
+          } else {
+            // Fallback to saving to camera roll without album
+            performSave(to: nil)
           }
         }
-      }
-    }
-
-    if #available(iOS 14.0, *) {
-      PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-        guard status == .authorized || status == .limited else {
-          completion(false, NSError(domain: "CircleConnect", code: 403, userInfo: [NSLocalizedDescriptionKey: "Photo library access denied"]))
-          return
-        }
-        performSaveDirectly()
-      }
-    } else {
-      PHPhotoLibrary.requestAuthorization { status in
-        guard status == .authorized || status == .limited else {
-          completion(false, NSError(domain: "CircleConnect", code: 403, userInfo: [NSLocalizedDescriptionKey: "Photo library access denied"]))
-          return
-        }
-        performSaveDirectly()
       }
     }
   }
@@ -543,8 +546,7 @@ import WebKit
     _ center: UNUserNotificationCenter,
     openSettingsFor notification: UNNotification?
   ) {
-    let controller = (topViewController() as? FlutterViewController) ?? (window?.rootViewController as? FlutterViewController)
-    if let controller = controller {
+    if let controller = window?.rootViewController as? FlutterViewController {
       let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: controller.binaryMessenger)
       channel.invokeMethod("openSettingsUrl", arguments: ["url": "https://efactor.tech/index.php/grid-chat/settings"])
     }
@@ -553,7 +555,7 @@ import WebKit
 
 extension AppDelegate: UIDocumentInteractionControllerDelegate {
   public func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
-    return topViewController() ?? window?.rootViewController ?? UIViewController()
+    return window?.rootViewController ?? UIViewController()
   }
 
   public func documentInteractionControllerDidEndPreview(_ controller: UIDocumentInteractionController) {
