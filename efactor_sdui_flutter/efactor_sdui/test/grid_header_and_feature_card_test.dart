@@ -166,6 +166,57 @@ void main() {
 
       await state.dispatch('grid-open-scanner');
       expect(scannerOpened, isTrue);
+      expect(state.lastError, isNull);
+    });
+
+    test('GridSduiState dispatches open-url targeting /grid/qr to inAppWebViewOpener', () async {
+      Uri? openedUri;
+      final schema = <String, dynamic>{
+        'actions': <String, dynamic>{
+          'grid-open-qr-link': <String, dynamic>{
+            'type': 'open-url',
+            'url': 'https://efactor.tech/index.php/grid/qr?grid_sso=test123',
+            'title': 'QR Link',
+            'openIn': 'inAppWebView',
+          },
+        },
+      };
+
+      final state = GridSduiState(schema);
+      state.inAppWebViewOpener = (Uri uri, {String? title}) async {
+        openedUri = uri;
+        return true;
+      };
+
+      await state.dispatch('grid-open-qr-link');
+      expect(openedUri, isNotNull);
+      expect(openedUri!.path, '/index.php/grid/qr');
+      expect(state.lastError, isNull);
+    });
+
+    test('GridSduiState dispatches open-url targeting /grid/profile to inAppWebViewOpener', () async {
+      Uri? openedUri;
+      final schema = <String, dynamic>{
+        'actions': <String, dynamic>{
+          'grid-open-profile': <String, dynamic>{
+            'type': 'open-url',
+            'url': 'https://efactor.tech/index.php/grid/profile?grid_sso=profile123',
+            'title': 'Profile',
+            'openIn': 'inAppWebView',
+          },
+        },
+      };
+
+      final state = GridSduiState(schema);
+      state.inAppWebViewOpener = (Uri uri, {String? title}) async {
+        openedUri = uri;
+        return true;
+      };
+
+      await state.dispatch('grid-open-profile');
+      expect(openedUri, isNotNull);
+      expect(openedUri!.path, '/index.php/grid/profile');
+      expect(state.lastError, isNull);
     });
   });
 }

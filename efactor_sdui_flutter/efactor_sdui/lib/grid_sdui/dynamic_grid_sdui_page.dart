@@ -351,10 +351,14 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       ),
     );
 
-    if (!mounted || scan == null) return false;
+    if (!mounted) return false;
+    if (scan == null) {
+      // User closed or cancelled the scanner — completed interaction, not a fatal failure.
+      return true;
+    }
     final rawValue =
         (scan['value'] ?? scan['displayValue'])?.toString().trim() ?? '';
-    if (rawValue.isEmpty) return false;
+    if (rawValue.isEmpty) return true;
 
     // If scanned value is an HTTP/HTTPS URL, open it authenticated in WebView
     final uri = Uri.tryParse(rawValue);
@@ -390,12 +394,6 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
 
   Future<bool> _openInAppWebView(Uri uri, {String? title}) async {
     if (!mounted) return false;
-    final path = uri.path.toLowerCase();
-    if (path.endsWith('/grid/qr') ||
-        path.endsWith('/qr') ||
-        (title ?? '').toLowerCase() == 'scan qr') {
-      return _openNativeScanner();
-    }
     final authenticatedUri = await _repository.resolveAuthenticatedUri(
       uri,
       activeSchema: _state?.schema,

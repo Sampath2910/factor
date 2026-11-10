@@ -306,15 +306,6 @@ class GridSduiState extends ChangeNotifier {
       return;
     }
 
-    final pathLower = uri.path.toLowerCase();
-    if (pathLower.endsWith('/grid/qr') || pathLower.endsWith('/qr')) {
-      final scanner = nativeScannerOpener;
-      if (scanner != null) {
-        final handled = await scanner();
-        if (handled) return;
-      }
-    }
-
     final openIn = (action['openIn']?.toString() ??
             _map(action['destination'])?['openIn']?.toString() ??
             extra?['openIn']?.toString() ??
@@ -345,7 +336,8 @@ class GridSduiState extends ChangeNotifier {
             uri,
             title: title.isEmpty ? null : title,
           );
-        } catch (_) {
+        } catch (e, stack) {
+          debugPrint('[GRID_SDUI] inAppWebViewOpener failed: $e\n$stack');
           opened = false;
         }
       }

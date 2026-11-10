@@ -24,12 +24,18 @@ class GridShellPool {
     if (path.contains('circle') || path.contains('chat')) {
       return '${prefix}circle_connect';
     }
+    if (path.contains('profile')) {
+      return '${prefix}grid_profile';
+    }
+    if (path.endsWith('/qr') || path.contains('/grid/qr')) {
+      return '${prefix}grid_qr';
+    }
     if (path.contains('professional') ||
         path.contains('space') ||
-        path.contains('profile') ||
-        path.endsWith('/grid') ||
-        path.contains('/grid/') ||
-        path.contains('/index.php/grid')) {
+        path == '/grid' ||
+        path == '/grid/' ||
+        path == '/index.php/grid' ||
+        path == '/index.php/grid/') {
       return '${prefix}professional_space';
     }
     return '$prefix${uri.host}_${uri.path}';
