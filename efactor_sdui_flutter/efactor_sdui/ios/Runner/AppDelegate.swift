@@ -28,7 +28,7 @@ import WebKit
     application.registerForRemoteNotifications()
 
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
-    if !isBridgeRegistered, let controller = window?.rootViewController as? FlutterViewController {
+    if !isBridgeRegistered, let controller = (window?.rootViewController as? FlutterViewController) ?? (topViewController() as? FlutterViewController) {
       GeneratedPluginRegistrant.register(with: self)
       wifiNativeBridge.register(with: controller.binaryMessenger)
       registerCircleConnectBridge(with: controller.binaryMessenger)
@@ -45,6 +45,46 @@ import WebKit
       registerCircleConnectBridge(with: messenger)
       isBridgeRegistered = true
     }
+  }
+
+  func ensureBridgeRegistered(with messenger: FlutterBinaryMessenger) {
+    guard !isBridgeRegistered else { return }
+    wifiNativeBridge.register(with: messenger)
+    registerCircleConnectBridge(with: messenger)
+    isBridgeRegistered = true
+  }
+
+  private func activeWindow() -> UIWindow? {
+    if let window = self.window {
+      return window
+    }
+    for scene in UIApplication.shared.connectedScenes {
+      if let windowScene = scene as? UIWindowScene {
+        for window in windowScene.windows where window.isKeyWindow {
+          return window
+        }
+        if let first = windowScene.windows.first {
+          return first
+        }
+      }
+    }
+    return nil
+  }
+
+  private func topViewController(base: UIViewController? = nil) -> UIViewController? {
+    let root = base ?? activeWindow()?.rootViewController ?? self.window?.rootViewController
+    guard let currentRoot = root else { return nil }
+
+    if let nav = currentRoot as? UINavigationController {
+      return topViewController(base: nav.visibleViewController ?? nav.topViewController)
+    }
+    if let tab = currentRoot as? UITabBarController {
+      return topViewController(base: tab.selectedViewController)
+    }
+    if let presented = currentRoot.presentedViewController, !presented.isBeingDismissed {
+      return topViewController(base: presented)
+    }
+    return currentRoot
   }
 
   private func registerCircleConnectBridge(with messenger: FlutterBinaryMessenger) {
@@ -277,8 +317,8 @@ import WebKit
     }
 
     DispatchQueue.main.async { [weak self] in
-      guard let self = self, let rootVC = self.window?.rootViewController else {
-        result(FlutterError(code: "NO_VIEW_CONTROLLER", message: "No root view controller", details: nil))
+      guard let self = self, let topVC = self.topViewController() else {
+        result(FlutterError(code: "NO_VIEW_CONTROLLER", message: "No view controller available", details: nil))
         return
       }
 
@@ -291,8 +331,8 @@ import WebKit
         result(["success": true, "type": "preview"])
       } else {
         // If in-app preview is not supported for this specific file, present Open In menu
-        let rect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
-        let menuPresented = self.documentInteractionController?.presentOpenInMenu(from: rect, in: rootVC.view, animated: true) ?? false
+        let rect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+        let menuPresented = self.documentInteractionController?.presentOpenInMenu(from: rect, in: topVC.view, animated: true) ?? false
         result(["success": menuPresented, "type": menuPresented ? "menu" : "failed"])
       }
     }
@@ -318,13 +358,16 @@ import WebKit
       )
       let destUrl = docsUrl.appendingPathComponent(fileName)
 
-      if FileManager.default.fileExists(atPath: destUrl.path) {
-        try FileManager.default.removeItem(at: destUrl)
+      let srcUrl = URL(fileURLWithPath: filePath)
+      if srcUrl.standardizedFileURL.path != destUrl.standardizedFileURL.path {
+        if FileManager.default.fileExists(atPath: destUrl.path) {
+          try FileManager.default.removeItem(at: destUrl)
+        }
+        try FileManager.default.copyItem(at: srcUrl, to: destUrl)
       }
-      try FileManager.default.copyItem(at: URL(fileURLWithPath: filePath), to: destUrl)
 
       DispatchQueue.main.async { [weak self] in
-        guard let self = self, let rootVC = self.window?.rootViewController else {
+        guard let self = self, let topVC = self.topViewController() else {
           result([
             "success": true,
             "type": "saved",
@@ -340,7 +383,12 @@ import WebKit
           let picker = UIDocumentPickerViewController(forExporting: [destUrl], asCopy: true)
           picker.delegate = self
           picker.modalPresentationStyle = .formSheet
-          rootVC.present(picker, animated: true) {
+          if let popover = picker.popoverPresentationController {
+            popover.sourceView = topVC.view
+            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+          }
+          topVC.present(picker, animated: true) {
             result([
               "success": true,
               "type": "saved",
@@ -352,11 +400,11 @@ import WebKit
         } else {
           let activityVC = UIActivityViewController(activityItems: [destUrl], applicationActivities: nil)
           if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = rootVC.view
-            popover.sourceRect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
+            popover.sourceView = topVC.view
+            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
             popover.permittedArrowDirections = []
           }
-          rootVC.present(activityVC, animated: true) {
+          topVC.present(activityVC, animated: true) {
             result([
               "success": true,
               "type": "saved",
@@ -406,7 +454,7 @@ import WebKit
   }
 
   private func saveAssetToAlbum(albumName: String, isVideo: Bool, fileUrl: URL?, image: UIImage?, completion: @escaping (Bool, Error?) -> Void) {
-    PHPhotoLibrary.requestAuthorization { status in
+    let performAuth: (PHAuthorizationStatus) -> Void = { status in
       guard status == .authorized || status == .limited else {
         completion(false, NSError(domain: "CircleConnect", code: 403, userInfo: [NSLocalizedDescriptionKey: "Photo library access denied"]))
         return
@@ -460,6 +508,12 @@ import WebKit
           }
         }
       }
+    }
+
+    if #available(iOS 14.0, *) {
+      PHPhotoLibrary.requestAuthorization(for: .addOnly, handler: performAuth)
+    } else {
+      PHPhotoLibrary.requestAuthorization(performAuth)
     }
   }
 
@@ -546,7 +600,8 @@ import WebKit
     _ center: UNUserNotificationCenter,
     openSettingsFor notification: UNNotification?
   ) {
-    if let controller = window?.rootViewController as? FlutterViewController {
+    let controller = (topViewController() as? FlutterViewController) ?? (window?.rootViewController as? FlutterViewController)
+    if let controller = controller {
       let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: controller.binaryMessenger)
       channel.invokeMethod("openSettingsUrl", arguments: ["url": "https://efactor.tech/index.php/grid-chat/settings"])
     }
@@ -555,7 +610,7 @@ import WebKit
 
 extension AppDelegate: UIDocumentInteractionControllerDelegate {
   public func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
-    return window?.rootViewController ?? UIViewController()
+    return topViewController() ?? window?.rootViewController ?? UIViewController()
   }
 
   public func documentInteractionControllerDidEndPreview(_ controller: UIDocumentInteractionController) {

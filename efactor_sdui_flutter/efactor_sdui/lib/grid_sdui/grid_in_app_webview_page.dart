@@ -2597,6 +2597,10 @@ Error: $error
     }
   }
 
+  static String get _browserUserAgent => Platform.isIOS
+      ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 EfactorApp'
+      : 'Mozilla/5.0 (Mobile; Android; EfactorApp)';
+
   void _handleCardShare({
     required String title,
     required String text,
@@ -2645,7 +2649,7 @@ Error: $error
             if (cookies.isNotEmpty) 'Cookie': cookies,
             if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
               'Authorization': 'Bearer ${widget.accessToken}',
-            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+            'User-Agent': _browserUserAgent,
           };
           final response =
               await http.get(Uri.parse(targetUrl), headers: headers);
@@ -2726,7 +2730,7 @@ Error: $error
           if (cookies.isNotEmpty) 'Cookie': cookies,
           if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
             'Authorization': 'Bearer ${widget.accessToken}',
-          'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+          'User-Agent': _browserUserAgent,
         };
 
         final tempDir = await getTemporaryDirectory();
@@ -2853,7 +2857,7 @@ Error: $error
             if (cookies.isNotEmpty) 'Cookie': cookies,
             if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
               'Authorization': 'Bearer ${widget.accessToken}',
-            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+            'User-Agent': _browserUserAgent,
           };
 
           final downloadResult =
@@ -2967,7 +2971,7 @@ Error: $error
             if (cookies.isNotEmpty) 'Cookie': cookies,
             if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
               'Authorization': 'Bearer ${widget.accessToken}',
-            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+            'User-Agent': _browserUserAgent,
           };
 
           final downloadResult =
@@ -3448,7 +3452,7 @@ Error: $error
         if (cookies.isNotEmpty) 'Cookie': cookies,
         if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
           'Authorization': 'Bearer ${widget.accessToken}',
-        'User-Agent': 'Mozilla/5.0 (Mobile; Android; EfactorApp)',
+        'User-Agent': _browserUserAgent,
       };
       final response = await http.get(targetUri, headers: headers);
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -3479,15 +3483,28 @@ Error: $error
         }
         final sanitizedFilename =
             filename.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-        final tempDir = await getTemporaryDirectory();
-        final localFile = File('${tempDir.path}/$sanitizedFilename');
+        final targetDir = Platform.isIOS
+            ? await CircleConnectFileService.instance.getDocumentsDirectory()
+            : await getTemporaryDirectory();
+        final localFile = File('${targetDir.path}/$sanitizedFilename');
         await localFile.writeAsBytes(response.bodyBytes);
 
-        final fileUri = Uri.file(localFile.path);
-        try {
-          await launchUrl(fileUri, mode: LaunchMode.externalApplication);
-        } catch (e) {
-          debugPrint('[GridInAppWebView] launchUrl file failed: $e');
+        if (Platform.isIOS) {
+          await CircleConnectFileService.instance.openFile(
+            localPath: localFile.path,
+            fileName: sanitizedFilename,
+          );
+        } else {
+          final fileUri = Uri.file(localFile.path);
+          try {
+            await launchUrl(fileUri, mode: LaunchMode.externalApplication);
+          } catch (e) {
+            debugPrint('[GridInAppWebView] launchUrl file failed: $e');
+            await CircleConnectFileService.instance.openFile(
+              localPath: localFile.path,
+              fileName: sanitizedFilename,
+            );
+          }
         }
       } else {
         debugPrint(

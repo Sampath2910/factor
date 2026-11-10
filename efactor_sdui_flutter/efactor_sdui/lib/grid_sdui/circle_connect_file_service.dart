@@ -134,9 +134,10 @@ class CircleConnectFileService {
       }
       return fallbackDir;
     } else {
-      // iOS: Persistent ApplicationSupport storage (not wiped on OS cache purges)
-      final appSupport = await getApplicationSupportDirectory();
-      final dir = Directory('${appSupport.path}/Media/Documents');
+      // iOS: Save to Documents/ directory so files are accessible to the user in the Files app
+      // (UIFileSharingEnabled and LSSupportsOpeningDocumentsInPlace in Info.plist expose this).
+      final appDoc = await getApplicationDocumentsDirectory();
+      final dir = Directory('${appDoc.path}/Documents');
       if (!dir.existsSync()) {
         dir.createSync(recursive: true);
       }
@@ -272,6 +273,43 @@ class CircleConnectFileService {
           'fileName': hashName,
           'size': hashCandidate.lengthSync(),
         };
+      }
+
+      // On iOS, also check legacy ApplicationSupportDirectory so previously downloaded files remain cached
+      if (Platform.isIOS) {
+        try {
+          final appSupport = await getApplicationSupportDirectory();
+          final legacyDir = Directory('${appSupport.path}/Media/Documents');
+          final legacyCandidate = File('${legacyDir.path}/$effectiveName');
+          if (legacyCandidate.existsSync() && legacyCandidate.lengthSync() > 0) {
+            try {
+              legacyCandidate.copySync(candidate.path);
+              return <String, dynamic>{
+                'isCached': true,
+                'localPath': candidate.path,
+                'fileName': effectiveName,
+                'size': candidate.lengthSync(),
+              };
+            } catch (_) {
+              return <String, dynamic>{
+                'isCached': true,
+                'localPath': legacyCandidate.path,
+                'fileName': effectiveName,
+                'size': legacyCandidate.lengthSync(),
+              };
+            }
+          }
+          final legacyHashCandidate = File('${legacyDir.path}/$hashName');
+          if (legacyHashCandidate.existsSync() &&
+              legacyHashCandidate.lengthSync() > 0) {
+            return <String, dynamic>{
+              'isCached': true,
+              'localPath': legacyHashCandidate.path,
+              'fileName': hashName,
+              'size': legacyHashCandidate.lengthSync(),
+            };
+          }
+        } catch (_) {}
       }
     } catch (e) {
       debugPrint('[CircleConnectFiles] getCachedFile error: $e');
