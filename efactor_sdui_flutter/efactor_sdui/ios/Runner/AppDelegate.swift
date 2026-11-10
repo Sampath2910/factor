@@ -366,54 +366,14 @@ import WebKit
         try FileManager.default.copyItem(at: srcUrl, to: destUrl)
       }
 
-      DispatchQueue.main.async { [weak self] in
-        guard let self = self, let topVC = self.topViewController() else {
-          result([
-            "success": true,
-            "type": "saved",
-            "localPath": destUrl.path,
-            "fileName": fileName,
-            "mimeType": mimeType
-          ])
-          return
-        }
-
-        // Present UIDocumentPickerViewController in export mode so user can save into Files app
-        if #available(iOS 14.0, *) {
-          let picker = UIDocumentPickerViewController(forExporting: [destUrl], asCopy: true)
-          picker.delegate = self
-          picker.modalPresentationStyle = .formSheet
-          if let popover = picker.popoverPresentationController {
-            popover.sourceView = topVC.view
-            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
-          }
-          topVC.present(picker, animated: true) {
-            result([
-              "success": true,
-              "type": "saved",
-              "localPath": destUrl.path,
-              "fileName": fileName,
-              "mimeType": mimeType
-            ])
-          }
-        } else {
-          let activityVC = UIActivityViewController(activityItems: [destUrl], applicationActivities: nil)
-          if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = topVC.view
-            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
-          }
-          topVC.present(activityVC, animated: true) {
-            result([
-              "success": true,
-              "type": "saved",
-              "localPath": destUrl.path,
-              "fileName": fileName,
-              "mimeType": mimeType
-            ])
-          }
-        }
+      DispatchQueue.main.async {
+        result([
+          "success": true,
+          "type": "saved",
+          "localPath": destUrl.path,
+          "fileName": fileName,
+          "mimeType": mimeType
+        ])
       }
     } catch {
       NSLog("[AppDelegate] saveFileToDocuments error: \(error.localizedDescription)")
@@ -454,66 +414,49 @@ import WebKit
   }
 
   private func saveAssetToAlbum(albumName: String, isVideo: Bool, fileUrl: URL?, image: UIImage?, completion: @escaping (Bool, Error?) -> Void) {
-    let performAuth: (PHAuthorizationStatus) -> Void = { status in
-      guard status == .authorized || status == .limited else {
-        completion(false, NSError(domain: "CircleConnect", code: 403, userInfo: [NSLocalizedDescriptionKey: "Photo library access denied"]))
-        return
-      }
-
-      // Find or create named album
-      var albumPlaceholder: PHObjectPlaceholder?
-      let fetchOptions = PHFetchOptions()
-      fetchOptions.predicate = NSPredicate(format: "title = %@", albumName)
-      let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: fetchOptions)
-
-      var targetCollection: PHAssetCollection? = collection.firstObject
-
-      func performSave(to album: PHAssetCollection?) {
-        PHPhotoLibrary.shared().performChanges({
-          var assetPlaceholder: PHObjectPlaceholder?
-          if isVideo, let url = fileUrl {
-            let request = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-            assetPlaceholder = request?.placeholderForCreatedAsset
-          } else if let img = image {
-            // creationRequestForAsset(from:) returns a non-optional
-            // PHAssetChangeRequest on the current Photos SDK, so no optional
-            // chaining here (unlike the video variant above).
-            let request = PHAssetChangeRequest.creationRequestForAsset(from: img)
-            assetPlaceholder = request.placeholderForCreatedAsset
-          }
-
-          if let album = album, let asset = assetPlaceholder {
-            let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
-            albumChangeRequest?.addAssets([asset] as NSArray)
-          }
-        }) { success, error in
-          completion(success, error)
+    let performSaveDirectly = {
+      PHPhotoLibrary.shared().performChanges({
+        if isVideo, let url = fileUrl {
+          _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+        } else if let img = image {
+          _ = PHAssetChangeRequest.creationRequestForAsset(from: img)
         }
-      }
-
-      if let target = targetCollection {
-        performSave(to: target)
-      } else {
-        // Create album first
-        PHPhotoLibrary.shared().performChanges({
-          let createAlbumRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: albumName)
-          albumPlaceholder = createAlbumRequest.placeholderForCreatedAssetCollection
-        }) { success, error in
-          if success, let placeholder = albumPlaceholder {
-            let collectionFetch = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
-            performSave(to: collectionFetch.firstObject)
-          } else {
-            // Fallback to saving to camera roll without album
-            performSave(to: nil)
+      }) { success, error in
+        if success {
+          completion(true, nil)
+        } else {
+          // UIKit standard fallback directly to Photos
+          DispatchQueue.main.async {
+            if isVideo, let url = fileUrl, UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(url.path) {
+              UISaveVideoAtPathToSavedPhotosAlbum(url.path, nil, nil, nil)
+              completion(true, nil)
+            } else if let img = image {
+              UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil)
+              completion(true, nil)
+            } else {
+              completion(false, error)
+            }
           }
         }
       }
     }
 
     if #available(iOS 14.0, *) {
-      PHPhotoLibrary.requestAuthorization(for: .addOnly, handler: performAuth)
+      PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+        guard status == .authorized || status == .limited else {
+          completion(false, NSError(domain: "CircleConnect", code: 403, userInfo: [NSLocalizedDescriptionKey: "Photo library access denied"]))
+          return
+        }
+        performSaveDirectly()
+      }
     } else {
-      PHPhotoLibrary.requestAuthorization(performAuth)
+      PHPhotoLibrary.requestAuthorization { status in
+        guard status == .authorized || status == .limited else {
+          completion(false, NSError(domain: "CircleConnect", code: 403, userInfo: [NSLocalizedDescriptionKey: "Photo library access denied"]))
+          return
+        }
+        performSaveDirectly()
+      }
     }
   }
 

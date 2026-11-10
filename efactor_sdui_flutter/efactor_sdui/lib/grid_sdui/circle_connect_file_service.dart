@@ -134,14 +134,14 @@ class CircleConnectFileService {
       }
       return fallbackDir;
     } else {
-      // iOS: Save to Documents/ directory so files are accessible to the user in the Files app
+      // iOS: Save directly to the App Documents directory so files are accessible to the user
+      // in the Files app under "On My iPhone -> Efactor IoE"
       // (UIFileSharingEnabled and LSSupportsOpeningDocumentsInPlace in Info.plist expose this).
       final appDoc = await getApplicationDocumentsDirectory();
-      final dir = Directory('${appDoc.path}/Documents');
-      if (!dir.existsSync()) {
-        dir.createSync(recursive: true);
+      if (!appDoc.existsSync()) {
+        appDoc.createSync(recursive: true);
       }
-      return dir;
+      return appDoc;
     }
   }
 
@@ -275,9 +275,31 @@ class CircleConnectFileService {
         };
       }
 
-      // On iOS, also check legacy ApplicationSupportDirectory so previously downloaded files remain cached
+      // On iOS, also check legacy subdirectories so previously downloaded files remain cached
       if (Platform.isIOS) {
         try {
+          // Check previous nested Documents/Documents path
+          final nestedDir = Directory('${docDir.path}/Documents');
+          final nestedCandidate = File('${nestedDir.path}/$effectiveName');
+          if (nestedCandidate.existsSync() && nestedCandidate.lengthSync() > 0) {
+            try {
+              nestedCandidate.copySync(candidate.path);
+              return <String, dynamic>{
+                'isCached': true,
+                'localPath': candidate.path,
+                'fileName': effectiveName,
+                'size': candidate.lengthSync(),
+              };
+            } catch (_) {
+              return <String, dynamic>{
+                'isCached': true,
+                'localPath': nestedCandidate.path,
+                'fileName': effectiveName,
+                'size': nestedCandidate.lengthSync(),
+              };
+            }
+          }
+
           final appSupport = await getApplicationSupportDirectory();
           final legacyDir = Directory('${appSupport.path}/Media/Documents');
           final legacyCandidate = File('${legacyDir.path}/$effectiveName');
