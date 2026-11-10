@@ -3228,11 +3228,14 @@ Error: $error
 
       if (action == 'getMedia') {
         final url = data['url']?.toString() ?? '';
-        final localPath =
-            await GridMediaCacheService.instance.getOrDownloadMedia(url);
+        // Returns a URL renderable directly from the https origin:
+        // iOS -> data: URL for cached images (null for uncached/video/audio so
+        // GRID Chat falls back to the remote URL); Android -> on-disk path.
+        final resolved =
+            await GridMediaCacheService.instance.getRenderableMediaUrl(url);
         if (callbackId != null && callbackId.isNotEmpty) {
           final js =
-              'window.__onMediaResolved && window.__onMediaResolved(${jsonEncode(callbackId)}, ${jsonEncode(localPath)});';
+              'window.__onMediaResolved && window.__onMediaResolved(${jsonEncode(callbackId)}, ${jsonEncode(resolved)});';
           await _controller.runJavaScript(js);
         }
       } else if (action == 'saveVoiceNote') {
