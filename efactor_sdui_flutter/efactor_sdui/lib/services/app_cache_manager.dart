@@ -2,9 +2,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../data/schema_repository.dart';
+import '../grid_sdui/grid_in_app_webview_page.dart';
 import '../grid_sdui/grid_live_location_service.dart';
 import '../grid_sdui/grid_schema_repository.dart';
 import '../grid_sdui/grid_shell_pool.dart';
+import '../grid_sdui/grid_web_snapshot.dart';
 import '../home_sdui/home_schema_repository.dart';
 import '../home_sdui/home_sdui_state.dart';
 import '../iot_sdui/iot_schema_repository.dart';
@@ -39,7 +41,19 @@ class AppCacheManager {
   }) async {
     logDebug('[AppCacheManager] Starting comprehensive logout cache cleanup for user=$userId...');
 
-    // 0. Circle Connect device key revocation
+    // 0. Circle Connect offline data and snapshot deletion per FLUTTER_OFFLINE_HANDOFF
+    try {
+      await GridInAppWebViewPage.clearGridChatOfflineDataOnLogout();
+    } catch (e) {
+      logDebug('[AppCacheManager] CircleConnect offline data clear error: $e');
+    }
+    try {
+      await GridWebSnapshot.clearUserSnapshots(userId: userId);
+    } catch (e) {
+      logDebug('[AppCacheManager] CircleConnect user snapshots clear error: $e');
+    }
+
+    // 0b. Circle Connect device key revocation
     try {
       await CircleConnectDeviceKeyStore.instance.revokeOnLogout();
     } catch (e) {

@@ -2,7 +2,7 @@ name: efactor_sdui
 description: Server-driven UI renderer for Efactor Design Studio device schemas (STUDIO_9_7).
 publish_to: "none"
 
-version: 0.1.0+3
+version: 0.1.0+4
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

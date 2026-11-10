@@ -423,6 +423,60 @@ class GridInAppWebViewPage extends StatefulWidget {
 
   /// Currently visible/active WebView instance for Circle Connect & Professional Space.
   static _GridInAppWebViewPageState? _activeState;
+  static Completer<void>? _clearOfflineDataCompleter;
+  static WebViewController? _lastCircleConnectController;
+
+  /// Executes `window.gridChatClearOfflineData()` on the Circle Connect WebView
+  /// and awaits its Promise before native logout clears auth tokens or disposes WebViews.
+  static Future<void> clearGridChatOfflineDataOnLogout({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final controller = _activeState?._controller ?? _lastCircleConnectController;
+    if (controller == null) {
+      debugPrint('[GridInAppWebView] No controller available for gridChatClearOfflineData on logout.');
+      return;
+    }
+
+    final completer = Completer<void>();
+    _clearOfflineDataCompleter = completer;
+
+    const clearJs = '''
+(async function() {
+  try {
+    if (typeof window.gridChatClearOfflineData === 'function') {
+      await window.gridChatClearOfflineData();
+    }
+  } catch (err) {
+    console.error('gridChatClearOfflineData error:', err);
+  } finally {
+    try {
+      if (window.CircleConnectChannelsBridge) {
+        window.CircleConnectChannelsBridge.postMessage(JSON.stringify({
+          action: 'gridChatOfflineDataCleared'
+        }));
+      }
+    } catch (_) {}
+  }
+})();
+''';
+
+    try {
+      await controller.runJavaScript(clearJs);
+      await completer.future.timeout(
+        timeout,
+        onTimeout: () {
+          debugPrint(
+            '[GridInAppWebView] gridChatClearOfflineData timed out after \${timeout.inSeconds}s — continuing logout.',
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('[GridInAppWebView] gridChatClearOfflineData error: $e');
+    } finally {
+      _clearOfflineDataCompleter = null;
+      _lastCircleConnectController = null;
+    }
+  }
 
   /// Returns true if GRID Chat / Circle Connect / Professional Space is currently open in the foreground.
   static bool get isPageOpen =>
@@ -819,6 +873,14 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     WidgetsBinding.instance.addObserver(this);
     _isPopping = false;
     GridInAppWebViewPage._activeState = this;
+    _initController();
+    if (_isCircleConnect) {
+      GridInAppWebViewPage._lastCircleConnectController = _controller;
+    }
+    debugPrint(
+      '[GridInAppWebView] initState: initialized controller for $_effectiveUri '
+      '(isCircleConnect: $_isCircleConnect, userId: ${widget.userId})',
+    );
 
     final isAnswerAction =
         _effectiveUri.queryParameters['call_action'] == 'answer';
@@ -863,7 +925,6 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           'window.CircleConnectFiles && window.CircleConnectFiles._trigger(${jsonEncode(eventName)}, ${jsonEncode(data)});';
       unawaited(_controller.runJavaScript(js));
     };
-    _initController();
     _setupPermissionsAndLoad();
   }
 
@@ -1138,7 +1199,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               _safeExitToGrid();
             }
           },
-          onPageStarted: (_) {
+          onPageStarted: (url) {
+            debugPrint('[GridInAppWebView] onPageStarted: $url');
             if (!mounted) return;
             _webCallUiReady = false;
             _chatUiReady = false;
@@ -1147,12 +1209,23 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               _error = null;
             });
             IncomingCallService.instance.onCircleConnectReadinessChanged();
+            unawaited(() async {
+              final online = await _isOnline();
+              if (!online) {
+                try {
+                  await _controller.runJavaScript(
+                    'window.__GRID_CHAT_OFFLINE_SHELL__ = true;',
+                  );
+                } catch (_) {}
+              }
+            }());
             unawaited(_injectCircleConnectPushBridge());
             unawaited(_injectGridBackButton());
             unawaited(_injectChatSwipeBridge());
             unawaited(_injectScannerBridge());
           },
           onPageFinished: (url) {
+            debugPrint('[GridInAppWebView] onPageFinished: $url');
             if (!mounted) return;
             setState(() {
               _loading = false;
@@ -1194,6 +1267,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             }
           },
           onWebResourceError: (error) {
+            debugPrint(
+              '[GridInAppWebView] onWebResourceError: errorCode=${error.errorCode}, '
+              'errorType=${error.errorType}, desc="${error.description}", '
+              'url="${error.url}", isForMainFrame=${error.isForMainFrame}',
+            );
             if (!mounted) return;
             // A failed image or script must not replace a page that loaded.
             if (error.isForMainFrame == false) return;
@@ -1205,6 +1283,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               );
               return;
             }
+            debugPrint(
+              '[GridInAppWebView] Main frame error (${error.errorCode}): triggering fallback / snapshot recovery',
+            );
             unawaited(_handleLoadFailure(error.description));
             _completeNavigation();
           },
@@ -2173,7 +2254,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     try {
       final data = jsonDecode(rawJson) as Map<String, dynamic>;
       final action = data['action']?.toString();
-      if (action == 'saveChannelsSnapshot') {
+      if (action == 'gridChatOfflineDataCleared') {
+        if (GridInAppWebViewPage._clearOfflineDataCompleter != null &&
+            !GridInAppWebViewPage._clearOfflineDataCompleter!.isCompleted) {
+          GridInAppWebViewPage._clearOfflineDataCompleter!.complete();
+        }
+      } else if (action == 'saveChannelsSnapshot') {
         final html = data['html']?.toString();
         if (html != null && html.length > 64) {
           unawaited(GridWebSnapshot.saveChannelsSnapshot(html));
@@ -3897,26 +3983,20 @@ Error: $error
       if (widget.userId != null) 'X-Efactor-User-Id': widget.userId.toString(),
     };
 
+    debugPrint(
+      '[GridInAppWebView] _setupPermissionsAndLoad: online=$online, uri=$_effectiveUri, '
+      'tokenPresent=${token.isNotEmpty}, userId=${widget.userId}',
+    );
+
     if (!online) {
-      // If the opened URL specifically targets Channels, load the Channels snapshot
-      final isChannelsTarget = widget.uri.path.contains('channel') ||
-          widget.uri.fragment.contains('channel') ||
-          widget.uri.query.contains('channel');
-
-      if (isChannelsTarget) {
-        final restored = await _tryLoadSnapshot();
-        if (restored) return;
-      }
-
-      // For Chats, Moments, Live, and Calls: leave untouched, exactly as they were originally
-      try {
-        _showingSnapshot = false;
-        await _controller.loadRequest(_effectiveUri, headers: headers);
+      debugPrint('[GridInAppWebView] Offline detected during setup -> attempting snapshot restoration');
+      final restored = await _tryLoadSnapshot();
+      if (restored) {
+        debugPrint('[GridInAppWebView] Offline snapshot loaded successfully');
         return;
-      } catch (_) {
-        // If WebView direct load fails offline, fall back to offline state
       }
 
+      debugPrint('[GridInAppWebView] No snapshot available -> presenting offline error state');
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -3925,6 +4005,7 @@ Error: $error
       return;
     }
     _showingSnapshot = false;
+    debugPrint('[GridInAppWebView] Online detected -> loading live URL: $_effectiveUri');
     await _controller.loadRequest(_effectiveUri, headers: headers);
   }
 
@@ -3938,23 +4019,61 @@ Error: $error
     }
   }
 
-  Future<bool> _tryLoadSnapshot() async {
-    // Only load snapshot for Channels page
-    var html = await GridWebSnapshot.readChannelsSnapshot();
-    if (html == null || html.trim().isEmpty) {
-      final isChat = _effectiveUri.path.contains('grid-chat');
-      final fallbackUri = Uri.parse(
-        '${_effectiveUri.origin}/index.php/${isChat ? 'grid-chat' : 'grid'}',
-      );
-      final fallbackHtml = await GridWebSnapshot.read(fallbackUri);
-      if (fallbackHtml != null &&
-          (fallbackHtml.contains('Channels') ||
-              fallbackHtml.contains('Directory'))) {
-        html = fallbackHtml;
+  Future<bool> _tryLoadSnapshot({
+    bool forceChannels = false,
+    bool forceChats = false,
+  }) async {
+    debugPrint(
+      '[GridInAppWebView] _tryLoadSnapshot checking snapshot for: $_effectiveUri '
+      '(userId: ${widget.userId}, forceChannels: $forceChannels, forceChats: $forceChats)',
+    );
+    String? html;
+    final isExplicitChannels = forceChannels ||
+        (!forceChats &&
+            (widget.uri.path.contains('channel') ||
+                widget.uri.fragment.contains('channel') ||
+                widget.uri.query.contains('channel')));
+
+    if (isExplicitChannels) {
+      html = await GridWebSnapshot.readChannelsSnapshot(userId: widget.userId);
+    } else if (_isProfessionalSpace) {
+      html = await GridWebSnapshot.read(_effectiveUri, userId: widget.userId);
+      if (html == null || html.trim().isEmpty) {
+        html = await GridWebSnapshot.readProfessionalSpaceSnapshot(
+          userId: widget.userId,
+        );
+      }
+    } else {
+      // 1. Try URI-specific snapshot
+      html = await GridWebSnapshot.read(_effectiveUri, userId: widget.userId);
+      // 2. If not found or if chat, read chat snapshot
+      if (html == null || html.trim().isEmpty) {
+        final isChat = _isCircleConnect ||
+            _effectiveUri.path.contains('grid-chat') ||
+            _effectiveUri.path.contains('chat');
+        if (isChat || forceChats) {
+          html = await GridWebSnapshot.readChatSnapshot(userId: widget.userId);
+        } else {
+          html = await GridWebSnapshot.readChannelsSnapshot(
+            userId: widget.userId,
+          );
+        }
       }
     }
-    if (html == null || html.trim().isEmpty) return false;
-    final interactive = GridWebSnapshot.ensureInteractive(html);
+
+    if (html == null || html.trim().isEmpty) {
+      debugPrint(
+        '[GridInAppWebView] Snapshot check: No snapshot found on disk for user ${widget.userId}',
+      );
+      return false;
+    }
+    debugPrint(
+      '[GridInAppWebView] Snapshot check: Found snapshot (${html.length} chars) for user ${widget.userId} -> loading interactive HTML string',
+    );
+    final interactive = GridWebSnapshot.ensureInteractive(
+      html,
+      isOffline: true,
+    );
     _showingSnapshot = true;
     await _controller.loadHtmlString(
       interactive,
@@ -3973,7 +4092,7 @@ Error: $error
       final online = await _isOnline();
       if (!online) return;
 
-      // Verify that the current view is specifically the Channels page
+      // Detect Channels vs Chats view
       const detectChannelsJs = '''
 (function() {
   try {
@@ -3990,10 +4109,6 @@ Error: $error
       final isChannelsRaw =
           await _controller.runJavaScriptReturningResult(detectChannelsJs);
       final isChannels = isChannelsRaw.toString().trim() == 'true';
-      if (!isChannels) {
-        // As requested by user, offline snapshotting is targeted ONLY for the Channels page
-        return;
-      }
 
       const bundleCssJs = '''
 (function() {
@@ -4036,8 +4151,21 @@ Error: $error
       final html = _unwrapJsString(raw);
       if (html == null || html.length < 64) return;
 
-      await GridWebSnapshot.saveChannelsSnapshot(html);
-      await GridWebSnapshot.save(_effectiveUri, html);
+      if (isChannels) {
+        await GridWebSnapshot.saveChannelsSnapshot(html, userId: widget.userId);
+      } else if (_isCircleConnect) {
+        await GridWebSnapshot.saveChatSnapshot(html, userId: widget.userId);
+      } else if (_isProfessionalSpace) {
+        await GridWebSnapshot.saveProfessionalSpaceSnapshot(
+          html,
+          userId: widget.userId,
+        );
+      }
+      await GridWebSnapshot.save(
+        _effectiveUri,
+        html,
+        userId: widget.userId,
+      );
     } catch (e) {
       debugPrint('[GridInAppWebView] Snapshot save failed: $e');
     }
@@ -4149,142 +4277,268 @@ Error: $error
     await _setupPermissionsAndLoad();
   }
 
+  Widget _buildLoadingState(BuildContext context) {
+    final spaceName = widget.title?.trim().isNotEmpty == true
+        ? widget.title!.trim()
+        : (_isCircleConnect ? 'Circle Connect' : 'GRID');
+
+    return Container(
+      color: const Color(0xFF0F172A),
+      width: double.infinity,
+      height: double.infinity,
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF1E293B),
+                  border: Border.all(
+                    color: const Color(0xFF38BDF8).withValues(alpha: 0.35),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF38BDF8).withValues(alpha: 0.18),
+                      blurRadius: 24,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(0xFF38BDF8),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Loading $spaceName...',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  letterSpacing: -0.2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Connecting to live space...',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF94A3B8),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: 140,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: const LinearProgressIndicator(
+                    minHeight: 3,
+                    backgroundColor: Color(0xFF1E293B),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFF38BDF8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextButton.icon(
+                onPressed: _handleBackPress,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF64748B),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                label: const Text(
+                  'Cancel',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildOfflineState(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final spaceName = widget.title?.trim().isNotEmpty == true
         ? widget.title!.trim()
-        : 'Circle Connect';
+        : (_isCircleConnect ? 'Circle Connect' : 'GRID');
 
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            // Stylized offline badge with cloud / wifi-off
-            Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isDark
-                      ? const [Color(0xFF1E293B), Color(0xFF0F172A)]
-                      : const [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+    final isOffline = _error == null ||
+        _error == 'offline' ||
+        _error!.toLowerCase().contains('offline') ||
+        _error!.toLowerCase().contains('internet_disconnected') ||
+        _error!.toLowerCase().contains('network_changed');
+
+    final title = isOffline
+        ? 'Internet Connection Required'
+        : 'Unable to Load $spaceName';
+
+    final message = isOffline
+        ? '$spaceName is a live cloud space. An active internet connection is required to load live updates, messages, and calls directly from the server.'
+        : 'Could not connect to $spaceName (${_error ?? "Network error"}). Please check your connection and tap Try Again.';
+
+    return Container(
+      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      width: double.infinity,
+      height: double.infinity,
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              // Stylized offline badge with cloud / wifi-off
+              Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? const [Color(0xFF1E293B), Color(0xFF0F172A)]
+                        : const [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.18),
+                      blurRadius: 28,
+                      spreadRadius: 6,
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF4F46E5).withValues(alpha: 0.18),
-                    blurRadius: 28,
-                    spreadRadius: 6,
-                  ),
-                ],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: <Widget>[
-                  Icon(
-                    Icons.cloud_off_rounded,
-                    size: 52,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF4F46E5),
-                  ),
-                  Positioned(
-                    right: 22,
-                    bottom: 22,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color:
-                              isDark ? const Color(0xFF0F172A) : Colors.white,
-                          width: 2,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: <Widget>[
+                    Icon(
+                      isOffline
+                          ? Icons.cloud_off_rounded
+                          : Icons.error_outline_rounded,
+                      size: 52,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF4F46E5),
+                    ),
+                    Positioned(
+                      right: 22,
+                      bottom: 22,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color:
+                                isDark ? const Color(0xFF0F172A) : Colors.white,
+                            width: 2,
+                          ),
+                        ),
+                        child: Icon(
+                          isOffline
+                              ? Icons.wifi_off_rounded
+                              : Icons.warning_rounded,
+                          size: 14,
+                          color: Colors.white,
                         ),
                       ),
-                      child: const Icon(
-                        Icons.wifi_off_rounded,
-                        size: 14,
-                        color: Colors.white,
-                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            // Title
-            Text(
-              'Internet Connection Required',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : const Color(0xFF1E293B),
-                letterSpacing: -0.3,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 10),
-            // User-friendly warm message
-            Text(
-              '$spaceName is a live cloud space. An active internet connection is required to load live updates, messages, and calls directly from the server.',
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.5,
-                color:
-                    isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 28),
-            // Retry button
-            FilledButton.icon(
-              onPressed: _retry,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF4F46E5),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 14,
+                  ],
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 2,
               ),
-              icon: const Icon(Icons.refresh_rounded, size: 20),
-              label: const Text(
-                'Try Again',
+              const SizedBox(height: 24),
+              // Title
+              Text(
+                title,
                 style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  letterSpacing: -0.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              // User-friendly warm message
+              Text(
+                message,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color:
+                      isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              // Retry button
+              FilledButton.icon(
+                onPressed: _retry,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 2,
+                ),
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                label: const Text(
+                  'Try Again',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            // Back to app button
-            TextButton.icon(
-              onPressed: _handleBackPress,
-              style: TextButton.styleFrom(
-                foregroundColor:
-                    isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
+              const SizedBox(height: 10),
+              // Back to app button
+              TextButton.icon(
+                onPressed: _handleBackPress,
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text(
+                  'Back to Efactor',
+                  style: TextStyle(fontSize: 14),
                 ),
               ),
-              icon: const Icon(Icons.arrow_back_rounded, size: 18),
-              label: const Text(
-                'Back to Efactor',
-                style: TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -4338,8 +4592,71 @@ Error: $error
                 )
               else
                 _buildOfflineState(context),
-              if (_loading && _error == null)
-                const LinearProgressIndicator(minHeight: 2),
+              if (_loading && !_showingSnapshot && _error == null)
+                _buildLoadingState(context),
+              if (_loading && _showingSnapshot && _error == null)
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: LinearProgressIndicator(minHeight: 2),
+                ),
+              if (_showingSnapshot && _error == null)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xF00F172A),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x33000000),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.cloud_off_rounded,
+                          size: 14,
+                          color: Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Waiting for network • Offline mode (showing cached data)',
+                          style: TextStyle(
+                            color: Color(0xFFCBD5E1),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        InkWell(
+                          onTap: _retry,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Icon(
+                              Icons.refresh_rounded,
+                              size: 14,
+                              color: Color(0xFF38BDF8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (!widget.showAppBar && _isCircleConnect)
                 Positioned(
                   top: 0,

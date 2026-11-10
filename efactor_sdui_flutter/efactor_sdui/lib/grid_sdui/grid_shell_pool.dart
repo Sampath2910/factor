@@ -56,22 +56,31 @@ class GridShellPool {
     final key = _poolKey(uri, userId: userId);
     final created = _shellCreationTimes[key];
     if (created != null && DateTime.now().difference(created) > maxAge) {
+      debugPrint('[GridShellPool] Shell expired for key=$key -> evicting');
       _warmedShells.remove(key);
       _shellCreationTimes.remove(key);
     }
     _shellCreationTimes.putIfAbsent(key, DateTime.now);
+    final isCached = _warmedShells.containsKey(key);
+    debugPrint(
+      '[GridShellPool] getOrCreateWarmShell: key=$key, isCached=$isCached, userId=$userId',
+    );
     return _warmedShells.putIfAbsent(key, shellBuilder);
   }
 
   /// Removes a shell from the pool when its route is popped and disposed.
   void removeShell(Uri uri, {int? userId}) {
     final key = _poolKey(uri, userId: userId);
+    debugPrint('[GridShellPool] removeShell: key=$key');
     _warmedShells.remove(key);
     _shellCreationTimes.remove(key);
   }
 
   /// Clears the warmed shells when logging out.
   void clearAll() {
+    debugPrint(
+      '[GridShellPool] clearAll: evicting ${_warmedShells.length} warmed shells',
+    );
     _warmedShells.clear();
     _shellCreationTimes.clear();
   }

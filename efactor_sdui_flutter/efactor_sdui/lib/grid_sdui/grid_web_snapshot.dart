@@ -9,13 +9,23 @@ import '../services/schema_offline.dart';
 /// finished, with scripts removed so the saved view does not immediately
 /// try to boot the live app and fail offline.
 class GridWebSnapshot {
-  static String fileNameFor(Uri uri) {
+  static String chatSnapshotFileNameFor(int? userId) =>
+      userId != null ? 'web_snapshot_chat_user_$userId.html' : 'web_snapshot_chat.html';
+
+  static String channelsSnapshotFileNameFor(int? userId) =>
+      userId != null ? 'web_snapshot_channels_user_$userId.html' : 'web_snapshot_channels_v3.html';
+
+  static String professionalSpaceSnapshotFileNameFor(int? userId) =>
+      userId != null ? 'web_snapshot_professional_space_user_$userId.html' : 'web_snapshot_professional_space.html';
+
+  static String fileNameFor(Uri uri, {int? userId}) {
     var stable = uri.replace(query: '', fragment: '').toString();
     while (stable.contains('/index.php/index.php/')) {
       stable = stable.replaceAll('/index.php/index.php/', '/index.php/');
     }
     final canonical = stable.replaceAll('/index.php/', '/');
-    return 'web_snapshot_${_hash(canonical)}.html';
+    final prefix = userId != null ? 'user_${userId}_' : '';
+    return 'web_snapshot_$prefix${_hash(canonical)}.html';
   }
 
   static String normalizeHtml(String html) {
@@ -40,7 +50,7 @@ class GridWebSnapshot {
     return text;
   }
 
-  static Future<void> save(Uri uri, String html) async {
+  static Future<void> save(Uri uri, String html, {int? userId}) async {
     final normalized = normalizeHtml(html).trim();
     if (normalized.length < 64) return;
     final lower = normalized.toLowerCase();
@@ -49,23 +59,27 @@ class GridWebSnapshot {
         lower.contains('internet connection required')) {
       return;
     }
-    await SchemaDiskCache.writeString(fileNameFor(uri), normalized);
+    await SchemaDiskCache.writeString(fileNameFor(uri, userId: userId), normalized);
   }
 
-  static Future<String?> read(Uri uri) async {
-    final primary = await SchemaDiskCache.readString(fileNameFor(uri));
+  static Future<String?> read(Uri uri, {int? userId}) async {
+    final primary = await SchemaDiskCache.readString(fileNameFor(uri, userId: userId));
     if (primary != null && primary.trim().isNotEmpty) {
       return normalizeHtml(primary);
     }
 
     final stable = uri.replace(query: '', fragment: '').toString();
-    final fallback = await SchemaDiskCache.readString('web_snapshot_${_hash(stable)}.html');
+    final fallback = await SchemaDiskCache.readString(
+      userId != null
+          ? 'web_snapshot_user_${userId}_${_hash(stable)}.html'
+          : 'web_snapshot_${_hash(stable)}.html',
+    );
     return fallback != null ? normalizeHtml(fallback) : null;
   }
 
   static const String channelsSnapshotFileName = 'web_snapshot_channels_v3.html';
 
-  static Future<void> saveChannelsSnapshot(String html) async {
+  static Future<void> saveChannelsSnapshot(String html, {int? userId}) async {
     final normalized = normalizeHtml(html).trim();
     if (normalized.length < 64) return;
     final lower = normalized.toLowerCase();
@@ -79,11 +93,15 @@ class GridWebSnapshot {
     if (!normalized.contains('Channels') && !normalized.contains('channel')) {
       return;
     }
-    await SchemaDiskCache.writeString(channelsSnapshotFileName, normalized);
+    await SchemaDiskCache.writeString(channelsSnapshotFileNameFor(userId), normalized);
+    if (userId == null) {
+      await SchemaDiskCache.writeString(channelsSnapshotFileName, normalized);
+    }
   }
 
-  static Future<String?> readChannelsSnapshot() async {
-    final raw = await SchemaDiskCache.readString(channelsSnapshotFileName);
+  static Future<String?> readChannelsSnapshot({int? userId}) async {
+    final raw = await SchemaDiskCache.readString(channelsSnapshotFileNameFor(userId)) ??
+        (userId != null ? await SchemaDiskCache.readString(channelsSnapshotFileName) : null);
     if (raw != null && raw.trim().length >= 64) {
       final clean = normalizeHtml(raw);
       // Strictly verify it is the actual Channels page with channels cards
@@ -97,6 +115,68 @@ class GridWebSnapshot {
       }
     }
     return getFallbackChannelsHtml();
+  }
+
+  static Future<void> saveChatSnapshot(String html, {int? userId}) async {
+    final normalized = normalizeHtml(html).trim();
+    if (normalized.length < 64) return;
+    final lower = normalized.toLowerCase();
+    if (lower.contains('err_internet_disconnected') ||
+        lower.contains('network error') ||
+        lower.contains('internet connection required')) {
+      return;
+    }
+    await SchemaDiskCache.writeString(chatSnapshotFileNameFor(userId), normalized);
+    if (userId == null) {
+      await SchemaDiskCache.writeString('web_snapshot_chat.html', normalized);
+    }
+  }
+
+  static Future<String?> readChatSnapshot({int? userId}) async {
+    final raw = await SchemaDiskCache.readString(chatSnapshotFileNameFor(userId)) ??
+        (userId != null ? await SchemaDiskCache.readString('web_snapshot_chat.html') : null);
+    if (raw != null && raw.trim().length >= 64) {
+      return normalizeHtml(raw);
+    }
+    return null;
+  }
+
+  static Future<void> saveProfessionalSpaceSnapshot(String html, {int? userId}) async {
+    final normalized = normalizeHtml(html).trim();
+    if (normalized.length < 64) return;
+    final lower = normalized.toLowerCase();
+    if (lower.contains('err_internet_disconnected') ||
+        lower.contains('network error') ||
+        lower.contains('internet connection required')) {
+      return;
+    }
+    await SchemaDiskCache.writeString(professionalSpaceSnapshotFileNameFor(userId), normalized);
+    if (userId == null) {
+      await SchemaDiskCache.writeString('web_snapshot_professional_space.html', normalized);
+    }
+  }
+
+  static Future<String?> readProfessionalSpaceSnapshot({int? userId}) async {
+    final raw = await SchemaDiskCache.readString(professionalSpaceSnapshotFileNameFor(userId)) ??
+        (userId != null ? await SchemaDiskCache.readString('web_snapshot_professional_space.html') : null);
+    if (raw != null && raw.trim().length >= 64) {
+      return normalizeHtml(raw);
+    }
+    return null;
+  }
+
+  /// Clears user-scoped snapshots from disk on logout.
+  static Future<void> clearUserSnapshots({int? userId}) async {
+    try {
+      if (userId != null) {
+        await SchemaDiskCache.remove(chatSnapshotFileNameFor(userId));
+        await SchemaDiskCache.remove(channelsSnapshotFileNameFor(userId));
+        await SchemaDiskCache.remove(professionalSpaceSnapshotFileNameFor(userId));
+      }
+      await SchemaDiskCache.remove('web_snapshot_chat.html');
+      await SchemaDiskCache.remove('web_snapshot_channels_v3.html');
+      await SchemaDiskCache.remove('web_snapshot_professional_space.html');
+    } catch (_) {}
   }
 
   static Future<bool> hasChannelsSnapshot() async {
@@ -291,8 +371,18 @@ class GridWebSnapshot {
 
   /// Ensures that navigation between Chats, Moments, Live, Calls, and subtabs
   /// works smoothly and never freezes or gets stuck.
-  static String ensureInteractive(String html) {
+  static String ensureInteractive(String html, {bool isOffline = false}) {
     var clean = stripScripts(html);
+
+    if (isOffline) {
+      const offlineFlag =
+          '<script>window.__GRID_CHAT_OFFLINE_SHELL__ = true;</script>';
+      if (clean.contains('<head>')) {
+        clean = clean.replaceFirst('<head>', '<head>$offlineFlag');
+      } else {
+        clean = '$offlineFlag$clean';
+      }
+    }
 
     const interactiveScript = '''
 <script>
