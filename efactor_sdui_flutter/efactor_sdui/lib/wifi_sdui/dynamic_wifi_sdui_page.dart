@@ -48,6 +48,11 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
   String _screenId = '';
   bool _busy = false;
   bool _onlineConfirmed = false;
+
+  /// The exact node id handed to the device at provisioning start. This is the
+  /// ONLY id the cloud confirmation is allowed to match against, so a provision
+  /// can never be "confirmed" by some other already-online device.
+  String _provisionTargetNodeId = '';
   String? _errorCode;
   String? _errorMessage;
 
@@ -1105,6 +1110,31 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     if (routerSsid.isEmpty) {
       throw StateError('A router must be selected before provisioning.');
     }
+
+    // Reject an empty password on a secured network: the device would silently
+    // fail to join the router and never report to the cloud (the exact
+    // "steps complete but nothing reaches the server" symptom). Open networks
+    // legitimately carry an empty password.
+    final isOpenNetwork = _selectedRouter?.isOpen == true;
+    if (!isOpenNetwork && password.isEmpty) {
+      throw StateError(
+        'A Wi-Fi password is required for the secured network "$routerSsid".',
+      );
+    }
+
+    // Provisioning session security scheme. No longer hard-coded: the schema
+    // may override it (SEC0/SEC1/SEC2) to match the device firmware; default
+    // SEC1 (POP-based), consistent with the required device POP.
+    final security = (_resolveRuntimeExpression(arguments['security']) ??
+                _runtimeValue('security'))
+            ?.toString()
+            .trim()
+            .toUpperCase() ??
+        '';
+    final provisionSecurity = security.isNotEmpty ? security : 'SEC1';
+
+    // Capture the authoritative match target BEFORE touching the network.
+    _provisionTargetNodeId = nodeId;
     // Do not require a Flutter-side SoftAP scan/selection before provisioning.
     // The authoritative eFactor library owns its device discovery/connection
     // sequence. Requiring _deviceSoftAp here can strand the UI forever on the
@@ -1138,9 +1168,10 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
       await _cloud.setProvisionStarted(true);
 
       debugPrint(
-        '[SDUI][WiFi] provStart router=$routerSsid popLen=${pop.length} '
-        'user=$userName platform=$defaultTargetPlatform '
-        '(client_test-aligned iOS SoftAP path)',
+        '[SDUI][WiFi][DIAG] provStart target_nodeId=$nodeId popLen=${pop.length} '
+        'user=$userName router=$routerSsid security=$provisionSecurity '
+        'passLen=${password.length} open=$isOpenNetwork '
+        'platform=$defaultTargetPlatform',
       );
 
       _lastProvisionParams = <String, String>{
@@ -1149,6 +1180,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
         'userName': userName,
         'routerSsid': routerSsid,
         'password': password,
+        'security': provisionSecurity,
       };
 
       if (defaultTargetPlatform == TargetPlatform.iOS) {
@@ -1162,7 +1194,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
           userName: userName,
           ssid: routerSsid,
           password: password,
-          security: 'SEC1',
+          security: provisionSecurity,
         );
       }
     }, keepBusyOnSuccess: true);
@@ -1220,7 +1252,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
           userName: params['userName']!,
           ssid: params['routerSsid']!,
           password: params['password']!,
-          security: 'SEC1',
+          security: params['security'] ?? 'SEC1',
         );
         debugPrint(
           '[SDUI][WiFi][iOS] provStart method call initiated on attempt #$_iosProvisionAttempt of $_kMaxProvisionAttempts. '
@@ -1446,6 +1478,11 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     // APPLIED_UNCONFIRMED = credentials were applied and the device left
     // SoftAP before local confirmation. This is explicitly NOT a failure.
     // Both continue on the existing automatic cloud-confirmation path.
+    debugPrint(
+      '[SDUI][WiFi][DIAG] terminal status=${event.status.name} '
+      'code=${event.code ?? "-"} detail=${event.detail ?? "-"} '
+      '-> cloud confirm for node="$_provisionTargetNodeId"',
+    );
     _routeProvisionedDeviceToCloudConfirmation();
   }
 
@@ -1474,23 +1511,35 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     return detail;
   }
 
-  Future<void> _confirmCloudOnline() async {
+  /// The authoritative node id the cloud confirmation must match. Order:
+  /// the exact id handed to the device at provisioning start, then the
+  /// schema/runtime device identity, then the SoftAP SSID (EWIFI_<id>).
+  /// Deliberately NOT the device POP (POP is a provisioning secret, not a
+  /// node id) and never "any online node".
+  String _resolveCloudMatchNodeId() {
+    if (_provisionTargetNodeId.trim().isNotEmpty) {
+      return _provisionTargetNodeId.trim();
+    }
     final identity = widget.state.resolveDeviceIdentity();
-    var nodeId = identity.nodeId?.trim() ?? '';
-    if (nodeId.isEmpty) {
-      final softApSsid = _deviceSoftAp?.ssid?.trim() ?? '';
-      if (softApSsid.startsWith('EWIFI_')) {
-        nodeId = softApSsid.substring('EWIFI_'.length).trim();
-      } else if (softApSsid.isNotEmpty) {
-        nodeId = softApSsid;
-      }
+    final fromIdentity = identity.nodeId?.trim() ?? '';
+    if (fromIdentity.isNotEmpty) return fromIdentity;
+
+    final softApSsid = _deviceSoftAp?.ssid.trim() ?? '';
+    if (softApSsid.startsWith('EWIFI_')) {
+      return softApSsid.substring('EWIFI_'.length).trim();
     }
-    if (nodeId.isEmpty) {
-      nodeId = (_runtimeValue('nodeId') ?? _runtimeValue('devicePop'))
-              ?.toString()
-              .trim() ??
-          '';
-    }
+    if (softApSsid.isNotEmpty) return softApSsid;
+
+    final fromRuntime = _runtimeValue('nodeId')?.toString().trim() ?? '';
+    return fromRuntime;
+  }
+
+  Future<void> _confirmCloudOnline() async {
+    final nodeId = _resolveCloudMatchNodeId();
+    debugPrint(
+      '[SDUI][WiFi][DIAG] confirmCloudOnline target_nodeId="$nodeId" '
+      '(provision="$_provisionTargetNodeId")',
+    );
 
     final token = widget.state.accessToken.trim();
 
@@ -1554,8 +1603,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     );
 
     while (mounted && !_provisionCancelled && DateTime.now().isBefore(deadline)) {
-      if (_cloudConfirmedNodeId != null &&
-          (nodeId.isEmpty || _cloudConfirmedNodeId == nodeId)) {
+      if (nodeId.isNotEmpty && _cloudConfirmedNodeId == nodeId) {
         _completeCloudConfirmation();
         return;
       }
@@ -1610,8 +1658,7 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     }
 
     if (!mounted || _provisionCancelled) return;
-    if (_cloudConfirmedNodeId != null &&
-        (nodeId.isEmpty || _cloudConfirmedNodeId == nodeId)) {
+    if (nodeId.isNotEmpty && _cloudConfirmedNodeId == nodeId) {
       _completeCloudConfirmation();
       return;
     }
@@ -1655,33 +1702,29 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     final message = event.message;
     if (message == null || message.trim().isEmpty) return;
 
-    final identity = widget.state.resolveDeviceIdentity();
-    var target = identity.nodeId?.trim() ?? '';
-    if (target.isEmpty) {
-      final softApSsid = _deviceSoftAp?.ssid?.trim() ?? '';
-      if (softApSsid.startsWith('EWIFI_')) {
-        target = softApSsid.substring('EWIFI_'.length).trim();
-      } else if (softApSsid.isNotEmpty) {
-        target = softApSsid;
-      }
-    }
-    if (target.isEmpty) {
-      target = (_runtimeValue('nodeId') ?? _runtimeValue('devicePop'))
-              ?.toString()
-              .trim() ??
-          '';
-    }
+    final target = _resolveCloudMatchNodeId();
 
     try {
       final decoded = jsonDecode(message);
-      final isMatch = target.isNotEmpty
-          ? _jsonContainsOnlineNode(decoded, target)
-          : _containsAnyOnlineNode(decoded);
+      // Fail closed: a provision is confirmed ONLY when the cloud reports the
+      // exact provisioned node id as online. Never confirm on "any online
+      // node" — that would falsely confirm using some other already-online
+      // device.
+      final isMatch =
+          target.isNotEmpty && _jsonContainsOnlineNode(decoded, target);
+
+      // Smoking-gun diagnostic: show what the cloud actually returned versus
+      // the id we are waiting for, so a mismatch (device online under a
+      // different id) is visible in one run.
+      final preview =
+          message.length > 500 ? message.substring(0, 500) : message;
+      debugPrint(
+        '[SDUI][WiFi][DIAG] cloud msg target="$target" match=$isMatch payload=$preview',
+      );
 
       if (isMatch) {
-        final confirmedId = target.isNotEmpty ? target : 'confirmed_device';
-        debugPrint('[SDUI][WiFi] exact cloud-online match for node=$confirmedId');
-        _cloudConfirmedNodeId = confirmedId;
+        debugPrint('[SDUI][WiFi] exact cloud-online match for node=$target');
+        _cloudConfirmedNodeId = target;
 
         // Do not wait for the next polling interval once the exact selected
         // node is already confirmed online by the cloud response.
@@ -1697,30 +1740,6 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
       // Native cloud callbacks can also contain informational non-JSON text
       // such as "Message Sent Successfully: ...". Forwarded without crash.
     }
-  }
-
-  bool _containsAnyOnlineNode(dynamic value) {
-    if (value is Map) {
-      final values = Map<String, dynamic>.from(value);
-      final onlineValue = _firstValueForKeys(values, const <String>[
-        'online',
-        'connected',
-        'is_online',
-        'isOnline',
-        'node_status',
-        'device_status',
-        'connection_status',
-      ]);
-      if (_isOnlineValue(onlineValue)) return true;
-      for (final nested in values.values) {
-        if (_containsAnyOnlineNode(nested)) return true;
-      }
-    } else if (value is List) {
-      for (final item in value) {
-        if (_containsAnyOnlineNode(item)) return true;
-      }
-    }
-    return false;
   }
 
   bool _jsonContainsOnlineNode(dynamic value, String nodeId) {
