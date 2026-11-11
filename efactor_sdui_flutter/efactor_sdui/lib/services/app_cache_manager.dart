@@ -4,6 +4,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../data/schema_repository.dart';
 import '../grid_sdui/grid_in_app_webview_page.dart';
 import '../grid_sdui/grid_live_location_service.dart';
+import '../grid_sdui/grid_media_cache_service.dart';
+import '../grid_sdui/grid_offline_shell_service.dart';
 import '../grid_sdui/grid_schema_repository.dart';
 import '../grid_sdui/grid_shell_pool.dart';
 import '../grid_sdui/grid_web_snapshot.dart';
@@ -111,6 +113,13 @@ class AppCacheManager {
       await GridLiveLocationService.instance.stopAll(postStop: true);
     } catch (e) {
       logDebug('[AppCacheManager] GridShellPool clear error: $e');
+    }
+    // Circle Connect offline shell (iOS) + cached media are account-owned.
+    try {
+      await GridOfflineShellService.instance.clear(userId: userId);
+      await GridMediaCacheService.instance.clearCache();
+    } catch (e) {
+      logDebug('[AppCacheManager] Grid offline shell/media clear error: $e');
     }
 
     // 6. WebView session cookies & web storage

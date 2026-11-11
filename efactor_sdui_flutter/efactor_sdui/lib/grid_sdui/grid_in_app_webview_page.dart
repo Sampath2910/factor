@@ -29,6 +29,7 @@ import 'dynamic_grid_sdui_page.dart';
 import 'circle_connect_file_service.dart';
 import 'grid_live_location_service.dart';
 import 'grid_media_cache_service.dart';
+import 'grid_offline_shell_service.dart';
 import 'grid_offline_outbox_service.dart';
 import 'grid_shell_pool.dart';
 import 'grid_web_snapshot.dart';
@@ -795,6 +796,14 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   /// Set this back to TRUE to fully restore the legacy snapshot behavior.
   static const bool _restoreDomSnapshotOffline = false;
 
+  /// Security origin the Circle Connect web app runs under. The offline shell
+  /// MUST load under this origin or it opens a different IndexedDB partition.
+  static const String _origin = 'https://efactor.tech';
+
+  /// Base URL used when loading the cached offline shell via loadHtmlString on
+  /// iOS. Only its origin matters for IndexedDB/location.origin.
+  static const String _offlineShellBaseUrl = '$_origin/index.php/grid-chat';
+
   var _loading = true;
   var _showingSnapshot = false;
   String? _error;
@@ -1267,6 +1276,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             if (!_showingSnapshot) {
               unawaited(_persistSnapshot());
               unawaited(_checkAndRecoverOfflineChannels());
+              // iOS: refresh the cached self-contained offline shell so Circle
+              // Connect can render offline (no Service Worker on WKWebView).
+              unawaited(_syncOfflineShellIfIOS());
               // Schedule delayed snapshot capture after dynamic React/SPA rendering completes
               Future.delayed(const Duration(milliseconds: 2500), () {
                 if (mounted && !_showingSnapshot && _error == null) {
@@ -4045,13 +4057,47 @@ Error: $error
         return;
       }
 
-      // Phase 1 (web-offline-first): load the real origin document even while
-      // offline so the Circle Connect Service Worker serves its cached shell
-      // and React reads its own IndexedDB (CircleConnectDB). No DOM snapshot.
       _showingSnapshot = false;
+
+      // Circle Connect offline:
+      //
+      // - Android's WebView runs the web Service Worker, so loading the real URL
+      //   lets it serve its cached shell + CircleConnectDB (WhatsApp-style).
+      //
+      // - iOS WKWebView does NOT run Service Workers, so the live URL would blank
+      //   offline. Instead we load the web team's self-contained offline shell
+      //   (cached while online) via loadHtmlString with the efactor.tech base URL,
+      //   so the origin stays correct and React reads the same CircleConnectDB.
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final shell =
+            await GridOfflineShellService.instance.getStoredShell(userId: widget.userId);
+        if (shell != null) {
+          debugPrint(
+            '[GridInAppWebView] Offline (iOS) -> loading cached self-contained '
+            'Circle Connect shell with origin $_origin',
+          );
+          await _controller.loadHtmlString(shell, baseUrl: _offlineShellBaseUrl);
+          return;
+        }
+        // No shell cached yet (never opened online since install/update) ->
+        // clean offline state rather than a blank page.
+        debugPrint(
+          '[GridInAppWebView] Offline (iOS) -> no cached Circle Connect shell; '
+          'showing offline state',
+        );
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = 'offline';
+        });
+        return;
+      }
+
+      // Android: load the real origin document so the web Service Worker serves
+      // its cached shell and React reads its own IndexedDB (CircleConnectDB).
       debugPrint(
-        '[GridInAppWebView] Offline detected -> loading live URL so the web '
-        'Service Worker/IndexedDB can serve offline: $_effectiveUri',
+        '[GridInAppWebView] Offline detected (Android) -> loading live URL so the '
+        'web Service Worker/IndexedDB can serve offline: $_effectiveUri',
       );
       await _controller.loadRequest(_effectiveUri, headers: headers);
       return;
@@ -4059,6 +4105,26 @@ Error: $error
     _showingSnapshot = false;
     debugPrint('[GridInAppWebView] Online detected -> loading live URL: $_effectiveUri');
     await _controller.loadRequest(_effectiveUri, headers: headers);
+  }
+
+  /// iOS only: while online, fetch/verify/cache the Circle Connect self-contained
+  /// offline shell so it can be loaded when offline (WKWebView has no Service
+  /// Worker). No-op on Android (its Service Worker path is unchanged).
+  Future<void> _syncOfflineShellIfIOS() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    if (!_isCircleConnect) return;
+    try {
+      if (!await _isOnline()) return;
+      final cookies =
+          await _getCookiesForEndpoint(GridOfflineShellService.manifestUrl);
+      await GridOfflineShellService.instance.syncShell(
+        accessToken: widget.accessToken,
+        userId: widget.userId,
+        cookieHeader: cookies,
+      );
+    } catch (e) {
+      debugPrint('[GridInAppWebView] offline shell sync error: $e');
+    }
   }
 
   Future<bool> _isOnline() async {
