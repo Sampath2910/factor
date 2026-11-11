@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme_controller.dart';
 import '../services/efactor_cloud_service.dart';
 import '../services/json_http.dart';
 import '../services/schema_patch.dart';
@@ -161,8 +162,28 @@ class IotSduiState extends ChangeNotifier {
   Map<String, dynamic> get page =>
       _map(schema['page']) ?? const <String, dynamic>{};
 
-  Map<String, dynamic> get theme =>
-      _map(schema['theme']) ?? _map(page['theme']) ?? const <String, dynamic>{};
+  /// The active IoT palette. The base `theme` block is a single (light) palette;
+  /// the schema also ships `themes.presets.light/.dark` whose flat color keys
+  /// mirror the base theme keys. We overlay the preset that matches the app-wide
+  /// Appearance choice (Profile → Appearance), resolving `system` against the OS,
+  /// so every renderer read of `theme[...]` returns the correct light/dark value.
+  Map<String, dynamic> get theme {
+    final base = _map(schema['theme']) ?? _map(page['theme']) ?? const <String, dynamic>{};
+    final presetColors = _activeThemePresetColors();
+    if (presetColors.isEmpty) return base;
+    return <String, dynamic>{...base, ...presetColors};
+  }
+
+  /// Flat color map of the `themes.presets` entry matching the resolved mode,
+  /// or empty when the schema ships no presets.
+  Map<String, dynamic> _activeThemePresetColors() {
+    final themes = _map(schema['themes']);
+    final presets = themes == null ? null : _map(themes['presets']);
+    if (presets == null || presets.isEmpty) return const <String, dynamic>{};
+    final modeKey = ThemeController.instance.isDark() ? 'dark' : 'light';
+    final preset = _map(presets[modeKey]) ?? _map(presets['light']);
+    return _map(preset?['color']) ?? const <String, dynamic>{};
+  }
 
   Map<String, dynamic> get typography =>
       _map(schema['typography']) ?? const <String, dynamic>{};

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// App-wide theme mode. [system] follows the OS brightness; [dark]/[light]
-/// force a mode. The app defaults to [dark] on first run.
+/// force a mode. The app defaults to [system] on first run so a brand-new /
+/// never-changed user follows their phone, matching the server account
+/// appearance contract (default "system").
 enum AppThemeMode { system, light, dark }
 
 /// Single source of truth for the app's theme, read by every surface and every
@@ -19,10 +21,14 @@ class ThemeController extends ChangeNotifier {
 
   static const String _prefKey = 'app.themeMode.v1';
 
-  AppThemeMode _mode = AppThemeMode.dark;
+  AppThemeMode _mode = AppThemeMode.system;
   bool _loaded = false;
 
-  /// The user's selected mode. Defaults to [AppThemeMode.dark].
+  /// When the user last changed the mode in-app. Used so a background schema
+  /// refetch does not revert a change the user just made (see [applyServerMode]).
+  DateTime? _lastUserSetAt;
+
+  /// The user's selected mode. Defaults to [AppThemeMode.system].
   AppThemeMode get mode => _mode;
 
   /// True once the persisted value has been read from disk. Until then the
@@ -78,10 +84,10 @@ class ThemeController extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final stored = prefs.getString(_prefKey);
-      _mode = _parse(stored) ?? AppThemeMode.dark;
+      _mode = _parse(stored) ?? AppThemeMode.system;
     } catch (_) {
       // Storage unavailable (e.g. first run / restricted): keep the default.
-      _mode = AppThemeMode.dark;
+      _mode = AppThemeMode.system;
     } finally {
       _loaded = true;
       notifyListeners();
@@ -89,7 +95,12 @@ class ThemeController extends ChangeNotifier {
   }
 
   /// Sets and persists the mode, notifying listeners so the whole app rebuilds.
-  Future<void> setMode(AppThemeMode next) async {
+  ///
+  /// [userInitiated] marks an in-app choice (the Profile → Appearance picker),
+  /// which protects it briefly from being overwritten by a background schema
+  /// refetch via [applyServerMode].
+  Future<void> setMode(AppThemeMode next, {bool userInitiated = true}) async {
+    if (userInitiated) _lastUserSetAt = DateTime.now();
     if (_mode == next && _loaded) return;
     _mode = next;
     _loaded = true;
@@ -100,6 +111,21 @@ class ThemeController extends ChangeNotifier {
     } catch (_) {
       // Non-fatal: the in-memory choice still applies for this session.
     }
+  }
+
+  /// Applies the account appearance served by the backend schema
+  /// (`state.global.themeMode` / `themes.activeMode` / Grid `theme.defaultMode`),
+  /// making the server the source of truth for cross-device sync. Skipped when
+  /// the user changed the mode in-app within the last few seconds so an
+  /// in-flight refetch cannot revert a fresh choice. [raw] accepts
+  /// "light"/"dark"/"system"/"auto"; unknown values are ignored.
+  Future<void> applyServerMode(String? raw) async {
+    final next = _parse(raw);
+    if (next == null) return;
+    final recentUserChange = _lastUserSetAt != null &&
+        DateTime.now().difference(_lastUserSetAt!) < const Duration(seconds: 5);
+    if (recentUserChange) return;
+    await setMode(next, userInitiated: false);
   }
 
   /// Cycles Dark -> Light -> System -> Dark. Handy for a simple toggle button.

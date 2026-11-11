@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/theme_controller.dart';
+
 class GridSduiState extends ChangeNotifier {
   GridSduiState(
     Map<String, dynamic> source, {
@@ -145,8 +147,23 @@ class GridSduiState extends ChangeNotifier {
 
   Map<String, dynamic>? get themeConfig => _map(schema['theme']);
 
-  /// Account/schema configured mode: `light`, `dark`, or `system`.
+  /// Configured mode: `light`, `dark`, or `system`.
+  ///
+  /// The app-wide [ThemeController] (the Profile → Appearance switch) is the
+  /// single source of truth so Grid follows the same light/dark/system choice
+  /// as every other screen. The schema's `theme.defaultMode` is only a fallback
+  /// used before the controller has loaded its persisted value.
   String get configuredThemeMode {
+    if (ThemeController.instance.isLoaded) {
+      switch (ThemeController.instance.mode) {
+        case AppThemeMode.light:
+          return 'light';
+        case AppThemeMode.dark:
+          return 'dark';
+        case AppThemeMode.system:
+          return 'system';
+      }
+    }
     final theme = themeConfig;
     final raw = theme?['defaultMode']?.toString().trim().toLowerCase() ?? '';
     if (raw == 'light' || raw == 'dark' || raw == 'system') {

@@ -16,6 +16,7 @@ import '../services/schema_prefetch.dart';
 import 'home_schema_repository.dart';
 import 'home_sdui_renderer.dart';
 import 'home_sdui_state.dart';
+import '../core/theme_controller.dart';
 
 class DynamicHomeSduiPage extends StatefulWidget {
   const DynamicHomeSduiPage({
@@ -107,6 +108,9 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // The Home palette is chosen by the app-wide Appearance switch (resolving
+    // `system` against the OS). Rebuild when that choice changes.
+    ThemeController.instance.addListener(_onAppearanceChanged);
     _subscribeToSchemaInvalidations();
     if (widget.enableAutoRefresh) {
       _startAutoRefreshTimer();
@@ -223,6 +227,23 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     }
   }
 
+  @override
+  void didChangePlatformBrightness() {
+    // In "System default" mode the active preset is resolved from the OS
+    // brightness, so a brightness flip must repaint Home immediately.
+    if (mounted && ThemeController.instance.mode == AppThemeMode.system) {
+      setState(() {});
+    }
+  }
+
+  /// The Profile → Appearance switch changed; repaint Home with the preset
+  /// that matches the new light/dark/system choice.
+  void _onAppearanceChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   bool get _schemaIsStaleForResume {
     final last = _lastSchemaLoadAt;
     if (last == null) return true;
@@ -247,6 +268,29 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
 
   String _schemaFingerprint(Map<String, dynamic> schema) {
     return schemaFingerprint(schema);
+  }
+
+  /// Reads the account appearance from the Home schema and applies it to the
+  /// app-wide ThemeController. Source (per backend): `state.global.themeMode`,
+  /// falling back to `themes.activeMode`. Absent/empty is left to the default.
+  void _syncAppearanceFromSchema(Map<String, dynamic> schema) {
+    String? raw;
+    final state = schema['state'];
+    if (state is Map) {
+      final global = state['global'];
+      if (global is Map) {
+        raw = global['themeMode']?.toString().trim();
+      }
+    }
+    if (raw == null || raw.isEmpty) {
+      final themes = schema['themes'];
+      if (themes is Map) {
+        raw = themes['activeMode']?.toString().trim();
+      }
+    }
+    if (raw != null && raw.isNotEmpty) {
+      unawaited(ThemeController.instance.applyServerMode(raw));
+    }
   }
 
   Future<void> _applyHomeSchema(
@@ -281,6 +325,11 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
 
     next.presentationHandler = _present;
     next.hostActionHandler = _handleHostAction;
+
+    // The backend serves the account appearance (default "system"). Seed the
+    // app-wide ThemeController from it so a choice made in web Profile applies
+    // on mobile and all tabs stay in sync; a fresh in-app change is protected.
+    _syncAppearanceFromSchema(schema);
 
     final renderer = HomeSduiRenderer(next);
 
@@ -405,6 +454,21 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         _error = error.toString();
         _loading = false;
       });
+    }
+  }
+
+  /// Maps a schema appearance/theme string to the app-wide [AppThemeMode].
+  AppThemeMode? _appThemeModeFromActionString(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'light':
+        return AppThemeMode.light;
+      case 'dark':
+        return AppThemeMode.dark;
+      case 'system':
+      case 'auto':
+        return AppThemeMode.system;
+      default:
+        return null;
     }
   }
 
@@ -593,6 +657,23 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         // The schema's preceding set-state actions already updated
         // global.themeMode/global.themePreset. The renderer observes state and
         // resolves themes.presets dynamically. No theme value is hardcoded.
+        return;
+
+      case 'save-profile-preferences':
+        // Host-side persistence hook fired by the profile preference sequences
+        // (appearance + notifications). A sibling HTTP action in the same
+        // sequence already persists to the server; here we apply the
+        // host-local part. For appearance that means driving the app-wide
+        // ThemeController so every surface follows the chosen light/dark/system
+        // mode. Unknown preferences (e.g. notifications) are a safe no-op.
+        final params = action['parameters'];
+        final map = params is Map ? params : const <String, dynamic>{};
+        final rawMode =
+            (map['themeMode'] ?? map['appearance'])?.toString().trim();
+        final mode = rawMode == null ? null : _appThemeModeFromActionString(rawMode);
+        if (mode != null) {
+          await ThemeController.instance.setMode(mode);
+        }
         return;
       default:
         throw StateError('Unsupported Home host action "$actionId".');
@@ -784,6 +865,7 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     _cloudConnectionSubscription?.cancel();
     _nodeStatusSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    ThemeController.instance.removeListener(_onAppearanceChanged);
     _state?.dispose();
     _repository.dispose();
     super.dispose();

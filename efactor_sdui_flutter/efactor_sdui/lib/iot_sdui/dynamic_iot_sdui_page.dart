@@ -18,6 +18,7 @@ import 'iot_schema_repository.dart';
 import 'iot_schema_icon.dart';
 import 'iot_sdui_renderer.dart';
 import 'iot_sdui_state.dart';
+import '../core/theme_controller.dart';
 
 class DynamicIotSduiPage extends StatefulWidget {
   const DynamicIotSduiPage({
@@ -108,6 +109,22 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
     _startDeviceStatePolling();
 
     WidgetsBinding.instance.addObserver(this);
+    // The IoT palette (themes.presets.light/.dark) follows the app-wide
+    // Appearance switch; repaint when it changes.
+    ThemeController.instance.addListener(_onAppearanceChanged);
+  }
+
+  void _onAppearanceChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    // In "System default" the active IoT preset is resolved from the OS
+    // brightness, so a brightness flip must repaint immediately.
+    if (mounted && ThemeController.instance.mode == AppThemeMode.system) {
+      setState(() {});
+    }
   }
 
   void _startDeviceStatePolling() {
@@ -1437,6 +1454,7 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
     _schemaInvalidationSubscription?.cancel();
     _cloudConnectionSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    ThemeController.instance.removeListener(_onAppearanceChanged);
     _state?.removeListener(_onStateErrorNotified);
     _state?.dispose();
     _repository.dispose();

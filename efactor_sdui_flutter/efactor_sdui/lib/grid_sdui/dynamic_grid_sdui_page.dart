@@ -18,6 +18,7 @@ import 'grid_schema_repository.dart';
 import 'grid_sdui_renderer.dart';
 import 'grid_sdui_state.dart';
 import 'grid_shell_pool.dart';
+import '../core/theme_controller.dart';
 
 class DynamicGridSduiPage extends StatefulWidget {
   const DynamicGridSduiPage({
@@ -84,6 +85,9 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Rebuild when the app-wide Appearance switch (Profile → Appearance)
+    // changes so Grid follows light/dark/system like every other screen.
+    ThemeController.instance.addListener(_onAppearanceChanged);
     _repository = widget.repository ??
         GridSchemaRepository(
           accessToken: widget.accessToken,
@@ -201,6 +205,14 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     }
   }
 
+  /// The Profile → Appearance switch changed. Grid resolves its mode from
+  /// [ThemeController], so a rebuild is enough to repaint in the new mode.
+  void _onAppearanceChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -234,6 +246,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ThemeController.instance.removeListener(_onAppearanceChanged);
     _schemaInvalidationSubscription?.cancel();
     _cloudConnectionSubscription?.cancel();
     _schemaEventDebounceTimer?.cancel();

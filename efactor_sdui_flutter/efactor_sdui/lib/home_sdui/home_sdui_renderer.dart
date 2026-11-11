@@ -3963,9 +3963,37 @@ class HomeSduiRenderer {
     return LinearGradient(begin: begin, end: end, colors: colors);
   }
 
+  /// Resolves which theme preset is active for the current app-wide Appearance
+  /// choice (Profile → Appearance). `light`/`dark` pick the matching preset;
+  /// `system` resolves against the OS brightness. Falls back to the
+  /// server/state-selected preset when no preset matches the resolved mode.
+  String? _effectivePresetId() {
+    final themes = state.schema['themes'];
+    final presets = themes is Map ? themes['presets'] : null;
+
+    if (presets is Map) {
+      final desiredMode =
+          ThemeController.instance.isDark() ? 'dark' : 'light';
+      // 1) A preset literally named after the mode (light/dark).
+      final named = presets[desiredMode];
+      if (named is Map) return desiredMode;
+      // 2) Any preset whose declared `mode` matches the resolved mode.
+      for (final entry in presets.entries) {
+        final value = entry.value;
+        if (value is Map &&
+            value['mode']?.toString().trim().toLowerCase() == desiredMode) {
+          return entry.key.toString();
+        }
+      }
+    }
+
+    // 3) Fall back to the server/state-selected preset.
+    return state.readState('global.themePreset')?.toString().trim() ??
+        (themes is Map ? themes['activePreset']?.toString().trim() : null);
+  }
+
   dynamic _activeThemeTokenValue(String token) {
-    final presetId = state.readState('global.themePreset')?.toString().trim() ??
-        state.schema['themes']?['activePreset']?.toString().trim();
+    final presetId = _effectivePresetId();
 
     if (presetId == null || presetId.isEmpty) return null;
 

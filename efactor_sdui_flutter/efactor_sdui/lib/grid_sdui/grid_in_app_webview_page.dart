@@ -18,6 +18,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import '../core/theme_controller.dart';
 import '../services/call_permission_helper.dart';
 import '../services/circle_connect_device_key_store.dart';
 import '../services/grid_chat_message_notification.dart';
@@ -925,7 +926,40 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           'window.CircleConnectFiles && window.CircleConnectFiles._trigger(${jsonEncode(eventName)}, ${jsonEncode(data)});';
       unawaited(_controller.runJavaScript(js));
     };
+    // Re-push the app's Appearance choice (light/dark/system) into the web app
+    // whenever it changes so Circle Connect / Professional Space can match it.
+    ThemeController.instance.addListener(_onAppThemeChanged);
     _setupPermissionsAndLoad();
+  }
+
+  void _onAppThemeChanged() {
+    unawaited(_injectAppThemeSignal());
+  }
+
+  /// Publishes the app-wide resolved theme (`dark`/`light`) to the hosted web
+  /// app. The site can read `window.__EFACTOR_APP_THEME__`, the
+  /// `data-app-theme` attribute, or listen for the `efactor-theme` event.
+  /// This is additive: a site that ignores the signal is unaffected.
+  Future<void> _injectAppThemeSignal() async {
+    if (!mounted) return;
+    final theme = ThemeController.instance.resolvedThemeWord();
+    final js = '''
+(function(){
+  try {
+    window.__EFACTOR_APP_THEME__ = ${jsonEncode(theme)};
+    var el = document.documentElement;
+    if (el) {
+      el.setAttribute('data-app-theme', ${jsonEncode(theme)});
+      el.style.colorScheme = ${jsonEncode(theme)};
+    }
+    window.dispatchEvent(new CustomEvent('efactor-theme', {detail: {theme: ${jsonEncode(theme)}}}));
+  } catch (e) {}
+})();''';
+    try {
+      await _controller.runJavaScript(js);
+    } catch (_) {
+      // Non-fatal: the page may not be ready yet; onPageFinished re-injects.
+    }
   }
 
   void _onDeviceKeyStatusChanged(bool hasKey) {
@@ -961,6 +995,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ThemeController.instance.removeListener(_onAppThemeChanged);
     _connectingCallTimer?.cancel();
     unawaited(OngoingCallService.instance.stopCall());
     PushNotificationBootstrap.instance.setActiveConversationId(null);
@@ -1242,6 +1277,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             unawaited(_injectGridBackButton());
             unawaited(_injectChatSwipeBridge());
             unawaited(_injectScannerBridge());
+            unawaited(_injectAppThemeSignal());
             _dispatchPendingCallActionIfPresent();
             if (_isConnectingCall) {
               Future.delayed(const Duration(milliseconds: 1000), () {

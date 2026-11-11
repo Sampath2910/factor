@@ -676,11 +676,23 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
             ? rawAppTitle.trim()
             : widget.nodeId);
 
+    // Derive the Material brightness from the schema's actual background so
+    // generated Material surfaces (dialogs, menus, text selection, pickers)
+    // match the device palette instead of defaulting to a light scheme over a
+    // dark background. Once the backend ships light/dark device palettes this
+    // automatically tracks whichever palette is active.
+    final schemaBrightness = backgroundColor.computeLuminance() < 0.5
+        ? Brightness.dark
+        : Brightness.light;
     final themeData = ThemeData(
       useMaterial3: true,
+      brightness: schemaBrightness,
       splashFactory: InkRipple.splashFactory,
       scaffoldBackgroundColor: backgroundColor,
-      colorScheme: ColorScheme.fromSeed(seedColor: primaryColor),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primaryColor,
+        brightness: schemaBrightness,
+      ),
       textTheme: textTheme,
     );
 
