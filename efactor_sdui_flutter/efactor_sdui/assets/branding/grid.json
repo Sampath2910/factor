@@ -1,128 +1,17 @@
 {
   "success": true,
-  "user_id": 707,
+  "user_id": 655,
   "pageId": "grid",
   "routeId": "grid",
+  "schema_rev": "grid-logo-globe-3",
   "schema_version": "3.0.0",
+  "updated_at": "2026-11-11T09:30:37+00:00",
+  "contentHash": "318b454f5f80beaebc9b42e12a2f7298457f1e22efc0ea8baea93f11b591e325",
   "gridApiUrl": "https://efactor.tech/v8/grid_api_creation.php",
-  "content": {
-    "id": "gridPage",
-    "routeId": "grid",
-    "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
-    "header": {
-      "title": "Grid",
-      "subtitle": "Your professional network space",
-      "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
-      "searchIconToken": "search",
-      "avatarInitial": "S",
-      "avatarColor": "#7c3aed"
-    },
-    "featureCards": [
-      {
-        "id": "professional-space",
-        "title": "Professional Space",
-        "subtitle": "Discover people, opportunities and grow your career.",
-        "iconToken": "user",
-        "image": "",
-        "imageUrl": "",
-        "url": "https://efactor.tech/index.php/grid",
-        "route": "https://efactor.tech/index.php/grid",
-        "color": "#5b6cff",
-        "gradientStart": "#dce4ff",
-        "gradientEnd": "#b7c4fb",
-        "textColor": "#312e81",
-        "actionId": "grid-open-professional-space"
-      },
-      {
-        "id": "circle-connect",
-        "title": "Circle Connect",
-        "subtitle": "Meaningful conversations. Stronger circles.",
-        "iconToken": "users",
-        "image": "",
-        "imageUrl": "",
-        "url": "https://efactor.tech/index.php/grid-chat",
-        "route": "https://efactor.tech/index.php/grid-chat",
-        "color": "#ea580c",
-        "gradientStart": "#ffe0cc",
-        "gradientEnd": "#f4b496",
-        "textColor": "#9a3412",
-        "actionId": "grid-open-circle-connect"
-      }
-    ],
-    "stats": [
-      {
-        "id": "professionals",
-        "label": "Professionals",
-        "value": 248
-      },
-      {
-        "id": "opportunities",
-        "label": "Opportunities",
-        "value": 36
-      },
-      {
-        "id": "active-circles",
-        "label": "Active Circles",
-        "value": 12
-      }
-    ],
-    "shareQr": {
-      "title": "Share Profile QR",
-      "subtitle": "Share your professional or circle profile with anyone.",
-      "iconToken": "grid",
-      "selectedMode": "professional",
-      "modes": [
-        {
-          "id": "professional",
-          "label": "Professional"
-        },
-        {
-          "id": "circle",
-          "label": "Circle"
-        }
-      ],
-      "qrCaption": "Scan to connect",
-      "qrPayload": "https://efactor.tech/grid/connect?mode=professional",
-      "qrImageUrl": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
-      "qrImageUrlTemplate": "https://efactor.tech/v8/qr_image.php?data={data}&mode={mode}&size=160",
-      "qrImageUrlsByMode": {
-        "professional": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
-        "circle": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dcircle&size=160&mode=circle"
-      },
-      "shareActionId": "grid-share-qr",
-      "selectModeActionId": "grid-select-qr-mode"
-    },
-    "exploring": {
-      "title": "Continue Exploring",
-      "seeAllLabel": "See all",
-      "seeAllActionId": "grid-see-all-exploring",
-      "items": [
-        {
-          "id": "find-talent",
-          "title": "Find Talent",
-          "subtitle": "People with skills you need",
-          "iconToken": "user",
-          "color": "#8b5cf6",
-          "actionId": "grid-open-find-talent"
-        },
-        {
-          "id": "join-circles",
-          "title": "Join Circles",
-          "subtitle": "Communities you'll love",
-          "iconToken": "users",
-          "color": "#14b8a6",
-          "actionId": "grid-open-join-circles"
-        }
-      ]
-    },
-    "quote": {
-      "text": "Connections turn potential into progress.",
-      "iconToken": "quote"
-    }
-  },
   "schema": {
     "schemaType": "server-driven-mobile-app",
     "schemaVersion": "3.0.0",
+    "schema_rev": "grid-logo-globe-3",
     "pageId": "grid",
     "routeId": "grid",
     "rootComponentId": "grid-page",
@@ -163,6 +52,8 @@
         "subtitle": "Discover people, opportunities and grow your career.",
         "iconToken": "user",
         "actionArrowIconToken": "chevron-right",
+        "ctaLabel": "Explore Now",
+        "ctaIconToken": "chevron-right",
         "image": null,
         "imageUrl": null,
         "color": "#5b6cff",
@@ -172,7 +63,7 @@
         "url": "https://efactor.tech/index.php/grid",
         "route": "https://efactor.tech/index.php/grid",
         "openIn": "inAppWebView",
-        "webViewTitle": "Professional Space",
+        "webViewTitle": "",
         "webView": {
           "javaScriptEnabled": true,
           "sharedCookies": true,
@@ -191,13 +82,30 @@
         "layout": {
           "columnSpan": 1,
           "rowSpan": 1,
-          "minHeight": 168,
+          "minHeight": 200,
+          "height": 200,
           "minWidth": 0,
           "width": "fill",
           "maxWidth": "100%"
         },
+        "appearanceDark": {
+          "borderRadius": 26,
+          "backgroundColor": "#2b3679",
+          "backgroundGradient": {
+            "start": "#2d387e",
+            "end": "#1b2351"
+          },
+          "borderColor": "#4351bc",
+          "titleColor": "#f8fafc",
+          "subtitleColor": "#cbd5e1",
+          "textColor": "#f8fafc",
+          "ctaColor": "#c4b5fd",
+          "actionArrowPosition": "topRight",
+          "ctaPosition": "bottom",
+          "showCta": true
+        },
         "appearance": {
-          "borderRadius": 24,
+          "borderRadius": 26,
           "backgroundColor": "#dce4ff",
           "backgroundGradient": {
             "start": "#dce4ff",
@@ -207,8 +115,16 @@
           "titlePosition": "belowIcon",
           "showSubtitle": true,
           "showActionArrow": true,
+          "actionArrowPosition": "topRight",
+          "actionArrowSize": 32,
+          "showCta": true,
+          "ctaLabel": "Explore Now",
+          "ctaPosition": "bottom",
+          "ctaFontSize": 11,
+          "ctaFontWeight": 700,
+          "ctaColor": "#5b6cff",
           "iconSize": 36,
-          "titleFontSize": 16,
+          "titleFontSize": 17,
           "subtitleFontSize": 12,
           "titlePadding": 12,
           "titleMaxLines": 2,
@@ -227,6 +143,8 @@
         "subtitle": "Meaningful conversations. Stronger circles.",
         "iconToken": "users",
         "actionArrowIconToken": "chevron-right",
+        "ctaLabel": "Explore Now",
+        "ctaIconToken": "chevron-right",
         "image": null,
         "imageUrl": null,
         "color": "#ea580c",
@@ -236,7 +154,7 @@
         "url": "https://efactor.tech/index.php/grid-chat",
         "route": "https://efactor.tech/index.php/grid-chat",
         "openIn": "inAppWebView",
-        "webViewTitle": "Circle Connect",
+        "webViewTitle": "",
         "webView": {
           "javaScriptEnabled": true,
           "sharedCookies": true,
@@ -255,13 +173,30 @@
         "layout": {
           "columnSpan": 1,
           "rowSpan": 1,
-          "minHeight": 168,
+          "minHeight": 200,
+          "height": 200,
           "minWidth": 0,
           "width": "fill",
           "maxWidth": "100%"
         },
+        "appearanceDark": {
+          "borderRadius": 26,
+          "backgroundColor": "#642e18",
+          "backgroundGradient": {
+            "start": "#692f18",
+            "end": "#411e12"
+          },
+          "borderColor": "#a74312",
+          "titleColor": "#f8fafc",
+          "subtitleColor": "#cbd5e1",
+          "textColor": "#f8fafc",
+          "ctaColor": "#c4b5fd",
+          "actionArrowPosition": "topRight",
+          "ctaPosition": "bottom",
+          "showCta": true
+        },
         "appearance": {
-          "borderRadius": 24,
+          "borderRadius": 26,
           "backgroundColor": "#ffe0cc",
           "backgroundGradient": {
             "start": "#ffe0cc",
@@ -271,8 +206,16 @@
           "titlePosition": "belowIcon",
           "showSubtitle": true,
           "showActionArrow": true,
+          "actionArrowPosition": "topRight",
+          "actionArrowSize": 32,
+          "showCta": true,
+          "ctaLabel": "Explore Now",
+          "ctaPosition": "bottom",
+          "ctaFontSize": 11,
+          "ctaFontWeight": 700,
+          "ctaColor": "#ea580c",
           "iconSize": 36,
-          "titleFontSize": 16,
+          "titleFontSize": 17,
           "subtitleFontSize": 12,
           "titlePadding": 12,
           "titleMaxLines": 2,
@@ -281,68 +224,146 @@
           "subtitleOverflow": "ellipsis",
           "width": "fill",
           "minWidth": 0
-        }
+        },
+        "orbitGlobeUrl": "https://efactor.tech/assets/grid-orbit-globe.svg",
+        "orbitGlobeImageUrl": "https://efactor.tech/assets/images/grid-orbit-globe.png"
       },
-      "grid-explore-find-talent": {
-        "id": "grid-explore-find-talent",
-        "type": "exploreCard",
-        "title": "Find Talent",
-        "subtitle": "People with skills you need",
-        "iconToken": "user",
-        "color": "#8b5cf6",
-        "actionId": "grid-open-find-talent",
-        "events": {
-          "tap": {
-            "actionId": "grid-open-find-talent"
+      "grid-explore-professional-message": {
+        "id": "grid-explore-professional-message",
+        "type": "featureCard",
+        "style": "softCard",
+        "title": "Messages",
+        "subtitle": "No new messages",
+        "label": "",
+        "initial": "",
+        "iconToken": "message",
+        "image": "https://efactor.tech/v8/grid_initials.php?t=M&c=14b8a6",
+        "imageUrl": "https://efactor.tech/v8/grid_initials.php?t=M&c=14b8a6",
+        "icon": {
+          "type": "avatarButton",
+          "label": "M",
+          "initial": "M",
+          "color": "#14b8a6",
+          "backgroundColor": "#14b8a6",
+          "foregroundColor": "#ffffff",
+          "imageUrl": "https://efactor.tech/v8/grid_initials.php?t=M&c=14b8a6",
+          "fontSize": 14,
+          "appearance": {
+            "size": 42,
+            "width": 42,
+            "height": 42,
+            "borderRadius": 21,
+            "backgroundColor": "#14b8a6",
+            "foregroundColor": "#ffffff",
+            "fontSize": 14,
+            "fontWeight": 700,
+            "imageUrl": "https://efactor.tech/v8/grid_initials.php?t=M&c=14b8a6"
           }
         },
-        "layout": {
-          "columnSpan": 1,
-          "rowSpan": 1,
-          "minHeight": 112,
-          "minWidth": 0,
-          "width": "fill",
-          "maxWidth": "100%"
+        "leading": {
+          "type": "avatarButton",
+          "label": "M",
+          "initial": "M",
+          "color": "#14b8a6",
+          "backgroundColor": "#14b8a6",
+          "foregroundColor": "#ffffff",
+          "imageUrl": "https://efactor.tech/v8/grid_initials.php?t=M&c=14b8a6",
+          "fontSize": 14,
+          "appearance": {
+            "size": 42,
+            "width": 42,
+            "height": 42,
+            "borderRadius": 21,
+            "backgroundColor": "#14b8a6",
+            "foregroundColor": "#ffffff",
+            "fontSize": 14,
+            "fontWeight": 700,
+            "imageUrl": "https://efactor.tech/v8/grid_initials.php?t=M&c=14b8a6"
+          }
         },
-        "appearance": {
-          "borderRadius": 18,
-          "backgroundColor": "#ffffff",
-          "titleMaxLines": 2,
-          "subtitleMaxLines": 2,
-          "titleOverflow": "ellipsis",
-          "subtitleOverflow": "ellipsis",
-          "minWidth": 0,
-          "width": "fill"
-        }
-      },
-      "grid-explore-join-circles": {
-        "id": "grid-explore-join-circles",
-        "type": "exploreCard",
-        "title": "Join Circles",
-        "subtitle": "Communities you'll love",
-        "iconToken": "users",
         "color": "#14b8a6",
-        "actionId": "grid-open-join-circles",
+        "badge": "Professional",
+        "chip": {
+          "label": "Professional"
+        },
+        "time": "",
+        "trailing": null,
+        "initials": "M",
+        "space": "professional",
+        "preview": "No new messages",
+        "unread": false,
+        "backgroundColor": "#eef2ff",
+        "avatarColor": "#14b8a6",
+        "gradientStart": "#eef2ff",
+        "gradientEnd": "#eef2ff",
+        "textColor": "#1e1b4b",
+        "url": "https://efactor.tech/index.php/grid/messaging",
+        "route": "https://efactor.tech/index.php/grid/messaging",
+        "openIn": "inAppWebView",
+        "actionId": "grid-open-professional-message",
         "events": {
           "tap": {
-            "actionId": "grid-open-join-circles"
+            "actionId": "grid-open-professional-message"
           }
         },
         "layout": {
+          "direction": "horizontal",
+          "alignItems": "center",
+          "crossAxisAlignment": "center",
+          "mainAxisSize": "max",
           "columnSpan": 1,
           "rowSpan": 1,
-          "minHeight": 112,
+          "gap": 12,
+          "height": 72,
+          "minHeight": 72,
+          "maxHeight": 76,
           "minWidth": 0,
           "width": "fill",
-          "maxWidth": "100%"
+          "maxWidth": "100%",
+          "overflowX": "hidden",
+          "titleFlex": 1,
+          "titleMinWidth": 0
+        },
+        "appearanceDark": {
+          "borderRadius": 16,
+          "backgroundColor": "#141824",
+          "backgroundGradient": {
+            "start": "#141824",
+            "end": "#141824"
+          },
+          "borderColor": "#262c3b",
+          "titleColor": "#f8fafc",
+          "subtitleColor": "#94a3b8",
+          "textColor": "#f8fafc"
         },
         "appearance": {
-          "borderRadius": 18,
-          "backgroundColor": "#ffffff",
-          "titleMaxLines": 2,
-          "subtitleMaxLines": 2,
+          "borderRadius": 16,
+          "backgroundColor": "#eef2ff",
+          "backgroundGradient": {
+            "start": "#eef2ff",
+            "end": "#eef2ff"
+          },
+          "iconPosition": "leading",
+          "titlePosition": "besideIcon",
+          "showIcon": true,
+          "showAvatar": true,
+          "iconBorderRadius": 21,
+          "showSubtitle": true,
+          "showActionArrow": false,
+          "showBadge": true,
+          "badgePlacement": "trailing",
+          "iconSize": 42,
+          "titleFontSize": 15,
+          "subtitleFontSize": 12,
+          "titlePadding": 0,
+          "titleMaxLines": 1,
+          "subtitleMaxLines": 1,
           "titleOverflow": "ellipsis",
           "subtitleOverflow": "ellipsis",
+          "padding": 12,
+          "height": 72,
+          "minHeight": 72,
+          "maxHeight": 76,
           "minWidth": 0,
           "width": "fill"
         }
@@ -369,37 +390,37 @@
           "padding": {
             "left": 16,
             "right": 16,
-            "top": 12,
+            "top": 18,
             "bottom": 108
           },
-          "gap": 16,
+          "gap": 18,
           "responsive": {
             "narrow": {
               "padding": {
                 "left": 12,
                 "right": 12,
-                "top": 8,
-                "bottom": 108
-              },
-              "gap": 12
-            },
-            "compact": {
-              "padding": {
-                "left": 12,
-                "right": 12,
-                "top": 10,
+                "top": 12,
                 "bottom": 108
               },
               "gap": 14
+            },
+            "compact": {
+              "padding": {
+                "left": 16,
+                "right": 16,
+                "top": 18,
+                "bottom": 108
+              },
+              "gap": 18
             },
             "regular": {
               "padding": {
                 "left": 16,
                 "right": 16,
-                "top": 12,
+                "top": 18,
                 "bottom": 108
               },
-              "gap": 16
+              "gap": 18
             },
             "medium": {
               "padding": {
@@ -422,31 +443,53 @@
             }
           }
         },
+        "appearance": {
+          "backgroundColor": "#eef4fb",
+          "pageBackground": "#eef4fb"
+        },
+        "appearanceDark": {
+          "backgroundColor": "#050b16",
+          "pageBackground": "#050b16"
+        },
         "children": [
           "grid-page-header",
           "grid-feature-row",
-          "grid-stats-row",
           "grid-share-qr",
-          "grid-explore-section",
-          "grid-quote-block"
+          "grid-explore-section"
         ]
       },
       "grid-page-header": {
         "id": "grid-page-header",
         "type": "pageHeader",
+        "title": "Your professional network space",
+        "subtitle": "",
         "eyebrow": "Welcome to GRID",
-        "title": "Grid",
-        "subtitle": "Your professional network space",
+        "eyebrowPlacement": "belowBrand",
+        "heroOrder": [
+          "brand",
+          "eyebrow",
+          "title",
+          "subtitle",
+          "tagline"
+        ],
         "tagline": "Connect. Collaborate. Grow Together.",
+        "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
+        "logoUrlDark": "https://efactor.tech/assets/images/dark_grid.png",
+        "image": "https://efactor.tech/assets/images/GRID_Logo.png",
         "orbitGlobeUrl": "https://efactor.tech/assets/grid-orbit-globe.svg",
         "orbitGlobeImageUrl": "https://efactor.tech/assets/images/grid-orbit-globe.png",
+        "orbitGlobeImageUrlDark": "https://efactor.tech/assets/images/grid-orbit-globe.png",
         "orbitGlobePlacement": "heroRight",
-        "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
-        "image": "https://efactor.tech/assets/images/GRID_Logo.png",
+        "orbitGlobeSize": {
+          "width": 160,
+          "height": 160
+        },
+        "orbitGlobeClip": false,
         "designTokens": {
           "colors": {
             "textPrimary": "#2e1065",
             "textSecondary": "#6b7280",
+            "textMuted": "#94a3b8",
             "border": "#e5e7eb",
             "surface": "#ffffff",
             "onSurface": "#111827",
@@ -461,18 +504,19 @@
             "color": "#ffffff"
           },
           "typography": {
+            "fontFamily": "Plus Jakarta Sans",
             "pageTitle": {
-              "size": 26,
-              "fontSize": 26,
+              "size": 18,
+              "fontSize": 18,
               "weight": 800,
               "fontWeight": 800,
               "letterSpacing": -0.02,
-              "maxLines": 1,
+              "maxLines": 2,
               "overflow": "ellipsis"
             },
             "pageSubtitle": {
-              "size": 13,
-              "fontSize": 13,
+              "size": 11,
+              "fontSize": 11,
               "weight": 500,
               "fontWeight": 500,
               "maxLines": 2,
@@ -497,63 +541,105 @@
           "alignItems": "center",
           "crossAxisAlignment": "center",
           "gap": 10,
-          "overflowX": "hidden",
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "clipBehavior": "none",
           "width": "fill",
           "maxWidth": "100%",
           "minWidth": 0,
           "titleFlex": 1,
           "titleMinWidth": 0,
+          "heroGlobeFlex": 0,
+          "heroGlobeWidth": 160,
+          "heroGlobeHeight": 160,
           "titleSubtitleDirection": "vertical",
           "subtitlePlacement": "belowTitle",
+          "eyebrowPlacement": "belowBrand",
           "actionsFlex": 0,
           "responsive": {
             "narrow": {
               "gap": 8,
-              "titleFontSize": 22,
-              "subtitleFontSize": 12,
-              "logoHeight": 28
+              "titleFontSize": 18,
+              "subtitleFontSize": 11,
+              "logoHeight": 44,
+              "heroGlobeWidth": 148,
+              "heroGlobeHeight": 148,
+              "overflowX": "visible",
+              "clipBehavior": "none"
             },
             "compact": {
-              "gap": 10,
-              "titleFontSize": 24,
-              "subtitleFontSize": 13,
-              "logoHeight": 32
+              "gap": 12,
+              "titleFontSize": 18,
+              "subtitleFontSize": 11,
+              "logoHeight": 48,
+              "heroGlobeWidth": 160,
+              "heroGlobeHeight": 160,
+              "overflowX": "visible",
+              "clipBehavior": "none"
             },
             "regular": {
               "gap": 12,
-              "titleFontSize": 28,
-              "subtitleFontSize": 13,
-              "logoHeight": 36
+              "titleFontSize": 18,
+              "subtitleFontSize": 11,
+              "logoHeight": 48,
+              "heroGlobeWidth": 160,
+              "heroGlobeHeight": 160
             },
             "medium": {
               "gap": 12,
-              "titleFontSize": 30,
-              "subtitleFontSize": 14,
-              "logoHeight": 36
+              "titleFontSize": 22,
+              "subtitleFontSize": 12,
+              "logoHeight": 52,
+              "heroGlobeWidth": 168,
+              "heroGlobeHeight": 168
             },
             "expanded": {
               "gap": 16,
-              "titleFontSize": 34,
-              "subtitleFontSize": 15,
-              "logoHeight": 40
+              "titleFontSize": 24,
+              "subtitleFontSize": 13,
+              "logoHeight": 56,
+              "heroGlobeWidth": 168,
+              "heroGlobeHeight": 168
             }
           }
         },
         "appearance": {
-          "logoHeight": 32,
-          "logoMaxWidth": 96
+          "logoHeight": 48,
+          "logoMaxWidth": 168,
+          "orbitGlobeSize": 160,
+          "orbitGlobeClip": false,
+          "overflow": "visible"
+        },
+        "appearanceDark": {
+          "logoUrlDark": "https://efactor.tech/assets/images/dark_grid.png",
+          "logoHeight": 48,
+          "logoMaxWidth": 168,
+          "eyebrowColor": "#a78bfa",
+          "titleColor": "#f8fafc",
+          "subtitleColor": "#94a3b8",
+          "taglineColor": "#94a3b8"
         },
         "typography": {
+          "fontFamily": "Plus Jakarta Sans",
           "titleToken": "typography.pageTitle",
           "subtitleToken": "typography.pageSubtitle",
           "title": {
-            "fontSize": 24,
+            "fontFamily": "Plus Jakarta Sans",
+            "fontSize": 18,
             "fontWeight": 800,
-            "maxLines": 1,
+            "maxLines": 2,
             "overflow": "ellipsis"
           },
           "subtitle": {
-            "fontSize": 13,
+            "fontFamily": "Plus Jakarta Sans",
+            "fontSize": 11,
+            "fontWeight": 500,
+            "maxLines": 2,
+            "overflow": "ellipsis"
+          },
+          "tagline": {
+            "fontFamily": "Plus Jakarta Sans",
+            "fontSize": 11,
             "fontWeight": 500,
             "maxLines": 2,
             "overflow": "ellipsis"
@@ -561,18 +647,28 @@
         },
         "actions": [
           {
-            "id": "grid-header-search",
-            "iconToken": "search",
-            "actionId": "grid-open-search",
+            "id": "grid-header-scanner",
+            "iconToken": "scanner",
+            "actionId": "grid-open-scanner",
             "layout": {
-              "width": 40,
-              "height": 40,
+              "width": 48,
+              "height": 48,
               "flex": 0,
               "shrink": 0
             },
             "appearance": {
-              "size": 40,
-              "iconSize": 22
+              "size": 48,
+              "iconSize": 22,
+              "backgroundColor": "#ffffff",
+              "foregroundColor": "#0b1b33",
+              "borderColor": "#e5e7eb"
+            },
+            "appearanceDark": {
+              "size": 48,
+              "iconSize": 22,
+              "backgroundColor": "#1a1f2e",
+              "foregroundColor": "#f8fafc",
+              "borderColor": "#2a3344"
             }
           },
           {
@@ -584,6 +680,17 @@
             "backgroundColor": "#7c3aed",
             "foregroundColor": "#ffffff",
             "actionId": "navigate-profile",
+            "previewMode": "imageOnly",
+            "previewImageUrl": "",
+            "url": null,
+            "route": null,
+            "openIn": null,
+            "webView": null,
+            "events": {
+              "tap": {
+                "actionId": "navigate-profile"
+              }
+            },
             "fontSize": 15,
             "action": {
               "fontSize": 15,
@@ -604,24 +711,34 @@
               }
             },
             "layout": {
-              "width": 40,
-              "height": 40,
+              "width": 48,
+              "height": 48,
               "flex": 0,
               "shrink": 0
             },
             "style": {
-              "width": 40,
-              "height": 40,
-              "fontSize": 15,
+              "width": 48,
+              "height": 48,
+              "fontSize": 16,
               "fontWeight": 700,
               "backgroundColor": "#7c3aed",
               "color": "#ffffff"
             },
+            "appearanceDark": {
+              "size": 48,
+              "width": 48,
+              "height": 48,
+              "borderRadius": 24,
+              "backgroundColor": "#7c3aed",
+              "foregroundColor": "#ffffff",
+              "fontSize": 16,
+              "fontWeight": 700
+            },
             "appearance": {
-              "size": 40,
-              "width": 40,
-              "height": 40,
-              "borderRadius": 20,
+              "size": 48,
+              "width": 48,
+              "height": 48,
+              "borderRadius": 24,
               "backgroundColor": "#7c3aed",
               "foregroundColor": "#ffffff",
               "fontSize": 15,
@@ -633,12 +750,21 @@
       "grid-feature-row": {
         "id": "grid-feature-row",
         "type": "responsiveGrid",
+        "orbitGlobeUrl": "https://efactor.tech/assets/grid-orbit-globe.svg",
+        "orbitGlobeImageUrl": "https://efactor.tech/assets/images/grid-orbit-globe.png",
+        "orbitGlobeImageUrlDark": "https://efactor.tech/assets/images/grid-orbit-globe.png",
+        "appearance": {
+          "backgroundColor": "transparent"
+        },
+        "appearanceDark": {
+          "backgroundColor": "transparent"
+        },
         "layout": {
           "columns": 2,
           "columnGap": 12,
           "rowGap": 12,
-          "rowHeight": 188,
-          "minRowHeight": 188,
+          "rowHeight": 200,
+          "minRowHeight": 200,
           "minimumCellWidthDp": 0,
           "fit": "fill",
           "width": "fill",
@@ -652,8 +778,8 @@
               "columns": 2,
               "columnGap": 10,
               "rowGap": 10,
-              "rowHeight": 176,
-              "minRowHeight": 176,
+              "rowHeight": 200,
+              "minRowHeight": 200,
               "minimumCellWidthDp": 0,
               "fit": "fill",
               "width": "fill",
@@ -664,10 +790,10 @@
             },
             "compact": {
               "columns": 2,
-              "columnGap": 8,
-              "rowGap": 8,
-              "rowHeight": 188,
-              "minRowHeight": 188,
+              "columnGap": 12,
+              "rowGap": 12,
+              "rowHeight": 200,
+              "minRowHeight": 200,
               "minimumCellWidthDp": 0,
               "fit": "fill",
               "width": "fill",
@@ -680,8 +806,8 @@
               "columns": 2,
               "columnGap": 12,
               "rowGap": 12,
-              "rowHeight": 188,
-              "minRowHeight": 188,
+              "rowHeight": 200,
+              "minRowHeight": 200,
               "minimumCellWidthDp": 0,
               "fit": "fill",
               "width": "fill",
@@ -726,8 +852,8 @@
             "columns": 2,
             "columnGap": 10,
             "rowGap": 10,
-            "rowHeight": 176,
-            "minRowHeight": 176,
+            "rowHeight": 200,
+            "minRowHeight": 200,
             "minimumCellWidthDp": 0,
             "fit": "fill",
             "width": "fill",
@@ -738,10 +864,10 @@
           },
           "compact": {
             "columns": 2,
-            "columnGap": 8,
-            "rowGap": 8,
-            "rowHeight": 188,
-            "minRowHeight": 188,
+            "columnGap": 12,
+            "rowGap": 12,
+            "rowHeight": 200,
+            "minRowHeight": 200,
             "minimumCellWidthDp": 0,
             "fit": "fill",
             "width": "fill",
@@ -754,8 +880,8 @@
             "columns": 2,
             "columnGap": 12,
             "rowGap": 12,
-            "rowHeight": 188,
-            "minRowHeight": 188,
+            "rowHeight": 200,
+            "minRowHeight": 200,
             "minimumCellWidthDp": 0,
             "fit": "fill",
             "width": "fill",
@@ -801,182 +927,205 @@
           "grid-feature-circle-connect"
         ]
       },
-      "grid-stats-row": {
-        "id": "grid-stats-row",
-        "type": "statusSummary",
-        "layout": {
-          "columns": 3,
-          "gap": 8,
-          "width": "fill",
-          "maxWidth": "100%",
-          "minWidth": 0,
-          "overflowX": "hidden",
-          "responsive": {
-            "compact": {
-              "columns": 3,
-              "gap": 6,
-              "rowHeight": 72,
-              "minRowHeight": 64
-            },
-            "narrow": {
-              "columns": 3,
-              "gap": 6,
-              "rowHeight": 56,
-              "minRowHeight": 56
-            },
-            "regular": {
-              "columns": 3,
-              "gap": 8,
-              "rowHeight": 72,
-              "minRowHeight": 64
-            },
-            "medium": {
-              "columns": 3,
-              "gap": 8,
-              "rowHeight": 72,
-              "minRowHeight": 64
-            },
-            "expanded": {
-              "columns": 3,
-              "gap": 12,
-              "rowHeight": 80,
-              "minRowHeight": 64
-            }
-          }
-        },
-        "appearance": {
-          "backgroundColor": "#ffffff",
-          "borderRadius": 22,
-          "valueFontSize": 20,
-          "labelFontSize": 11,
-          "paddingVertical": 12,
-          "paddingHorizontal": 8,
-          "labelMaxLines": 2,
-          "labelOverflow": "ellipsis",
-          "minWidth": 0,
-          "width": "fill"
-        },
-        "items": [
-          {
-            "id": "professionals",
-            "label": "Professionals",
-            "value": 248,
-            "colorToken": "colors.textPrimary",
-            "appearance": {
-              "borderRadius": 22,
-              "backgroundColor": "#ffffff",
-              "valueFontSize": 22,
-              "labelFontSize": 12,
-              "paddingVertical": 12,
-              "paddingHorizontal": 12
-            }
-          },
-          {
-            "id": "opportunities",
-            "label": "Opportunities",
-            "value": 36,
-            "colorToken": "colors.textPrimary",
-            "appearance": {
-              "borderRadius": 22,
-              "backgroundColor": "#ffffff",
-              "valueFontSize": 22,
-              "labelFontSize": 12,
-              "paddingVertical": 12,
-              "paddingHorizontal": 12
-            }
-          },
-          {
-            "id": "active-circles",
-            "label": "Active Circles",
-            "value": 12,
-            "colorToken": "colors.textPrimary",
-            "appearance": {
-              "borderRadius": 22,
-              "backgroundColor": "#ffffff",
-              "valueFontSize": 22,
-              "labelFontSize": 12,
-              "paddingVertical": 12,
-              "paddingHorizontal": 12
-            }
-          }
-        ]
-      },
       "grid-share-qr": {
         "id": "grid-share-qr",
         "type": "shareQrCard",
         "title": "Share Profile QR",
         "subtitle": "Share your professional or circle profile with anyone.",
-        "iconToken": "grid",
+        "iconToken": "scanner",
         "selectedMode": "professional",
         "modes": [
           {
             "id": "professional",
             "label": "Professional",
+            "iconToken": "user",
             "selected": true,
             "actionId": "grid-select-qr-mode"
           },
           {
             "id": "circle",
             "label": "Circle",
+            "iconToken": "users",
             "selected": false,
             "actionId": "grid-select-qr-mode"
           }
         ],
         "qrCaption": "Scan to connect",
-        "qrPayload": "https://efactor.tech/grid/connect?mode=professional",
-        "image": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
-        "qrImageUrl": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
-        "qrImageUrlTemplate": "https://efactor.tech/v8/qr_image.php?data={data}&mode={mode}&size=160",
+        "qrPayload": "https://efactor.tech/index.php/grid/connect?mode=professional&user_id=655",
+        "data": "https://efactor.tech/index.php/grid/connect?mode=professional&user_id=655",
+        "image": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Findex.php%2Fgrid%2Fconnect%3Fmode%3Dprofessional%26user_id%3D655&size=200&mode=professional",
+        "imageUrl": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Findex.php%2Fgrid%2Fconnect%3Fmode%3Dprofessional%26user_id%3D655&size=200&mode=professional",
+        "qrImageUrl": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Findex.php%2Fgrid%2Fconnect%3Fmode%3Dprofessional%26user_id%3D655&size=200&mode=professional",
+        "qrImageUrlTemplate": "https://efactor.tech/v8/qr_image.php?data={data}&mode={mode}&size=200",
         "qrImageUrlsByMode": {
-          "professional": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
-          "circle": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dcircle&size=160&mode=circle"
+          "professional": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Findex.php%2Fgrid%2Fconnect%3Fmode%3Dprofessional%26user_id%3D655&size=200&mode=professional",
+          "circle": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Findex.php%2Fgrid-chat%2Fconnect%3Fmode%3Dcircle%26user_id%3D655&size=200&mode=circle"
         },
-        "shareActionId": "grid-share-qr",
-        "actionId": "grid-share-qr",
+        "shareActionId": null,
         "layout": {
           "direction": "horizontal",
-          "gap": 12,
+          "alignItems": "center",
+          "crossAxisAlignment": "center",
+          "gap": 16,
           "width": "fill",
           "maxWidth": "100%",
           "minWidth": 0,
           "overflowX": "hidden",
+          "qrSize": 140,
           "responsive": {
-            "compact": {
-              "direction": "horizontal",
-              "gap": 10
-            },
             "narrow": {
               "direction": "vertical",
-              "gap": 10
+              "gap": 14,
+              "alignItems": "stretch",
+              "qrSize": 160
+            },
+            "compact": {
+              "direction": "horizontal",
+              "gap": 16,
+              "qrSize": 140
             },
             "regular": {
               "direction": "horizontal",
-              "gap": 12
+              "gap": 16,
+              "qrSize": 140
             },
             "medium": {
               "direction": "horizontal",
-              "gap": 12
+              "gap": 18,
+              "qrSize": 148
             },
             "expanded": {
               "direction": "horizontal",
-              "gap": 16
+              "gap": 20,
+              "qrSize": 160
             }
           }
         },
+        "appearanceDark": {
+          "backgroundColor": "#171b28",
+          "borderColor": "#2a3344",
+          "borderWidth": 1,
+          "borderRadius": 24,
+          "padding": 16,
+          "titleColor": "#f8fafc",
+          "subtitleColor": "#94a3b8",
+          "qrBackgroundColor": "#ffffff",
+          "qrBorderColor": "#2a3344",
+          "captionColor": "#94a3b8",
+          "modeChipBackground": "#0f172a",
+          "modeChipColor": "#94a3b8",
+          "modeChipSelectedBackground": "#8b5cf6",
+          "modeChipSelectedColor": "#ffffff"
+        },
         "appearance": {
-          "backgroundColor": "#eef2f7",
-          "borderRadius": 20,
-          "titleFontSize": 18,
-          "subtitleFontSize": 13
-        }
+          "backgroundColor": "#ffffff",
+          "borderColor": "#e5e7eb",
+          "borderWidth": 1,
+          "borderRadius": 24,
+          "padding": 16,
+          "titleFontSize": 15,
+          "titleFontWeight": 800,
+          "titleColor": "#0f172a",
+          "subtitleFontSize": 12,
+          "subtitleColor": "#64748b",
+          "qrSize": 140,
+          "qrPadding": 10,
+          "qrBorderRadius": 16,
+          "qrBackgroundColor": "#ffffff",
+          "qrBorderColor": "#e5e7eb",
+          "captionFontSize": 11,
+          "captionColor": "#94a3b8",
+          "modeChipBorderRadius": 999,
+          "modeChipPaddingHorizontal": 12,
+          "modeChipPaddingVertical": 10,
+          "modeChipFontSize": 12,
+          "modeChipBackground": "#f1f5f9",
+          "modeChipColor": "#334155",
+          "modeChipSelectedBackground": "#7c3aed",
+          "modeChipSelectedColor": "#ffffff",
+          "modesPlacement": "bottom"
+        },
+        "modesPlacement": "bottom"
       },
       "grid-explore-section": {
         "id": "grid-explore-section",
         "type": "section",
-        "title": "Continue Exploring",
+        "title": "Updates",
+        "iconToken": "bell",
+        "badge": "",
+        "headerBadge": {
+          "label": "",
+          "backgroundColor": "#dcfce7",
+          "color": "#16a34a"
+        },
+        "filters": [
+          {
+            "id": "professional",
+            "label": "Professional",
+            "iconToken": "briefcase",
+            "count": 0,
+            "selected": true
+          },
+          {
+            "id": "circle",
+            "label": "Chat",
+            "iconToken": "message",
+            "count": 0,
+            "selected": false
+          }
+        ],
+        "modes": [
+          {
+            "id": "professional",
+            "label": "Professional",
+            "iconToken": "briefcase",
+            "selected": true,
+            "count": 0
+          },
+          {
+            "id": "circle",
+            "label": "Chat",
+            "iconToken": "message",
+            "selected": false,
+            "count": 0
+          }
+        ],
         "trailing": {
-          "label": "See all",
+          "label": "View All",
           "actionId": "grid-see-all-exploring"
+        },
+        "footer": {
+          "label": "View All Updates",
+          "actionId": "grid-see-all-exploring"
+        },
+        "appearanceDark": {
+          "backgroundColor": "#0e1118",
+          "borderColor": "#262c3b",
+          "borderRadius": 24,
+          "padding": 14,
+          "titleColor": "#f8fafc",
+          "filterSelectedBackground": "#8b5cf6",
+          "filterSelectedColor": "#ffffff",
+          "itemTitleColor": "#f8fafc",
+          "itemSubtitleColor": "#94a3b8",
+          "unreadDotColor": "#60a5fa",
+          "footerBackgroundColor": "#1e1b3a",
+          "footerColor": "#c4b5fd"
+        },
+        "appearance": {
+          "backgroundColor": "#ffffff",
+          "borderRadius": 24,
+          "padding": 14,
+          "titleFontSize": 18,
+          "titleFontWeight": 800,
+          "titleColor": "#0f172a",
+          "filterSelectedBackground": "#7c3aed",
+          "filterSelectedColor": "#ffffff",
+          "itemTitleFontSize": 14,
+          "itemSubtitleFontSize": 12,
+          "unreadDotColor": "#3b82f6",
+          "footerBackgroundColor": "#eef2ff",
+          "footerColor": "#6d28d9"
         },
         "children": [
           "grid-explore-row"
@@ -985,12 +1134,18 @@
       "grid-explore-row": {
         "id": "grid-explore-row",
         "type": "responsiveGrid",
+        "appearance": {
+          "backgroundColor": "transparent"
+        },
+        "appearanceDark": {
+          "backgroundColor": "transparent"
+        },
         "layout": {
-          "columns": 2,
-          "columnGap": 12,
-          "rowGap": 12,
-          "rowHeight": 122,
-          "minRowHeight": 122,
+          "columns": 1,
+          "columnGap": 8,
+          "rowGap": 8,
+          "rowHeight": 76,
+          "minRowHeight": 76,
           "minimumCellWidthDp": 0,
           "fit": "fill",
           "width": "fill",
@@ -1001,11 +1156,11 @@
           "independentScroll": false,
           "responsive": {
             "narrow": {
-              "columns": 2,
-              "columnGap": 10,
-              "rowGap": 10,
-              "rowHeight": 122,
-              "minRowHeight": 122,
+              "columns": 1,
+              "columnGap": 8,
+              "rowGap": 8,
+              "rowHeight": 76,
+              "minRowHeight": 76,
               "minimumCellWidthDp": 0,
               "fit": "fill",
               "width": "fill",
@@ -1015,11 +1170,11 @@
               "overflowX": "hidden"
             },
             "compact": {
-              "columns": 2,
-              "columnGap": 10,
-              "rowGap": 10,
-              "rowHeight": 122,
-              "minRowHeight": 122,
+              "columns": 1,
+              "columnGap": 8,
+              "rowGap": 8,
+              "rowHeight": 76,
+              "minRowHeight": 76,
               "minimumCellWidthDp": 0,
               "fit": "fill",
               "width": "fill",
@@ -1029,11 +1184,11 @@
               "overflowX": "hidden"
             },
             "regular": {
-              "columns": 2,
-              "columnGap": 12,
-              "rowGap": 12,
-              "rowHeight": 122,
-              "minRowHeight": 122,
+              "columns": 1,
+              "columnGap": 8,
+              "rowGap": 8,
+              "rowHeight": 76,
+              "minRowHeight": 76,
               "minimumCellWidthDp": 0,
               "fit": "fill",
               "width": "fill",
@@ -1043,11 +1198,11 @@
               "overflowX": "hidden"
             },
             "medium": {
-              "columns": 2,
-              "columnGap": 12,
-              "rowGap": 12,
-              "rowHeight": 122,
-              "minRowHeight": 122,
+              "columns": 1,
+              "columnGap": 8,
+              "rowGap": 8,
+              "rowHeight": 76,
+              "minRowHeight": 76,
               "minimumCellWidthDp": 0,
               "fit": "fill",
               "width": "fill",
@@ -1057,11 +1212,11 @@
               "overflowX": "hidden"
             },
             "expanded": {
-              "columns": 2,
-              "columnGap": 16,
-              "rowGap": 16,
-              "rowHeight": 122,
-              "minRowHeight": 122,
+              "columns": 1,
+              "columnGap": 10,
+              "rowGap": 10,
+              "rowHeight": 76,
+              "minRowHeight": 76,
               "minimumCellWidthDp": 0,
               "fit": "fill",
               "width": "fill",
@@ -1075,11 +1230,11 @@
         },
         "layouts": {
           "narrow": {
-            "columns": 2,
-            "columnGap": 10,
-            "rowGap": 10,
-            "rowHeight": 122,
-            "minRowHeight": 122,
+            "columns": 1,
+            "columnGap": 8,
+            "rowGap": 8,
+            "rowHeight": 76,
+            "minRowHeight": 76,
             "minimumCellWidthDp": 0,
             "fit": "fill",
             "width": "fill",
@@ -1089,11 +1244,11 @@
             "overflowX": "hidden"
           },
           "compact": {
-            "columns": 2,
-            "columnGap": 10,
-            "rowGap": 10,
-            "rowHeight": 122,
-            "minRowHeight": 122,
+            "columns": 1,
+            "columnGap": 8,
+            "rowGap": 8,
+            "rowHeight": 76,
+            "minRowHeight": 76,
             "minimumCellWidthDp": 0,
             "fit": "fill",
             "width": "fill",
@@ -1103,11 +1258,11 @@
             "overflowX": "hidden"
           },
           "regular": {
-            "columns": 2,
-            "columnGap": 12,
-            "rowGap": 12,
-            "rowHeight": 122,
-            "minRowHeight": 122,
+            "columns": 1,
+            "columnGap": 8,
+            "rowGap": 8,
+            "rowHeight": 76,
+            "minRowHeight": 76,
             "minimumCellWidthDp": 0,
             "fit": "fill",
             "width": "fill",
@@ -1117,11 +1272,11 @@
             "overflowX": "hidden"
           },
           "medium": {
-            "columns": 2,
-            "columnGap": 12,
-            "rowGap": 12,
-            "rowHeight": 122,
-            "minRowHeight": 122,
+            "columns": 1,
+            "columnGap": 8,
+            "rowGap": 8,
+            "rowHeight": 76,
+            "minRowHeight": 76,
             "minimumCellWidthDp": 0,
             "fit": "fill",
             "width": "fill",
@@ -1131,11 +1286,11 @@
             "overflowX": "hidden"
           },
           "expanded": {
-            "columns": 2,
-            "columnGap": 16,
-            "rowGap": 16,
-            "rowHeight": 122,
-            "minRowHeight": 122,
+            "columns": 1,
+            "columnGap": 10,
+            "rowGap": 10,
+            "rowHeight": 76,
+            "minRowHeight": 76,
             "minimumCellWidthDp": 0,
             "fit": "fill",
             "width": "fill",
@@ -1149,38 +1304,50 @@
         "overflowPolicy": "reflow",
         "preserveChildOrder": true,
         "children": [
-          "grid-explore-find-talent",
-          "grid-explore-join-circles"
+          "grid-explore-professional-message"
         ]
-      },
-      "grid-quote-block": {
-        "id": "grid-quote-block",
-        "type": "quoteBlock",
-        "title": "Connections turn potential into progress.",
-        "iconToken": "quote",
-        "appearance": {
-          "backgroundColor": "#f5f3ff",
-          "textColor": "#312e81",
-          "borderRadius": 20
-        }
       },
       "grid-loading": {
         "id": "grid-loading",
         "type": "skeleton",
-        "variant": "home-dashboard"
+        "variant": "home-dashboard",
+        "appearance": {
+          "backgroundColor": "#eef4fb"
+        },
+        "appearanceDark": {
+          "backgroundColor": "#050b16"
+        }
       },
       "grid-empty": {
         "id": "grid-empty",
         "type": "emptyState",
         "iconToken": "grid",
         "title": "Grid is empty",
-        "subtitle": "Your network space will appear here."
+        "subtitle": "Your network space will appear here.",
+        "appearance": {
+          "backgroundColor": "#eef4fb",
+          "titleColor": "#0b1b33",
+          "subtitleColor": "#64748b"
+        },
+        "appearanceDark": {
+          "backgroundColor": "#050b16",
+          "titleColor": "#f8fafc",
+          "subtitleColor": "#94a3b8"
+        }
       },
       "grid-error": {
         "id": "grid-error",
         "type": "errorState",
         "title": "Unable to load Grid",
-        "retryActionId": "refresh-grid"
+        "retryActionId": "refresh-grid",
+        "appearance": {
+          "backgroundColor": "#eef4fb",
+          "titleColor": "#0b1b33"
+        },
+        "appearanceDark": {
+          "backgroundColor": "#050b16",
+          "titleColor": "#f8fafc"
+        }
       }
     },
     "actions": {
@@ -1191,9 +1358,11 @@
         }
       },
       "navigate-profile": {
-        "type": "navigate",
+        "type": "host-action",
+        "actionId": "preview-grid-avatar",
         "destination": {
-          "routeId": "profile"
+          "previewMode": "imageOnly",
+          "imageUrl": ""
         }
       },
       "refresh-grid": {
@@ -1215,15 +1384,45 @@
           }
         ]
       },
-      "grid-open-search": {
-        "type": "host-action",
-        "actionId": "open-grid-search"
+      "grid-open-scanner": {
+        "type": "open-url",
+        "url": "https://efactor.tech/index.php/grid/qr",
+        "route": "https://efactor.tech/index.php/grid/qr",
+        "title": "Scan QR",
+        "openIn": "inAppWebView",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": true,
+          "showToolbar": true,
+          "hideAppBar": false,
+          "displayMode": "standard"
+        },
+        "destination": {
+          "url": "https://efactor.tech/index.php/grid/qr",
+          "openIn": "inAppWebView",
+          "title": "Scan QR",
+          "sharedCookies": true,
+          "showAppBar": true,
+          "showToolbar": true,
+          "hideAppBar": false,
+          "webView": {
+            "javaScriptEnabled": true,
+            "sharedCookies": true,
+            "clearCache": false,
+            "showAppBar": true,
+            "showToolbar": true,
+            "hideAppBar": false,
+            "displayMode": "standard"
+          }
+        }
       },
       "grid-open-professional-space": {
         "type": "open-url",
         "url": "https://efactor.tech/index.php/grid",
         "route": "https://efactor.tech/index.php/grid",
-        "title": "Professional Space",
+        "title": "",
         "openIn": "inAppWebView",
         "webView": {
           "javaScriptEnabled": true,
@@ -1237,7 +1436,7 @@
         "destination": {
           "url": "https://efactor.tech/index.php/grid",
           "openIn": "inAppWebView",
-          "title": "Professional Space",
+          "title": "",
           "sharedCookies": true,
           "showAppBar": false,
           "showToolbar": false,
@@ -1257,7 +1456,7 @@
         "type": "open-url",
         "url": "https://efactor.tech/index.php/grid-chat",
         "route": "https://efactor.tech/index.php/grid-chat",
-        "title": "Circle Connect",
+        "title": "",
         "openIn": "inAppWebView",
         "webView": {
           "javaScriptEnabled": true,
@@ -1271,7 +1470,7 @@
         "destination": {
           "url": "https://efactor.tech/index.php/grid-chat",
           "openIn": "inAppWebView",
-          "title": "Circle Connect",
+          "title": "",
           "sharedCookies": true,
           "showAppBar": false,
           "showToolbar": false,
@@ -1288,24 +1487,144 @@
         }
       },
       "grid-open-find-talent": {
-        "type": "host-action",
-        "actionId": "open-grid-find-talent"
+        "type": "open-url",
+        "url": "https://efactor.tech/index.php/grid/network",
+        "route": "https://efactor.tech/index.php/grid/network",
+        "title": "",
+        "openIn": "inAppWebView",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "displayMode": "fullscreen"
+        },
+        "destination": {
+          "url": "https://efactor.tech/index.php/grid/network",
+          "openIn": "inAppWebView",
+          "title": "",
+          "sharedCookies": true,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "webView": {
+            "javaScriptEnabled": true,
+            "sharedCookies": true,
+            "clearCache": false,
+            "showAppBar": false,
+            "showToolbar": false,
+            "hideAppBar": true,
+            "displayMode": "fullscreen"
+          }
+        }
       },
       "grid-open-join-circles": {
-        "type": "host-action",
-        "actionId": "open-grid-join-circles"
+        "type": "open-url",
+        "url": "https://efactor.tech/index.php/grid-chat",
+        "route": "https://efactor.tech/index.php/grid-chat",
+        "title": "",
+        "openIn": "inAppWebView",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "displayMode": "fullscreen"
+        },
+        "destination": {
+          "url": "https://efactor.tech/index.php/grid-chat",
+          "openIn": "inAppWebView",
+          "title": "",
+          "sharedCookies": true,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "webView": {
+            "javaScriptEnabled": true,
+            "sharedCookies": true,
+            "clearCache": false,
+            "showAppBar": false,
+            "showToolbar": false,
+            "hideAppBar": true,
+            "displayMode": "fullscreen"
+          }
+        }
       },
       "grid-see-all-exploring": {
-        "type": "host-action",
-        "actionId": "open-grid-exploring-all"
-      },
-      "grid-share-qr": {
-        "type": "host-action",
-        "actionId": "share-grid-qr"
+        "type": "open-url",
+        "url": "https://efactor.tech/index.php/grid/network",
+        "route": "https://efactor.tech/index.php/grid/network",
+        "title": "",
+        "openIn": "inAppWebView",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "displayMode": "fullscreen"
+        },
+        "destination": {
+          "url": "https://efactor.tech/index.php/grid/network",
+          "openIn": "inAppWebView",
+          "title": "",
+          "sharedCookies": true,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "webView": {
+            "javaScriptEnabled": true,
+            "sharedCookies": true,
+            "clearCache": false,
+            "showAppBar": false,
+            "showToolbar": false,
+            "hideAppBar": true,
+            "displayMode": "fullscreen"
+          }
+        }
       },
       "grid-select-qr-mode": {
         "type": "host-action",
         "actionId": "select-grid-qr-mode"
+      },
+      "grid-open-professional-message": {
+        "type": "open-url",
+        "url": "https://efactor.tech/index.php/grid/messaging",
+        "route": "https://efactor.tech/index.php/grid/messaging",
+        "title": "",
+        "openIn": "inAppWebView",
+        "webView": {
+          "javaScriptEnabled": true,
+          "sharedCookies": true,
+          "clearCache": false,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "displayMode": "fullscreen"
+        },
+        "destination": {
+          "url": "https://efactor.tech/index.php/grid/messaging",
+          "openIn": "inAppWebView",
+          "title": "",
+          "sharedCookies": true,
+          "showAppBar": false,
+          "showToolbar": false,
+          "hideAppBar": true,
+          "webView": {
+            "javaScriptEnabled": true,
+            "sharedCookies": true,
+            "clearCache": false,
+            "showAppBar": false,
+            "showToolbar": false,
+            "hideAppBar": true,
+            "displayMode": "fullscreen"
+          }
+        }
       }
     },
     "dataSources": {
@@ -1315,13 +1634,151 @@
         "method": "GET",
         "queryParameters": {
           "action": "get_grid",
-          "user_id": 707
+          "user_id": 655,
+          "schema_rev": "grid-logo-globe-3"
         },
         "responseMapping": {
           "schema": "$.schema",
-          "content": "$.content"
+          "page": "$.schema.page",
+          "components": "$.schema.components",
+          "actions": "$.schema.actions",
+          "iconRegistry": "$.schema.iconRegistry",
+          "content": "$.schema.content"
         },
         "published": true
+      }
+    },
+    "content": {
+      "id": "gridPage",
+      "routeId": "grid",
+      "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
+      "orbitGlobeUrl": "https://efactor.tech/assets/grid-orbit-globe.svg",
+      "header": {
+        "title": "Grid",
+        "subtitle": "Your professional network space",
+        "eyebrow": "Welcome to GRID",
+        "tagline": "Connect. Collaborate. Grow Together.",
+        "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
+        "searchIconToken": "scanner",
+        "avatarInitial": "S",
+        "avatarColor": "#7c3aed",
+        "avatarUrl": ""
+      },
+      "featureCards": [
+        {
+          "id": "professional-space",
+          "title": "Professional Space",
+          "subtitle": "Discover people, opportunities and grow your career.",
+          "iconToken": "user",
+          "ctaLabel": "Explore Now",
+          "image": "",
+          "imageUrl": "",
+          "url": "https://efactor.tech/index.php/grid",
+          "route": "https://efactor.tech/index.php/grid",
+          "color": "#5b6cff",
+          "gradientStart": "#dce4ff",
+          "gradientEnd": "#b7c4fb",
+          "textColor": "#312e81",
+          "actionId": "grid-open-professional-space"
+        },
+        {
+          "id": "circle-connect",
+          "title": "Circle Connect",
+          "subtitle": "Meaningful conversations. Stronger circles.",
+          "iconToken": "users",
+          "ctaLabel": "Explore Now",
+          "image": "",
+          "imageUrl": "",
+          "url": "https://efactor.tech/index.php/grid-chat",
+          "route": "https://efactor.tech/index.php/grid-chat",
+          "color": "#ea580c",
+          "gradientStart": "#ffe0cc",
+          "gradientEnd": "#f4b496",
+          "textColor": "#9a3412",
+          "actionId": "grid-open-circle-connect",
+          "orbitGlobeUrl": "https://efactor.tech/assets/grid-orbit-globe.svg"
+        }
+      ],
+      "stats": [],
+      "shareQr": {
+        "title": "Share Profile QR",
+        "subtitle": "Share your professional or circle profile with anyone.",
+        "iconToken": "qrcode",
+        "selectedMode": "professional",
+        "modes": [
+          {
+            "id": "professional",
+            "label": "Professional",
+            "iconToken": "user"
+          },
+          {
+            "id": "circle",
+            "label": "Circle",
+            "iconToken": "users"
+          }
+        ],
+        "qrCaption": "Scan to connect",
+        "qrPayload": "https://efactor.tech/index.php/grid/connect?mode=professional&user_id=655",
+        "qrImageUrl": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Findex.php%2Fgrid%2Fconnect%3Fmode%3Dprofessional%26user_id%3D655&size=200&mode=professional",
+        "qrImageUrlTemplate": "https://efactor.tech/v8/qr_image.php?data={data}&mode={mode}&size=200",
+        "qrImageUrlsByMode": {
+          "professional": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Findex.php%2Fgrid%2Fconnect%3Fmode%3Dprofessional%26user_id%3D655&size=200&mode=professional",
+          "circle": "https://efactor.tech/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Findex.php%2Fgrid-chat%2Fconnect%3Fmode%3Dcircle%26user_id%3D655&size=200&mode=circle"
+        },
+        "shareActionId": null,
+        "selectModeActionId": "grid-select-qr-mode"
+      },
+      "exploring": {
+        "title": "Updates",
+        "iconToken": "bell",
+        "seeAllLabel": "View All",
+        "seeAllActionId": "grid-see-all-exploring",
+        "viewAllLabel": "View All Updates",
+        "items": [
+          {
+            "id": "professional-message",
+            "kind": "message",
+            "space": "professional",
+            "title": "Messages",
+            "subtitle": "No new messages",
+            "preview": "No new messages",
+            "badge": "Professional",
+            "time": "",
+            "at": 0,
+            "initials": "M",
+            "iconToken": "message",
+            "imageUrl": "",
+            "image": "",
+            "color": "#5b6cff",
+            "backgroundColor": "#eef2ff",
+            "avatarColor": "#14b8a6",
+            "actionId": "grid-open-professional-message",
+            "url": "https://efactor.tech/index.php/grid/messaging",
+            "route": "https://efactor.tech/index.php/grid/messaging",
+            "unread": false
+          }
+        ],
+        "badge": "",
+        "filters": [
+          {
+            "id": "professional",
+            "label": "Professional",
+            "iconToken": "briefcase",
+            "count": 0,
+            "selected": true
+          },
+          {
+            "id": "circle",
+            "label": "Chat",
+            "iconToken": "message",
+            "count": 0,
+            "selected": false
+          }
+        ]
+      },
+      "quote": {
+        "text": "Connections turn potential into progress.",
+        "iconToken": "quote"
       }
     },
     "iconRegistry": {
@@ -1333,6 +1790,14 @@
         "flutter": "magnifyingGlass",
         "web": "magnifying-glass"
       },
+      "scanner": {
+        "flutter": "qrCodeScanner",
+        "web": "qrcode"
+      },
+      "qrcode": {
+        "flutter": "qrCode",
+        "web": "qrcode"
+      },
       "user": {
         "flutter": "user",
         "web": "user"
@@ -1340,6 +1805,18 @@
       "users": {
         "flutter": "users",
         "web": "users"
+      },
+      "bell": {
+        "flutter": "bell",
+        "web": "bell"
+      },
+      "briefcase": {
+        "flutter": "briefcase",
+        "web": "briefcase"
+      },
+      "building": {
+        "flutter": "building",
+        "web": "building"
       },
       "quote": {
         "flutter": "quoteLeft",
@@ -1352,6 +1829,14 @@
       "profile": {
         "flutter": "userPen",
         "web": "user-pen"
+      },
+      "message": {
+        "flutter": "chatBubble",
+        "web": "comment"
+      },
+      "phone": {
+        "flutter": "phone",
+        "web": "phone"
       }
     },
     "action": {
@@ -1366,23 +1851,60 @@
         "accent": "#7c3aed",
         "textPrimary": "#2e1065",
         "textSecondary": "#6b7280",
+        "textMuted": "#94a3b8",
         "pageBackground": "#f7f8fc"
+      },
+      "defaultMode": "system",
+      "systemFollows": "device",
+      "modes": {
+        "light": {
+          "pageBackground": "#eef4fb",
+          "surface": "#ffffff",
+          "onSurface": "#0b1b33",
+          "textPrimary": "#0b1b33",
+          "textSecondary": "#64748b",
+          "textMuted": "#94a3b8",
+          "border": "#cbd5e1",
+          "accent": "#7c3aed",
+          "onAccent": "#ffffff"
+        },
+        "dark": {
+          "pageBackground": "#050b16",
+          "surface": "#1a1f2e",
+          "onSurface": "#f8fafc",
+          "textPrimary": "#f8fafc",
+          "textSecondary": "#94a3b8",
+          "textMuted": "#64748b",
+          "border": "#2a3344",
+          "accent": "#8b5cf6",
+          "onAccent": "#ffffff"
+        }
       }
     },
     "typography": {
+      "fontFamily": "Plus Jakarta Sans",
       "action": {
         "fontSize": 15,
         "fontWeight": 700,
         "lineHeight": 1.2
       },
       "pageTitle": {
-        "fontSize": 26,
+        "fontFamily": "Plus Jakarta Sans",
+        "fontSize": 18,
         "fontWeight": 800,
-        "maxLines": 1,
+        "maxLines": 2,
         "overflow": "ellipsis"
       },
       "pageSubtitle": {
-        "fontSize": 13,
+        "fontFamily": "Plus Jakarta Sans",
+        "fontSize": 11,
+        "fontWeight": 500,
+        "maxLines": 2,
+        "overflow": "ellipsis"
+      },
+      "tagline": {
+        "fontFamily": "Plus Jakarta Sans",
+        "fontSize": 11,
         "fontWeight": 500,
         "maxLines": 2,
         "overflow": "ellipsis"
@@ -1392,6 +1914,7 @@
       "colors": {
         "textPrimary": "#2e1065",
         "textSecondary": "#6b7280",
+        "textMuted": "#94a3b8",
         "border": "#e5e7eb",
         "surface": "#ffffff",
         "onSurface": "#111827",
@@ -1406,18 +1929,19 @@
         "color": "#ffffff"
       },
       "typography": {
+        "fontFamily": "Plus Jakarta Sans",
         "pageTitle": {
-          "size": 26,
-          "fontSize": 26,
+          "size": 18,
+          "fontSize": 18,
           "weight": 800,
           "fontWeight": 800,
           "letterSpacing": -0.02,
-          "maxLines": 1,
+          "maxLines": 2,
           "overflow": "ellipsis"
         },
         "pageSubtitle": {
-          "size": 13,
-          "fontSize": 13,
+          "size": 11,
+          "fontSize": 11,
           "weight": 500,
           "fontWeight": 500,
           "maxLines": 2,

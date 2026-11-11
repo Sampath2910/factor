@@ -123,21 +123,6 @@ class GridSchemaRepository {
   Future<Map<String, dynamic>> _loadUncoalesced({
     required bool forceRefresh,
   }) async {
-    if (!forceRefresh) {
-      final memory = _memoryCache[_cacheKey];
-      if (memory != null) {
-        logDebug('[GRID_SDUI][FETCH_SCHEMA] MEMORY HIT');
-        return memory;
-      }
-
-      final disk = await _readDiskCache();
-      if (disk != null) {
-        _memoryCache[_cacheKey] = disk;
-        logDebug('[GRID_SDUI][FETCH_SCHEMA] DISK CACHE HIT');
-        return disk;
-      }
-    }
-
     try {
       return await _loadLive(forceRefresh: forceRefresh);
     } catch (error) {
@@ -229,7 +214,25 @@ class GridSchemaRepository {
     unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
   }
 
-  /// Cache-first incremental revalidation for Grid schemas.
+  /// Extracts the layout contract revision (`schema_rev`) from envelope or nested schema.
+  static String? extractSchemaRev(Map<String, dynamic>? schema) {
+    if (schema == null) return null;
+    for (final raw in <dynamic>[
+      schema['schema_rev'],
+      schema['schema'] is Map ? (schema['schema'] as Map)['schema_rev'] : null,
+      schema['dataSources'] is Map && (schema['dataSources'] as Map)['grid'] is Map
+          ? (((schema['dataSources'] as Map)['grid'] as Map)['queryParameters'] is Map
+              ? (((schema['dataSources'] as Map)['grid'] as Map)['queryParameters'] as Map)['schema_rev']
+              : null)
+          : null,
+    ]) {
+      final text = raw?.toString().trim() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  /// Network-first incremental revalidation for Grid schemas.
   Future<SchemaSyncResult> revalidate({
     SchemaInvalidationEvent? event,
     bool forceFull = false,
@@ -260,9 +263,12 @@ class GridSchemaRepository {
     try {
       if (effectiveForceFull || !hasDeltaEndpoints) {
         final cachedFingerprint = schemaFingerprint(cached);
+        final cachedRev = extractSchemaRev(cached);
         final full = await _loadLive(forceRefresh: true);
         final fullFingerprint = schemaFingerprint(full);
-        final changed = cachedFingerprint != fullFingerprint;
+        final fullRev = extractSchemaRev(full);
+        final revChanged = fullRev != null && fullRev != cachedRev;
+        final changed = revChanged || cachedFingerprint != fullFingerprint;
         return SchemaSyncResult(
           schema: changed ? full : cached,
           changed: changed,
@@ -337,7 +343,7 @@ class GridSchemaRepository {
       uri,
       headers: <String, String>{
         'Accept': 'application/json',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, must-revalidate',
         'Pragma': 'no-cache',
         'Authorization': 'Bearer ${accessToken.trim()}',
       },
@@ -389,6 +395,20 @@ class GridSchemaRepository {
       contentType: response.headers['content-type'],
     );
 
+    final previous = _memoryCache[_cacheKey];
+    final previousRev = extractSchemaRev(previous);
+    final nextRev = extractSchemaRev(schema);
+    if (nextRev != null && previousRev != null && nextRev != previousRev) {
+      logDebug(
+        '[GRID_SDUI][FETCH_SCHEMA] schema_rev changed '
+        '($previousRev -> $nextRev); invalidating cached layout',
+      );
+      _memoryCache.remove(_cacheKey);
+      try {
+        await SchemaDiskCache.remove(_diskCacheFileName);
+      } catch (_) {}
+    }
+
     schema['_clientGridSchemaSource'] = _redactUri(uri).toString();
     schema['_clientGridSchemaCacheHit'] = false;
     schema['_clientGridSchemaOfflineFallback'] = false;
@@ -398,6 +418,7 @@ class GridSchemaRepository {
     _memoryCache[_cacheKey] = schema;
     // Await disk write so offline open after first visit is reliable.
     await _writeDiskCache(response.body);
+    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
     return schema;
   }
 
@@ -412,7 +433,9 @@ class GridSchemaRepository {
       source: sourceName,
     );
 
-    final decoded = await compute(_gridJsonDecodeAny, raw);
+    final decoded = raw.length > 50 * 1024
+        ? await compute(_gridJsonDecodeAny, raw)
+        : _gridJsonDecodeAny(raw);
     if (decoded is! Map) {
       throw FormatException(
         'Grid response root must be a JSON object. source=$sourceName',
@@ -489,9 +512,14 @@ class GridSchemaRepository {
       'contentHash',
       'grid_sso',
       'gridApiUrl',
+      'schema_rev',
       'schema_version',
+      'schemaVersion',
       'pageId',
       'routeId',
+      'theme',
+      'typography',
+      'layoutPolicy',
     ]) {
       if (root.containsKey(metaKey) && !schema.containsKey(metaKey)) {
         schema[metaKey] = root[metaKey];

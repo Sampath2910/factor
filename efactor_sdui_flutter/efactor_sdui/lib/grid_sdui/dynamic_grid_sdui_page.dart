@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../sdui/scanner_page.dart';
 import '../sdui/schema_guard.dart';
@@ -24,6 +25,7 @@ class DynamicGridSduiPage extends StatefulWidget {
     required this.accessToken,
     this.userId,
     this.embedInHostShell = false,
+    this.includeTopSafeArea = false,
     this.schemaRefreshEpoch = 0,
     this.repository,
     this.enableAutoRefresh = true,
@@ -35,6 +37,11 @@ class DynamicGridSduiPage extends StatefulWidget {
   /// When true, Home keeps its app shell (including the schema bottom bar)
   /// and this page fills only the shell body.
   final bool embedInHostShell;
+
+  /// When embedded inside a host shell that already removed outer top padding,
+  /// apply SafeArea top inset internally so Grid's dark/light background paints
+  /// edge-to-edge behind the status bar.
+  final bool includeTopSafeArea;
 
   /// Bumped by the Home host when this tab is shown again so the live schema
   /// is refetched instead of the IndexedStack keeping a stale first paint.
@@ -54,10 +61,12 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     with WidgetsBindingObserver {
   late final GridSchemaRepository _repository;
   GridSduiState? _state;
+  GridSduiState? _loadingThemeState;
   GridSduiRenderer? _renderer;
   bool _loading = true;
   String? _error;
   String? _activeSchemaFingerprint;
+  String? _activeSchemaRev;
   bool _revalidateInProgress = false;
 
   static const Duration _resumeRefreshAfter = Duration(seconds: 30);
@@ -80,12 +89,21 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
           accessToken: widget.accessToken,
           userId: widget.userId,
         );
+    final peeked = _repository.peekMemory();
+    if (peeked != null) {
+      _loadingThemeState = GridSduiState(
+        peeked,
+        platformBrightness:
+            WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      );
+    }
     _subscribeToSchemaInvalidations();
     if (widget.enableAutoRefresh) {
       _startAutoRefreshTimer();
     }
-    // Cache-first: show disk/memory immediately, then revalidate in background.
-    _load(forceRefresh: false);
+    // Network-first on open: fetch live get_grid so layout, theme, avatar,
+    // QR, and Updates are fresh, with disk/asset used only for offline fallback.
+    _load(forceRefresh: true, fromInitState: true);
   }
 
   void _startAutoRefreshTimer() {
@@ -173,9 +191,26 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   }
 
   @override
+  void didChangePlatformBrightness() {
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    _state?.updatePlatformBrightness(brightness);
+    _loadingThemeState?.updatePlatformBrightness(brightness);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _schemaIsStaleForResume) {
-      _revalidateInBackground(forceFull: false);
+    if (state == AppLifecycleState.resumed) {
+      final brightness =
+          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      _state?.updatePlatformBrightness(brightness);
+      _loadingThemeState?.updatePlatformBrightness(brightness);
+      if (_schemaIsStaleForResume) {
+        _revalidateInBackground(forceFull: true);
+      }
     }
   }
 
@@ -190,7 +225,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.accessToken != widget.accessToken ||
         oldWidget.userId != widget.userId) {
-      _load(forceRefresh: false);
+      _load(forceRefresh: true);
     } else if (oldWidget.schemaRefreshEpoch != widget.schemaRefreshEpoch) {
       _revalidateInBackground(forceFull: true);
     }
@@ -204,29 +239,51 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     _schemaEventDebounceTimer?.cancel();
     _autoRefreshTimer?.cancel();
     _state?.dispose();
+    _loadingThemeState?.dispose();
     if (widget.repository == null) {
       _repository.dispose();
     }
     super.dispose();
   }
 
-  Future<void> _load({bool forceRefresh = false, bool showFeedback = false}) async {
+  Future<void> _load({
+    bool forceRefresh = true,
+    bool showFeedback = false,
+    bool fromInitState = false,
+  }) async {
     final generationOk = mounted;
-    Map<String, dynamic>? schema;
-    if (!forceRefresh) {
-      schema = _repository.peekMemory() ?? await _repository.readFromCache();
+
+    if (_state == null && _loadingThemeState == null) {
+      unawaited(
+        _repository.readFromCache().then((cached) {
+          if (!mounted || _state != null || cached == null) return;
+          final brightness =
+              WidgetsBinding.instance.platformDispatcher.platformBrightness;
+          setState(() {
+            _loadingThemeState?.dispose();
+            _loadingThemeState = GridSduiState(
+              cached,
+              platformBrightness: brightness,
+            );
+          });
+        }),
+      );
     }
 
-    setState(() {
-      // Only show a full-page spinner when there is nothing cached to paint.
-      if (_state == null && schema == null) _loading = true;
+    if (fromInitState) {
+      if (_state == null) _loading = true;
       _error = null;
-    });
+    } else {
+      setState(() {
+        if (_state == null) _loading = true;
+        _error = null;
+      });
+    }
 
     final previousFingerprint = _activeSchemaFingerprint;
 
     try {
-      schema ??= widget.repository != null
+      final schema = widget.repository != null
           ? await _repository.load(forceRefresh: forceRefresh)
           : await SchemaLoadQueue.instance.loadGrid(
               accessToken: widget.accessToken,
@@ -259,13 +316,6 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
             duration: const Duration(seconds: 2),
           ),
         );
-      }
-
-      if (!forceRefresh) {
-        // Eager revalidation: whenever the page is loaded (even from cache),
-        // immediately fetch the live schema from the server in the background
-        // so any schema update on the server is displayed without requiring a manual pull-to-refresh.
-        unawaited(_revalidateInBackground(forceFull: true));
       }
     } catch (error, stack) {
       logDebug('[GRID_SDUI][LOAD_ERROR] $error');
@@ -317,9 +367,18 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
 
   void _applySchema(Map<String, dynamic> schema, {bool forceRebuild = false}) {
     final fingerprint = schemaFingerprint(schema);
+    final nextRev = GridSchemaRepository.extractSchemaRev(schema);
+    final revChanged = nextRev != null && nextRev != _activeSchemaRev;
+    final platformBrightness = mounted
+        ? (MediaQuery.maybePlatformBrightnessOf(context) ??
+            WidgetsBinding.instance.platformDispatcher.platformBrightness)
+        : WidgetsBinding.instance.platformDispatcher.platformBrightness;
+
     if (!forceRebuild &&
+        !revChanged &&
         _state != null &&
         fingerprint == _activeSchemaFingerprint) {
+      _state!.updatePlatformBrightness(platformBrightness, notify: false);
       setState(() {
         _loading = false;
         _error = null;
@@ -327,10 +386,17 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       return;
     }
     _activeSchemaFingerprint = fingerprint;
-    final next = GridSduiState(schema);
+    _activeSchemaRev = nextRev;
+    final next = GridSduiState(
+      schema,
+      platformBrightness: platformBrightness,
+    );
     next.inAppWebViewOpener = _openInAppWebView;
     next.nativeScannerOpener = _openNativeScanner;
+    next.refreshHandler = () => _load(forceRefresh: true);
     _state?.dispose();
+    _loadingThemeState?.dispose();
+    _loadingThemeState = null;
     setState(() {
       _state = next;
       _renderer = GridSduiRenderer(next);
@@ -418,11 +484,20 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
 
   @override
   Widget build(BuildContext context) {
+    final platformBrightness = MediaQuery.platformBrightnessOf(context);
     final state = _state;
     final renderer = _renderer;
-    final background = state?.tokenColor('colors.pageBackground');
-    final foreground = state?.tokenColor('colors.textPrimary');
-    final body = _buildBody(context, state, renderer);
+    state?.updatePlatformBrightness(platformBrightness, notify: false);
+    _loadingThemeState?.updatePlatformBrightness(
+      platformBrightness,
+      notify: false,
+    );
+
+    final activeThemeState = state ?? _loadingThemeState;
+    final background = activeThemeState?.tokenColor('colors.pageBackground');
+    final foreground = activeThemeState?.tokenColor('colors.textPrimary');
+    final isDark = activeThemeState?.isDarkMode ??
+        (platformBrightness == Brightness.dark);
 
     if (state != null && (background == null || foreground == null)) {
       return const SchemaIssueWidget(
@@ -433,52 +508,151 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       );
     }
 
+    final themedData = _gridThemeData(
+      context,
+      state: activeThemeState,
+      isDark: isDark,
+      background: background,
+      foreground: foreground,
+    );
+
+    final body = _buildBody(
+      context,
+      state,
+      renderer,
+      isDark: isDark,
+    );
+
+    final overlayStyle = widget.embedInHostShell
+        ? SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness:
+                isDark ? Brightness.light : Brightness.dark,
+            statusBarBrightness:
+                isDark ? Brightness.dark : Brightness.light,
+          )
+        : SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness:
+                isDark ? Brightness.light : Brightness.dark,
+            statusBarBrightness:
+                isDark ? Brightness.dark : Brightness.light,
+            systemNavigationBarColor: background,
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarIconBrightness:
+                isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarContrastEnforced: false,
+          );
+
     if (widget.embedInHostShell) {
-      if (background == null) {
-        return body;
+      Widget embedded = SafeArea(
+        top: widget.includeTopSafeArea,
+        bottom: false,
+        child: body,
+      );
+      if (background != null) {
+        embedded = ColoredBox(color: background, child: embedded);
       }
-      return ColoredBox(color: background, child: body);
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: overlayStyle,
+        sized: false,
+        child: Theme(data: themedData, child: embedded),
+      );
     }
 
-    return Scaffold(
-      backgroundColor: background,
-      appBar: AppBar(
-        backgroundColor: background,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: foreground,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.troubleshoot, size: 20),
-            tooltip: 'Push Notification & Call Diagnostics',
-            onPressed: () {
-              PushDiagnosticSheet.show(
-                context,
-                userId: widget.userId?.toString(),
-                accessToken: widget.accessToken,
-              );
-            },
+    return Theme(
+      data: themedData,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: overlayStyle,
+        sized: false,
+        child: Scaffold(
+          backgroundColor: background,
+          appBar: AppBar(
+            backgroundColor: background,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            foregroundColor: foreground,
+            systemOverlayStyle: overlayStyle,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.troubleshoot, size: 20),
+                tooltip: 'Push Notification & Call Diagnostics',
+                onPressed: () {
+                  PushDiagnosticSheet.show(
+                    context,
+                    userId: widget.userId?.toString(),
+                    accessToken: widget.accessToken,
+                  );
+                },
+              ),
+            ],
           ),
-        ],
+          body: SafeArea(
+            top: false,
+            child: body,
+          ),
+        ),
       ),
-      body: SafeArea(
-        top: false,
-        child: body,
-      ),
+    );
+  }
+
+  ThemeData _gridThemeData(
+    BuildContext context, {
+    required GridSduiState? state,
+    required bool isDark,
+    required Color? background,
+    required Color? foreground,
+  }) {
+    final base = Theme.of(context);
+    final surface = state?.tokenColor('colors.surface') ?? background;
+    final accent = state?.tokenColor('colors.accent');
+    final onAccent = state?.tokenColor('colors.onAccent');
+    final onSurface = state?.tokenColor('colors.onSurface') ?? foreground;
+    final scheme = ColorScheme.fromSeed(
+      seedColor: accent ?? base.colorScheme.primary,
+      brightness: isDark ? Brightness.dark : Brightness.light,
+    ).copyWith(
+      primary: accent,
+      onPrimary: onAccent,
+      surface: surface,
+      onSurface: onSurface,
+    );
+    return base.copyWith(
+      brightness: isDark ? Brightness.dark : Brightness.light,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: background ?? scheme.surface,
     );
   }
 
   Widget _buildBody(
     BuildContext context,
     GridSduiState? state,
-    GridSduiRenderer? renderer,
-  ) {
+    GridSduiRenderer? renderer, {
+    required bool isDark,
+  }) {
     if (_loading && state == null) {
+      final skeletonState = _loadingThemeState;
+      final skeletonComp = skeletonState?.component('grid-loading');
+      if (skeletonState != null && skeletonComp != null) {
+        return GridSduiRenderer(skeletonState).buildNode(context, skeletonComp);
+      }
       return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null && state == null) {
-      return SchemaPullToRefresh(
+      final fallbackState = _loadingThemeState;
+      final errorComp = fallbackState?.component('grid-error');
+      final errorAppearance = (fallbackState != null && errorComp != null)
+          ? fallbackState.resolvedAppearance(errorComp)
+          : const <String, dynamic>{};
+      final errorBg =
+          fallbackState?.parseColor(errorAppearance['backgroundColor']) ??
+              fallbackState?.tokenColor('colors.pageBackground');
+      final errorTextColor =
+          fallbackState?.parseColor(errorAppearance['titleColor']) ??
+              fallbackState?.tokenColor('colors.textPrimary');
+
+      Widget errorBody = SchemaPullToRefresh(
         fillViewport: true,
         onRefresh: () async {
           setState(() => _loading = true);
@@ -490,7 +664,27 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(_error!, textAlign: TextAlign.center),
+                if (errorComp != null &&
+                    (errorComp['title']?.toString().trim().isNotEmpty ?? false))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      errorComp['title'].toString(),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: errorTextColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: errorTextColor == null
+                      ? null
+                      : TextStyle(color: errorTextColor.withValues(alpha: 0.8)),
+                ),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () => _load(forceRefresh: true),
@@ -501,6 +695,10 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
           ),
         ),
       );
+      if (errorBg != null) {
+        errorBody = ColoredBox(color: errorBg, child: errorBody);
+      }
+      return errorBody;
     }
 
     if (state == null || renderer == null) {
@@ -517,6 +715,10 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     return AnimatedBuilder(
       animation: state,
       builder: (context, _) {
+        state.updatePlatformBrightness(
+          MediaQuery.platformBrightnessOf(context),
+          notify: false,
+        );
         return Column(
           children: <Widget>[
             if (state.lastError != null)

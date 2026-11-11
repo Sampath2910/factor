@@ -1177,21 +1177,30 @@ void main() {
   });
 
   group('GRID Header Orbit Globe & Duplicate Suppression', () {
-    testWidgets('Header renders 92px globe on hero right with welcome text',
+    testWidgets(
+        'Header renders schema-driven responsive PNG globe on hero right with welcome text',
         (tester) async {
       final schema = <String, dynamic>{
         'rootComponentId': 'grid-page-header',
         'designTokens': <String, dynamic>{
           'colors': <String, dynamic>{
-            'textPrimary': '#2e1065',
-            'textSecondary': '#6b7280',
+            'textPrimary': '#0b1b33',
+            'textSecondary': '#64748b',
             'accent': '#7c3aed',
             'surface': '#ffffff',
             'onAccent': '#ffffff',
           },
           'typography': <String, dynamic>{
-            'pageTitle': <String, dynamic>{'size': 26.0},
-            'pageSubtitle': <String, dynamic>{'size': 13.0},
+            'pageTitle': <String, dynamic>{
+              'size': 18.0,
+              'weight': 800,
+              'maxLines': 2,
+            },
+            'pageSubtitle': <String, dynamic>{
+              'size': 11.0,
+              'weight': 500,
+              'maxLines': 2,
+            },
           },
         },
         'components': <String, dynamic>{
@@ -1206,13 +1215,38 @@ void main() {
             'orbitGlobeImageUrl':
                 'https://efactor.tech/assets/images/grid-orbit-globe.png',
             'orbitGlobePlacement': 'heroRight',
-            'appearance': <String, dynamic>{'logoHeight': 32.0},
+            'orbitGlobeClip': false,
+            'layout': <String, dynamic>{
+              'heroGlobeWidth': 160.0,
+              'heroGlobeHeight': 160.0,
+              'responsive': <String, dynamic>{
+                'narrow': <String, dynamic>{
+                  'logoHeight': 44.0,
+                  'heroGlobeWidth': 148.0,
+                  'heroGlobeHeight': 148.0,
+                },
+                'compact': <String, dynamic>{
+                  'logoHeight': 48.0,
+                  'heroGlobeWidth': 160.0,
+                  'heroGlobeHeight': 160.0,
+                },
+              },
+            },
+            'appearance': <String, dynamic>{
+              'logoHeight': 48.0,
+              'orbitGlobeSize': 160.0,
+            },
           },
         },
       };
 
       final state = GridSduiState(schema);
       final renderer = GridSduiRenderer(state);
+
+      // Compact phone width (400px -> compact -> 160x160 PNG globe)
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1228,26 +1262,51 @@ void main() {
       expect(find.text('Your professional network space'), findsOneWidget);
       expect(find.text('Connect. Collaborate. Grow Together.'), findsOneWidget);
 
-      // Verify 92x92 globe container size
+      // Verify 160x160 globe container size (not legacy hardcoded 92x92)
       final sizedBoxes = tester.widgetList<SizedBox>(find.byType(SizedBox));
-      final globeBox = sizedBoxes.firstWhere(
-        (box) => box.width == 92.0 && box.height == 92.0,
+      expect(
+        sizedBoxes.any((box) => box.width == 160.0 && box.height == 160.0),
+        isTrue,
       );
-      expect(globeBox.width, equals(92.0));
-      expect(globeBox.height, equals(92.0));
+      expect(
+        sizedBoxes.any((box) => box.width == 92.0 && box.height == 92.0),
+        isFalse,
+      );
 
       // Verify IgnorePointer wrapper for touch-through transparency
       final ignorePointers =
           tester.widgetList<IgnorePointer>(find.byType(IgnorePointer));
       expect(ignorePointers.any((ip) => ip.ignoring), isTrue);
 
-      // In headless test environment, verifies CachedNetworkImage fallback
+      // Verify orbitGlobeClip: false -> Clip.none
+      final clipRects = tester.widgetList<ClipRect>(find.byType(ClipRect));
+      expect(
+        clipRects.any((cr) => cr.clipBehavior == Clip.none),
+        isTrue,
+      );
+
+      // Verify PNG CachedNetworkImage (no SVG/WebView)
       final images = tester
           .widgetList<CachedNetworkImage>(find.byType(CachedNetworkImage));
       expect(
         images.any((img) =>
             img.imageUrl ==
             'https://efactor.tech/assets/images/grid-orbit-globe.png'),
+        isTrue,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) => w.runtimeType.toString().contains('WebView'),
+        ),
+        findsNothing,
+      );
+
+      // Narrow width (< 320dp -> narrow -> 148x148)
+      tester.view.physicalSize = const Size(300, 800);
+      await tester.pump();
+      final narrowBoxes = tester.widgetList<SizedBox>(find.byType(SizedBox));
+      expect(
+        narrowBoxes.any((box) => box.width == 148.0 && box.height == 148.0),
         isTrue,
       );
     });

@@ -902,6 +902,25 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
             : null;
 
         final background = renderer.tokenColor('colors.pageBackground');
+        final navBackground = bottomId != null
+            ? (renderer.tokenColor('colors.surface') ?? background)
+            : background;
+        final homeStatusDark =
+            background != null && background.computeLuminance() < 0.5;
+        final homeNavDark =
+            navBackground != null && navBackground.computeLuminance() < 0.5;
+        final homeOverlayStyle = SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness:
+              homeStatusDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness:
+              homeStatusDark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: navBackground,
+          systemNavigationBarDividerColor: Colors.transparent,
+          systemNavigationBarIconBrightness:
+              homeNavDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarContrastEnforced: false,
+        );
         final textScale = renderer.schemaTextScaleRange();
 
         final history = state.readState('navigation.history');
@@ -963,15 +982,12 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
           child: Scaffold(
             backgroundColor: background,
             appBar: appBar,
-            body: SafeArea(
-              bottom: false,
-              top: !hasHistory,
-              child: _buildShellBody(
-                context,
-                state: state,
-                renderer: renderer,
-                rootId: rootId,
-              ),
+            body: _buildShellBody(
+              context,
+              state: state,
+              renderer: renderer,
+              rootId: rootId,
+              topSafeArea: !hasHistory,
             ),
             bottomNavigationBar: bottomId == null
                 ? null
@@ -979,6 +995,12 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
             floatingActionButton:
                 fabId == null ? null : renderer.buildComponent(context, fabId),
           ),
+        );
+
+        homeShell = AnnotatedRegion<SystemUiOverlayStyle>(
+          sized: false,
+          value: homeOverlayStyle,
+          child: homeShell,
         );
 
         if (textScale != null) {
@@ -1004,6 +1026,7 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     required HomeSduiState state,
     required HomeSduiRenderer renderer,
     required String rootId,
+    required bool topSafeArea,
   }) {
     final embedIot = state.shouldEmbedLiveIot();
     final embedGrid = state.shouldEmbedLiveGrid();
@@ -1054,8 +1077,14 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
           )
         : homeContent;
 
+    final homeSafeBody = SafeArea(
+      bottom: false,
+      top: topSafeArea,
+      child: homeBody,
+    );
+
     if (!_iotSurfaceOpened && !_gridSurfaceOpened) {
-      return homeBody;
+      return homeSafeBody;
     }
 
     return IndexedStack(
@@ -1066,33 +1095,37 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
           : 0,
       sizing: StackFit.expand,
       children: <Widget>[
-        homeBody,
+        homeSafeBody,
         _iotSurfaceOpened
-            ? DynamicIotSduiPage(
-                key: const ValueKey<String>('home-host-iot'),
-                accessToken: widget.accessToken,
-                source: IotSchemaSource.fromEnvironment(),
-                embedInHostShell: true,
-                schemaRefreshEpoch: _iotRefreshEpoch,
-                onOpenDevice: ({
-                  required String modelId,
-                  required String nodeId,
-                  String? deviceName,
-                  bool? online,
-                }) async {
-                  final handler = widget.onOpenDevice;
-                  if (handler == null) {
-                    throw StateError(
-                      'No Home Device SDUI host callback is registered.',
+            ? SafeArea(
+                bottom: false,
+                top: topSafeArea,
+                child: DynamicIotSduiPage(
+                  key: const ValueKey<String>('home-host-iot'),
+                  accessToken: widget.accessToken,
+                  source: IotSchemaSource.fromEnvironment(),
+                  embedInHostShell: true,
+                  schemaRefreshEpoch: _iotRefreshEpoch,
+                  onOpenDevice: ({
+                    required String modelId,
+                    required String nodeId,
+                    String? deviceName,
+                    bool? online,
+                  }) async {
+                    final handler = widget.onOpenDevice;
+                    if (handler == null) {
+                      throw StateError(
+                        'No Home Device SDUI host callback is registered.',
+                      );
+                    }
+                    await handler(
+                      modelId: modelId,
+                      nodeId: nodeId,
+                      deviceName: deviceName,
+                      online: online,
                     );
-                  }
-                  await handler(
-                    modelId: modelId,
-                    nodeId: nodeId,
-                    deviceName: deviceName,
-                    online: online,
-                  );
-                },
+                  },
+                ),
               )
             : const SizedBox.shrink(),
         _gridSurfaceOpened
@@ -1101,6 +1134,7 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
                 accessToken: widget.accessToken,
                 userId: widget.userId,
                 embedInHostShell: true,
+                includeTopSafeArea: topSafeArea,
                 schemaRefreshEpoch: _gridRefreshEpoch,
               )
             : const SizedBox.shrink(),

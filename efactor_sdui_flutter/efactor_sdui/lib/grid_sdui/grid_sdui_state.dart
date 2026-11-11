@@ -3,12 +3,31 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class GridSduiState extends ChangeNotifier {
-  GridSduiState(Map<String, dynamic> source)
-      : schema = source['schema'] is Map
+  GridSduiState(
+    Map<String, dynamic> source, {
+    Brightness? platformBrightness,
+  })  : _platformBrightness =
+            platformBrightness ?? PlatformDispatcher.instance.platformBrightness,
+        schema = source['schema'] is Map
             ? Map<String, dynamic>.from(
                 (source['schema'] as Map).cast<dynamic, dynamic>(),
               )
             : Map<String, dynamic>.from(source) {
+    if (source['schema'] is Map) {
+      for (final metaKey in const [
+        'schema_rev',
+        'schema_version',
+        'schemaVersion',
+        'theme',
+        'typography',
+        'layoutPolicy',
+      ]) {
+        if (source.containsKey(metaKey) && !schema.containsKey(metaKey)) {
+          schema[metaKey] = source[metaKey];
+        }
+      }
+    }
+
     // Deep-merge dynamic content if passed via root envelope
     final sourceContent = source['content'];
     if (sourceContent is Map) {
@@ -69,7 +88,6 @@ class GridSduiState extends ChangeNotifier {
           'items': stats,
           'layout': <String, dynamic>{'gap': 8.0},
           'appearance': <String, dynamic>{
-            'backgroundColor': '#ffffff',
             'borderRadius': 16.0,
             'valueFontSize': 20.0,
             'labelFontSize': 12.0,
@@ -108,8 +126,77 @@ class GridSduiState extends ChangeNotifier {
   }
 
   Map<String, dynamic> schema;
+  Brightness _platformBrightness;
   String? lastError;
   bool _disposed = false;
+
+  Brightness get platformBrightness => _platformBrightness;
+
+  void updatePlatformBrightness(
+    Brightness brightness, {
+    bool notify = true,
+  }) {
+    if (_platformBrightness == brightness) return;
+    _platformBrightness = brightness;
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  Map<String, dynamic>? get themeConfig => _map(schema['theme']);
+
+  /// Account/schema configured mode: `light`, `dark`, or `system`.
+  String get configuredThemeMode {
+    final theme = themeConfig;
+    final raw = theme?['defaultMode']?.toString().trim().toLowerCase() ?? '';
+    if (raw == 'light' || raw == 'dark' || raw == 'system') {
+      return raw;
+    }
+    if (raw == 'auto') return 'system';
+    return theme != null ? 'system' : 'light';
+  }
+
+  /// Active theme mode (`light` or `dark`) after resolving `system` against
+  /// the current device platform brightness.
+  String get resolvedThemeMode {
+    final configured = configuredThemeMode;
+    if (configured == 'dark') return 'dark';
+    if (configured == 'light') return 'light';
+    return _platformBrightness == Brightness.dark ? 'dark' : 'light';
+  }
+
+  bool get isDarkMode => resolvedThemeMode == 'dark';
+
+  /// Resolves a component's effective appearance map for the active theme mode.
+  Map<String, dynamic> resolvedAppearance(Map<String, dynamic> component) {
+    final light = _map(component['appearance']) ?? const <String, dynamic>{};
+    if (!isDarkMode) {
+      return Map<String, dynamic>.from(light);
+    }
+    final dark = _map(component['appearanceDark']);
+    if (dark == null || dark.isEmpty) {
+      return Map<String, dynamic>.from(light);
+    }
+
+    final merged = Map<String, dynamic>.from(light);
+    if (dark.containsKey('backgroundColor') &&
+        !dark.containsKey('backgroundGradient')) {
+      merged.remove('backgroundGradient');
+    }
+    for (final entry in dark.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (value is Map && merged[key] is Map) {
+        merged[key] = <String, dynamic>{
+          ...Map<String, dynamic>.from((merged[key] as Map).cast<dynamic, dynamic>()),
+          ...Map<String, dynamic>.from(value.cast<dynamic, dynamic>()),
+        };
+      } else {
+        merged[key] = value;
+      }
+    }
+    return merged;
+  }
 
   /// Host opens schema `openIn: inAppWebView` destinations inside the app
   /// (embedded WebView). When null, falls back to url_launcher Custom Tabs.
@@ -117,6 +204,9 @@ class GridSduiState extends ChangeNotifier {
 
   /// Native camera scanner opener for QR and barcode scanning.
   Future<bool> Function()? nativeScannerOpener;
+
+  /// Host handler to refresh Grid data sources from the live schema endpoint.
+  Future<void> Function()? refreshHandler;
 
   Map<String, dynamic> get components => schema['components'] is Map
       ? Map<String, dynamic>.from(
@@ -252,6 +342,10 @@ class GridSduiState extends ChangeNotifier {
       case 'set-state':
         return;
       case 'refresh-data-source':
+        final handler = refreshHandler;
+        if (handler != null) {
+          await handler();
+        }
         return;
       case 'navigate':
         lastError =
@@ -466,9 +560,20 @@ class GridSduiState extends ChangeNotifier {
   }
 
   Color? tokenColor(String? token) {
-    final colors = _map(designTokens['colors']);
-    if (token == null || token.isEmpty || colors == null) return null;
+    if (token == null || token.isEmpty) return null;
     final key = token.replaceFirst('colors.', '');
+    final modeColors = _map(_map(themeConfig?['modes'])?[resolvedThemeMode]);
+    if (modeColors != null) {
+      final modeColor = _parseColor(modeColors[key] ?? modeColors[token]);
+      if (modeColor != null) return modeColor;
+    }
+    if (!isDarkMode) {
+      final themeColors = _map(themeConfig?['colors']);
+      final themeColor = _parseColor(themeColors?[key] ?? themeColors?[token]);
+      if (themeColor != null) return themeColor;
+    }
+    final colors = _map(designTokens['colors']);
+    if (colors == null) return null;
     return _parseColor(colors[key] ?? colors[token]);
   }
 
