@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -105,6 +106,80 @@ class GridMediaCacheService {
       debugPrint('[GridMediaCache] Download failed for $remoteUrl: $e');
     }
     return remoteUrl; // Fallback to remote if offline & not cached yet
+  }
+
+  static const Set<String> _imageExtensions = <String>{
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif'
+  };
+
+  bool _isImageFile(String path) {
+    final dot = path.lastIndexOf('.');
+    if (dot == -1) return false;
+    return _imageExtensions.contains(path.substring(dot + 1).toLowerCase());
+  }
+
+  String _imageMimeFor(String path) {
+    final dot = path.lastIndexOf('.');
+    final ext = dot == -1 ? '' : path.substring(dot + 1).toLowerCase();
+    switch (ext) {
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'bmp':
+        return 'image/bmp';
+      case 'heic':
+      case 'heif':
+        return 'image/heic';
+      case 'jpg':
+      case 'jpeg':
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  /// Returns a URL string that GRID Chat can assign DIRECTLY to an
+  /// `<img>/<video>/<audio>` `src` from the https://efactor.tech origin, matching
+  /// the CircleConnectMedia.getMedia(remoteUrl) -> Promise<string|null> contract.
+  ///
+  /// iOS: WKWebView blocks raw filesystem / file:// URLs cross-origin from an
+  /// https page, so cached IMAGES are returned as self-contained `data:` URLs
+  /// that render without network. Non-image media (video/audio) cannot be served
+  /// this way reliably (size + no byte-range seeking); until the native
+  /// custom-scheme handler lands we return null so GRID Chat falls back to the
+  /// remote URL (its documented behaviour).
+  ///
+  /// Android: unchanged — returns the on-disk path exactly as before.
+  Future<String?> getRenderableMediaUrl(String remoteUrl) async {
+    final clean = remoteUrl.trim();
+    if (clean.isEmpty) return null;
+
+    final path = await getOrDownloadMedia(clean);
+    // getOrDownloadMedia returns the remote URL unchanged when caching failed.
+    final bool cached = path != clean;
+
+    if (!Platform.isIOS) {
+      return path; // Android: preserve existing behaviour.
+    }
+
+    if (!cached) {
+      // Nothing cached yet -> null lets GRID Chat use the remote URL online.
+      return null;
+    }
+
+    if (_isImageFile(path)) {
+      try {
+        final bytes = await File(path).readAsBytes();
+        return 'data:${_imageMimeFor(path)};base64,${base64Encode(bytes)}';
+      } catch (e) {
+        debugPrint('[GridMediaCache] iOS data-url encode failed: $e');
+        return null;
+      }
+    }
+    // Video/audio: pending native custom-scheme serving -> fall back to remote.
+    return null;
   }
 
   /// Saves a freshly recorded voice note or captured camera image directly to local storage.
