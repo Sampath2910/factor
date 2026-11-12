@@ -787,6 +787,13 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   late final WebViewController _controller;
   var _loading = true;
   var _showingSnapshot = false;
+
+  /// Last known connectivity, kept current by [_connectivitySub] and
+  /// [_isOnline]. Lets [onPageStarted] inject the offline marker synchronously
+  /// (as early as webview_flutter allows) instead of after an async check,
+  /// per the GRID Chat offline contract §7 (marker must be set before page JS
+  /// selects identity).
+  bool _knownOffline = false;
   String? _error;
   Completer<void>? _navigationCompleter;
   StreamSubscription<OfflineOutboxAction>? _outboxSyncedSub;
@@ -904,6 +911,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     });
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
       final isConnected = results.any((r) => r != ConnectivityResult.none);
+      _knownOffline = !isConnected;
       if (isConnected && (_error != null || _showingSnapshot)) {
         debugPrint(
             '[GridInAppWebView] Network restored -> auto-retrying live connection');
@@ -1249,6 +1257,15 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             if (!mounted) return;
             _webCallUiReady = false;
             _chatUiReady = false;
+            // Set the offline marker as early as possible (contract §7). Use the
+            // cached connectivity flag so this runs synchronously here, before
+            // React selects identity; the async check below only corrects a
+            // stale cache.
+            if (_knownOffline) {
+              unawaited(_controller.runJavaScript(
+                'window.__GRID_CHAT_OFFLINE_SHELL__ = true;',
+              ));
+            }
             setState(() {
               _loading = true;
               _error = null;
@@ -4079,8 +4096,13 @@ Error: $error
   Future<bool> _isOnline() async {
     try {
       final results = await Connectivity().checkConnectivity();
-      if (results.isEmpty) return false;
-      return results.any((r) => r != ConnectivityResult.none);
+      if (results.isEmpty) {
+        _knownOffline = true;
+        return false;
+      }
+      final online = results.any((r) => r != ConnectivityResult.none);
+      _knownOffline = !online;
+      return online;
     } catch (_) {
       return true;
     }
