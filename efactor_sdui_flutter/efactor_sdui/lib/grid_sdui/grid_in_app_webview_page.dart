@@ -4583,109 +4583,6 @@ Error: $error
     await _setupPermissionsAndLoad();
   }
 
-  Widget _buildLoadingState(BuildContext context) {
-    final spaceName = widget.title?.trim().isNotEmpty == true
-        ? widget.title!.trim()
-        : (_isCircleConnect ? 'Circle Connect' : 'GRID');
-
-    return Container(
-      color: const Color(0xFF0F172A),
-      width: double.infinity,
-      height: double.infinity,
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF1E293B),
-                  border: Border.all(
-                    color: const Color(0xFF38BDF8).withValues(alpha: 0.35),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF38BDF8).withValues(alpha: 0.18),
-                      blurRadius: 24,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Color(0xFF38BDF8),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Loading $spaceName...',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  letterSpacing: -0.2,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Connecting to live space...',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF94A3B8),
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: 140,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: const LinearProgressIndicator(
-                    minHeight: 3,
-                    backgroundColor: Color(0xFF1E293B),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFF38BDF8),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextButton.icon(
-                onPressed: _handleBackPress,
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF64748B),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                ),
-                icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                label: const Text(
-                  'Cancel',
-                  style: TextStyle(fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildOfflineState(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -4898,8 +4795,12 @@ Error: $error
                 )
               else
                 _buildOfflineState(context),
-              if (_loading && !_showingSnapshot && _error == null)
-                _buildLoadingState(context),
+              // Full-screen animated loader removed: it ran a spinner +
+              // progress bar that repainted every frame during load (hurting
+              // smoothness and keeping the WebView recompositing). The WebView
+              // background is already dark (no white flash), so the page fades
+              // in cleanly. The _loading flag is still used for call-readiness
+              // and the offline snapshot progress bar below.
               if (_loading && _showingSnapshot && _error == null)
                 const Positioned(
                   top: 0,
