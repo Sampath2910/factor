@@ -1079,6 +1079,16 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           }
         },
       )
+      // Receives the full offline snapshot HTML. Used instead of
+      // runJavaScriptReturningResult on Android, whose JS return channel
+      // truncates/fails on the large (often >1 MB) inlined-CSS DOM string,
+      // which previously left Android with no snapshot to restore offline.
+      ..addJavaScriptChannel(
+        'SnapshotCaptureBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          _handleSnapshotCaptureMessage(msg.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) async {
@@ -2767,7 +2777,7 @@ Error: $error
             if (cookies.isNotEmpty) 'Cookie': cookies,
             if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
               'Authorization': 'Bearer ${widget.accessToken}',
-            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+            'User-Agent': _browserUserAgent,
           };
           final response =
               await http.get(Uri.parse(targetUrl), headers: headers);
@@ -2848,7 +2858,7 @@ Error: $error
           if (cookies.isNotEmpty) 'Cookie': cookies,
           if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
             'Authorization': 'Bearer ${widget.accessToken}',
-          'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+          'User-Agent': _browserUserAgent,
         };
 
         final tempDir = await getTemporaryDirectory();
@@ -2975,7 +2985,7 @@ Error: $error
             if (cookies.isNotEmpty) 'Cookie': cookies,
             if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
               'Authorization': 'Bearer ${widget.accessToken}',
-            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+            'User-Agent': _browserUserAgent,
           };
 
           final downloadResult =
@@ -3089,7 +3099,7 @@ Error: $error
             if (cookies.isNotEmpty) 'Cookie': cookies,
             if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
               'Authorization': 'Bearer ${widget.accessToken}',
-            'User-Agent': 'Mozilla/5.0 (Mobile; EfactorApp)',
+            'User-Agent': _browserUserAgent,
           };
 
           final downloadResult =
@@ -3563,6 +3573,12 @@ Error: $error
 
   /// Downloads a file or document from efactor.tech forwarding active session cookies (ci_session),
   /// extracts the filename from Content-Disposition/Content-Type, saves to device, and opens it.
+  /// Realistic per-platform User-Agent for authenticated file downloads.
+  /// Some servers/CDNs reject generic agents, so we mirror the in-app browser.
+  static String get _browserUserAgent => Platform.isIOS
+      ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 EfactorApp'
+      : 'Mozilla/5.0 (Mobile; Android; EfactorApp)';
+
   Future<void> _handleFileDownload(Uri targetUri) async {
     try {
       final cookies = await _getCookiesForEndpoint(targetUri.toString());
@@ -3570,7 +3586,7 @@ Error: $error
         if (cookies.isNotEmpty) 'Cookie': cookies,
         if (widget.accessToken != null && widget.accessToken!.isNotEmpty)
           'Authorization': 'Bearer ${widget.accessToken}',
-        'User-Agent': 'Mozilla/5.0 (Mobile; Android; EfactorApp)',
+        'User-Agent': _browserUserAgent,
       };
       final response = await http.get(targetUri, headers: headers);
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -3601,15 +3617,30 @@ Error: $error
         }
         final sanitizedFilename =
             filename.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-        final tempDir = await getTemporaryDirectory();
-        final localFile = File('${tempDir.path}/$sanitizedFilename');
+        // iOS: save into the Files-app-visible Documents directory and open via
+        // the native handler. Android: use a temp file opened externally.
+        final targetDir = Platform.isIOS
+            ? await CircleConnectFileService.instance.getDocumentsDirectory()
+            : await getTemporaryDirectory();
+        final localFile = File('${targetDir.path}/$sanitizedFilename');
         await localFile.writeAsBytes(response.bodyBytes);
 
-        final fileUri = Uri.file(localFile.path);
-        try {
-          await launchUrl(fileUri, mode: LaunchMode.externalApplication);
-        } catch (e) {
-          debugPrint('[GridInAppWebView] launchUrl file failed: $e');
+        if (Platform.isIOS) {
+          await CircleConnectFileService.instance.openFile(
+            localPath: localFile.path,
+            fileName: sanitizedFilename,
+          );
+        } else {
+          final fileUri = Uri.file(localFile.path);
+          try {
+            await launchUrl(fileUri, mode: LaunchMode.externalApplication);
+          } catch (e) {
+            debugPrint('[GridInAppWebView] launchUrl file failed: $e');
+            await CircleConnectFileService.instance.openFile(
+              localPath: localFile.path,
+              fileName: sanitizedFilename,
+            );
+          }
         }
       } else {
         debugPrint(
@@ -4146,6 +4177,18 @@ Error: $error
           await _controller.runJavaScriptReturningResult(detectChannelsJs);
       final isChannels = isChannelsRaw.toString().trim() == 'true';
 
+      // Android: the inlined-CSS DOM snapshot is often >1 MB, which the
+      // runJavaScriptReturningResult return channel truncates/fails on, leaving
+      // Android with no snapshot to restore offline. Capture via a JS channel
+      // (SnapshotCaptureBridge) instead, which has no return-size limit. The
+      // save itself happens in _handleSnapshotCaptureMessage.
+      if (Platform.isAndroid) {
+        await _controller.runJavaScript(_snapshotCaptureJs(isChannels));
+        return;
+      }
+
+      // iOS (WKWebView): the return channel handles the full string fine, so the
+      // existing capture path is kept unchanged.
       const bundleCssJs = '''
 (function() {
   try {
@@ -4185,8 +4228,86 @@ Error: $error
 ''';
       final raw = await _controller.runJavaScriptReturningResult(bundleCssJs);
       final html = _unwrapJsString(raw);
-      if (html == null || html.length < 64) return;
+      if (html == null) return;
+      await _saveSnapshotHtml(html, isChannels: isChannels);
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Snapshot save failed: $e');
+    }
+  }
 
+  /// Builds the Android capture script: inlines all CSS (same as the iOS path)
+  /// then posts the full DOM HTML over [SnapshotCaptureBridge]. JSON.stringify
+  /// safely escapes the HTML; [isChannels] is baked in so the Dart handler knows
+  /// which snapshot slot to write.
+  String _snapshotCaptureJs(bool isChannels) {
+    return '''
+(function() {
+  try {
+    var cssText = '';
+    for (var i = 0; i < document.styleSheets.length; i++) {
+      try {
+        var sheet = document.styleSheets[i];
+        var rules = sheet.cssRules || sheet.rules;
+        if (rules) {
+          for (var j = 0; j < rules.length; j++) {
+            cssText += rules[j].cssText + '\\n';
+          }
+        }
+      } catch(e) {}
+    }
+    var inlineStyle = document.getElementById('__offline_compiled_styles');
+    if (!inlineStyle) {
+      inlineStyle = document.createElement('style');
+      inlineStyle.id = '__offline_compiled_styles';
+      document.head.appendChild(inlineStyle);
+    }
+    if (cssText.length > 50) {
+      inlineStyle.textContent = cssText;
+    }
+    var computedBg = window.getComputedStyle(document.body).backgroundColor;
+    var computedColor = window.getComputedStyle(document.body).color;
+    if (computedBg && computedBg !== 'rgba(0, 0, 0, 0)') {
+      document.body.style.backgroundColor = computedBg;
+      document.documentElement.style.backgroundColor = computedBg;
+    }
+    if (computedColor) {
+      document.body.style.color = computedColor;
+    }
+  } catch(err) {}
+  try {
+    var payload = JSON.stringify({
+      isChannels: ${isChannels ? 'true' : 'false'},
+      html: document.documentElement.outerHTML
+    });
+    if (window.SnapshotCaptureBridge && window.SnapshotCaptureBridge.postMessage) {
+      window.SnapshotCaptureBridge.postMessage(payload);
+    }
+  } catch(e) {}
+})();
+''';
+  }
+
+  /// Receives the Android offline snapshot posted from [_snapshotCaptureJs].
+  void _handleSnapshotCaptureMessage(String rawJson) {
+    try {
+      final data = jsonDecode(rawJson) as Map<String, dynamic>;
+      final html = data['html']?.toString();
+      final isChannels = data['isChannels'] == true;
+      if (html == null) return;
+      unawaited(_saveSnapshotHtml(html, isChannels: isChannels));
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Snapshot capture decode failed: $e');
+    }
+  }
+
+  /// Persists a captured snapshot to the app-side store (used by both the iOS
+  /// return path and the Android channel path).
+  Future<void> _saveSnapshotHtml(
+    String html, {
+    required bool isChannels,
+  }) async {
+    if (html.length < 64) return;
+    try {
       if (isChannels) {
         await GridWebSnapshot.saveChannelsSnapshot(html, userId: widget.userId);
       } else if (_isCircleConnect) {
@@ -4201,6 +4322,9 @@ Error: $error
         _effectiveUri,
         html,
         userId: widget.userId,
+      );
+      debugPrint(
+        '[GridInAppWebView] Snapshot saved (${html.length} chars, isChannels: $isChannels)',
       );
     } catch (e) {
       debugPrint('[GridInAppWebView] Snapshot save failed: $e');
