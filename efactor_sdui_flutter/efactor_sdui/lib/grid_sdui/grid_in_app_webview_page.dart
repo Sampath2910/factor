@@ -808,6 +808,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   var _loading = true;
   var _showingSnapshot = false;
 
+  /// True once the GRID / Professional Space web app has confirmed (via
+  /// [ProfessionalSpaceBridge] `saveProfessionalSnapshot`) that its service
+  /// worker registered and the offline app shell is cached. Diagnostic only.
+  bool _professionalSpaceShellReady = false;
+
   /// Last known connectivity, kept current by [_connectivitySub] and
   /// [_isOnline]. Lets [onPageStarted] inject the offline marker synchronously
   /// (as early as webview_flutter allows) instead of after an async check,
@@ -1115,6 +1120,17 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         'SnapshotCaptureBridge',
         onMessageReceived: (JavaScriptMessage msg) {
           _handleSnapshotCaptureMessage(msg.message);
+        },
+      )
+      // Handshake from the GRID / Professional Space web app: on successful
+      // service-worker registration it posts {action:'saveProfessionalSnapshot',
+      // url, status, serviceWorker}, signalling the offline app shell is in
+      // place. Acknowledgement only — the server owns all GRID data; we never
+      // back up or sync its local storage.
+      ..addJavaScriptChannel(
+        'ProfessionalSpaceBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          _handleProfessionalSpaceBridgeMessage(msg.message);
         },
       )
       ..setNavigationDelegate(
@@ -4121,17 +4137,33 @@ Error: $error
 
       // Offline behavior differs per surface:
       //
-      // - Circle Connect (chat) has a full in-page offline engine (Service
-      //   Worker + CircleConnectDB/IndexedDB), so we load the real origin
-      //   document and let it render cached chats (WhatsApp-style).
+      // - Circle Connect (chat): full in-page offline engine (Service Worker +
+      //   CircleConnectDB), handled below.
       //
-      // - Professional Space (and any other web surface) has NO in-page offline
-      //   engine. Loading the live URL offline would just paint a blank page,
-      //   so instead we show a clean "no internet" state (LinkedIn-style).
+      // - Professional Space (GRID): its own service worker (grid/sw.js, scope
+      //   /index.php/grid) caches the app shell LinkedIn-style. Android's WebView
+      //   runs it, so load the live URL and let the SW serve the cached shell
+      //   offline (network-first pages -> cache fallback). If the SW is not
+      //   registered yet, onWebResourceError -> _handleLoadFailure shows the
+      //   offline screen gracefully. iOS WKWebView cannot run service workers
+      //   without App-Bound Domains (which we do not enable), so Professional
+      //   Space on iOS -- and any other web surface with no offline engine --
+      //   falls back to the clean "no internet" screen.
       if (!_isCircleConnect) {
+        if (_isProfessionalSpace &&
+            defaultTargetPlatform == TargetPlatform.android) {
+          _showingSnapshot = false;
+          debugPrint(
+            '[GridInAppWebView] Offline (Android, Professional Space) -> loading '
+            'live URL so grid/sw.js serves the cached shell '
+            '(shellReported=$_professionalSpaceShellReady): $_effectiveUri',
+          );
+          await _controller.loadRequest(_effectiveUri, headers: headers);
+          return;
+        }
         debugPrint(
-          '[GridInAppWebView] Offline detected on a non-chat surface -> '
-          'showing clean offline state (LinkedIn-style): $_effectiveUri',
+          '[GridInAppWebView] Offline on a non-chat surface with no offline '
+          'engine -> showing clean offline state: $_effectiveUri',
         );
         if (!mounted) return;
         setState(() {
@@ -4295,6 +4327,10 @@ Error: $error
   }
 
   Future<void> _persistSnapshot() async {
+    // Professional Space (GRID) owns its own offline (grid/sw.js shell) with the
+    // server as source of truth. Per the GRID device-storage contract, do not
+    // back up / snapshot its DOM.
+    if (_isProfessionalSpace) return;
     try {
       final online = await _isOnline();
       if (!online) return;
@@ -4391,6 +4427,26 @@ Error: $error
       unawaited(_saveSnapshotHtml(html, isChannels: isChannels));
     } catch (e) {
       debugPrint('[GridInAppWebView] Snapshot capture decode failed: $e');
+    }
+  }
+
+  /// Handles the GRID / Professional Space offline-shell handshake. The web app
+  /// posts `{action:'saveProfessionalSnapshot', url, status, serviceWorker}` once
+  /// its service worker registers. This is an acknowledgement only — GRID data
+  /// is server-owned, so we record the flag and do not persist/sync anything.
+  void _handleProfessionalSpaceBridgeMessage(String rawJson) {
+    try {
+      final data = jsonDecode(rawJson) as Map<String, dynamic>;
+      if (data['action']?.toString() == 'saveProfessionalSnapshot') {
+        _professionalSpaceShellReady = true;
+        debugPrint(
+          '[GridInAppWebView] Professional Space offline shell ready '
+          '(url=${data['url']}, status=${data['status']}, '
+          'serviceWorker=${data['serviceWorker']})',
+        );
+      }
+    } catch (e) {
+      debugPrint('[GridInAppWebView] ProfessionalSpaceBridge decode failed: $e');
     }
   }
 

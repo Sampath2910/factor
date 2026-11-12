@@ -36,7 +36,7 @@
   - **Circle Connect (chat)** = `https://efactor.tech/index.php/grid-chat` → detected by `_isCircleConnect` (path/title contains `chat`/`circle`/`grid-chat`).
   - **Professional Space** = `https://efactor.tech/index.php/grid` → `_isProfessionalSpace`.
 - SSO: URLs carry a one-time `grid_sso` token; the server consumes it and redirects to the clean path.
-- **Native ↔ web bridges** (JS channels, must be preserved): `CircleConnectPushBridge`, `CircleConnectMediaBridge`, `CircleConnectFileBridge`, `CircleConnectOutboxBridge`, `CircleConnectChannelsBridge`, `CircleConnectNavBridge`, `SnapshotCaptureBridge`. Web-facing shims: `window.CircleConnectMedia/Files/Outbox/Push`.
+- **Native ↔ web bridges** (JS channels, must be preserved): `CircleConnectPushBridge`, `CircleConnectMediaBridge`, `CircleConnectFileBridge`, `CircleConnectOutboxBridge`, `CircleConnectChannelsBridge`, `CircleConnectNavBridge`, `SnapshotCaptureBridge`, `ProfessionalSpaceBridge` (GRID offline-shell handshake: `{action:'saveProfessionalSnapshot', url, status, serviceWorker}` — acknowledgement only). Web-facing shims: `window.CircleConnectMedia/Files/Outbox/Push`.
 - Android native file/media: `android/app/src/main/kotlin/com/example/efactor_sdui/MainActivity.kt` channel `tech.efactor/circle_connect` (saveImageToGallery/saveVideoToGallery/openFile/saveFileToDownloads via MediaStore).
 
 ### 2.2 Offline architecture (WhatsApp-style) — **per-platform hybrid**
@@ -44,7 +44,11 @@ Flag: `_restoreDomSnapshotOffline` in `grid_in_app_webview_page.dart` (currently
 
 - **Android (offline Circle Connect):** reload the **live origin URL**; the web app's **Service Worker** (`/index.php/grid-chat/sw.js`) serves the cached shell + assets and React reads **IndexedDB `CircleConnectDB`**. (Android WebView runs Service Workers.)
 - **iOS (offline Circle Connect):** WKWebView **cannot run Service Workers**, so it loads the web team's **self-contained offline shell** (one ~11.4 MB inlined HTML) via `loadHtmlString(..., baseUrl: https://efactor.tech/index.php/grid-chat)`. Managed by `lib/grid_sdui/grid_offline_shell_service.dart` (fetch manifest → compare `buildId` → download → SHA-256 verify → atomic user-scoped store). Synced online in `onPageFinished` via `_syncOfflineShellIfIOS()`.
-- **Professional Space / non-chat offline:** clean "Internet Connection Required" screen (no in-page offline engine). **Do NOT load the live URL offline for these.**
+- **Professional Space (GRID) offline:** GRID has its own service worker `grid/sw.js` (scope `/index.php/grid`) that caches the app shell (LinkedIn-style).
+  - **Android:** load the live URL offline so the SW serves the cached shell (same pattern as Circle Connect). On SW registration the web posts `ProfessionalSpaceBridge` `saveProfessionalSnapshot` (ack only — server owns the data; `grid_dm_offline` IndexedDB is a DM mirror + outbox, `grid_offline` is dead/legacy).
+  - **iOS:** WKWebView can't run service workers without App-Bound Domains (not enabled) → clean "no internet" screen. (No GRID iOS offline-shell endpoint exists, unlike Circle Connect.)
+  - We do NOT DOM-snapshot Professional Space (`_persistSnapshot` early-returns for it) — server is source of truth.
+- **Other non-chat web surfaces:** clean "Internet Connection Required" screen.
 - **CRITICAL constraint:** IndexedDB/Cache are **origin-scoped**. Offline rendering MUST keep the real `efactor.tech` origin (live URL on Android; `loadHtmlString` with `baseUrl=origin` on iOS). Switching to `file://` would orphan `CircleConnectDB`.
 - **First-sync rule:** offline only shows data cached during a prior **online** session (a chat caches after being opened once online). Live features (calls, presence, new inbound msgs) need a connection; offline sends are queued via the **offline outbox** and synced on reconnect.
 - **Legacy DOM-snapshot path** (only when `_restoreDomSnapshotOffline=true`): captures script-stripped `document.documentElement.outerHTML` via `SnapshotCaptureBridge` (JS channel — avoids Android's `runJavaScriptReturningResult` truncation on >1 MB), stored by `grid_web_snapshot.dart` (account-scoped, cleared on logout). Kept as a fallback only.
@@ -111,6 +115,7 @@ adb -s <id> logcat -v brief flutter:I '*:S'  # stable device logs independent of
 > Add an entry per meaningful change: commit, what/why, and any key files.
 
 ### 2026-11-12
+- **feat(professional-space): offline via grid/sw.js + ProfessionalSpaceBridge.** Per the GRID device-storage contract: Android Professional Space loads the live URL offline so `grid/sw.js` serves its cached shell (was: always a no-internet screen); added `ProfessionalSpaceBridge` to handle the `saveProfessionalSnapshot` handshake; `_persistSnapshot` skips Professional Space. iOS stays on the no-internet screen (no App-Bound Domains). **Blocked for end-to-end verification by the `/grid/index` server crash** (GRID backend). File: `lib/grid_sdui/grid_in_app_webview_page.dart`.
 - **`eb5ac7f` feat(theme): brightness-aware home header, bottom nav, inline text colors.**
   - Home header logo swaps by resolved brightness (`logo.imageUrl`/`imageUrlDark`, `appearanceLight`/`appearanceDark.logoUrl`).
   - `_inlineTypography` prefers `colorLight`/`colorDark` over baked `color` (fixed invisible title in dark mode).
