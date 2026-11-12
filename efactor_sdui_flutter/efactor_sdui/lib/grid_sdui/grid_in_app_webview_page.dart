@@ -4199,59 +4199,13 @@ Error: $error
           await _controller.runJavaScriptReturningResult(detectChannelsJs);
       final isChannels = isChannelsRaw.toString().trim() == 'true';
 
-      // Android: the inlined-CSS DOM snapshot is often >1 MB, which the
-      // runJavaScriptReturningResult return channel truncates/fails on, leaving
-      // Android with no snapshot to restore offline. Capture via a JS channel
-      // (SnapshotCaptureBridge) instead, which has no return-size limit. The
-      // save itself happens in _handleSnapshotCaptureMessage.
-      if (Platform.isAndroid) {
-        await _controller.runJavaScript(_snapshotCaptureJs(isChannels));
-        return;
-      }
-
-      // iOS (WKWebView): the return channel handles the full string fine, so the
-      // existing capture path is kept unchanged.
-      const bundleCssJs = '''
-(function() {
-  try {
-    var cssText = '';
-    for (var i = 0; i < document.styleSheets.length; i++) {
-      try {
-        var sheet = document.styleSheets[i];
-        var rules = sheet.cssRules || sheet.rules;
-        if (rules) {
-          for (var j = 0; j < rules.length; j++) {
-            cssText += rules[j].cssText + '\\n';
-          }
-        }
-      } catch(e) {}
-    }
-    var inlineStyle = document.getElementById('__offline_compiled_styles');
-    if (!inlineStyle) {
-      inlineStyle = document.createElement('style');
-      inlineStyle.id = '__offline_compiled_styles';
-      document.head.appendChild(inlineStyle);
-    }
-    if (cssText.length > 50) {
-      inlineStyle.textContent = cssText;
-    }
-    var computedBg = window.getComputedStyle(document.body).backgroundColor;
-    var computedColor = window.getComputedStyle(document.body).color;
-    if (computedBg && computedBg !== 'rgba(0, 0, 0, 0)') {
-      document.body.style.backgroundColor = computedBg;
-      document.documentElement.style.backgroundColor = computedBg;
-    }
-    if (computedColor) {
-      document.body.style.color = computedColor;
-    }
-  } catch(err) {}
-  return document.documentElement.outerHTML;
-})();
-''';
-      final raw = await _controller.runJavaScriptReturningResult(bundleCssJs);
-      final html = _unwrapJsString(raw);
-      if (html == null) return;
-      await _saveSnapshotHtml(html, isChannels: isChannels);
+      // Capture via the SnapshotCaptureBridge JS channel on BOTH platforms.
+      // The inlined-CSS DOM snapshot is often >1 MB: Android's
+      // runJavaScriptReturningResult return channel truncates/fails on it, and
+      // WKWebView's can stall on very large strings, which left iOS without a
+      // usable offline snapshot too. The channel has no return-size limit; the
+      // save happens in _handleSnapshotCaptureMessage.
+      await _controller.runJavaScript(_snapshotCaptureJs(isChannels));
     } catch (e) {
       debugPrint('[GridInAppWebView] Snapshot save failed: $e');
     }
@@ -4400,18 +4354,6 @@ Error: $error
     });
   }
 
-  static String? _unwrapJsString(Object? raw) {
-    if (raw == null) return null;
-    final text = raw.toString().trim();
-    if (text.isEmpty) return null;
-    try {
-      final decoded = jsonDecode(text);
-      if (decoded is String) {
-        return GridWebSnapshot.normalizeHtml(decoded);
-      }
-    } catch (_) {}
-    return GridWebSnapshot.normalizeHtml(text);
-  }
 
   void _showPermissionSettingsPrompt({
     bool requiresVideo = false,
