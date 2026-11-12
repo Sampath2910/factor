@@ -117,11 +117,18 @@ class GridOfflineShellService {
 
       final Map<String, dynamic> body =
           jsonDecode(manifestResp.body) as Map<String, dynamic>;
-      if (body['success'] != true || body['data'] is! Map) {
-        debugPrint('[GridOfflineShell] manifest not successful — skipping');
+      // Accept both manifest shapes:
+      //  - wrapped envelope: { success: true, data: { buildId, sha256, ... } }
+      //  - flat object:      { buildId, sha256, shellUrl, ... }
+      // If a `success` flag is present and explicitly false, treat as failure;
+      // otherwise read fields from `data` when present, else the top-level body.
+      if (body['success'] == false) {
+        debugPrint('[GridOfflineShell] manifest success=false — skipping');
         return;
       }
-      final data = body['data'] as Map<String, dynamic>;
+      final Map<String, dynamic> data = (body['data'] is Map)
+          ? (body['data'] as Map).cast<String, dynamic>()
+          : body;
       final buildId = data['buildId']?.toString() ?? '';
       final expectedSha = data['sha256']?.toString().toLowerCase() ?? '';
       final shellUrl = data['shellUrl']?.toString() ?? '';
