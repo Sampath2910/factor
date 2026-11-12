@@ -274,19 +274,28 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
   /// app-wide ThemeController. Source (per backend): `state.global.themeMode`,
   /// falling back to `themes.activeMode`. Absent/empty is left to the default.
   void _syncAppearanceFromSchema(Map<String, dynamic> schema) {
-    String? raw;
     final state = schema['state'];
-    if (state is Map) {
-      final global = state['global'];
-      if (global is Map) {
-        raw = global['themeMode']?.toString().trim();
-      }
+    final global = (state is Map && state['global'] is Map)
+        ? state['global'] as Map
+        : const <dynamic, dynamic>{};
+    final themes = schema['themes'] is Map
+        ? schema['themes'] as Map
+        : const <dynamic, dynamic>{};
+
+    // Honor the "follow OS" flags: when set, the app follows the OS brightness
+    // regardless of the stored themeMode (contract: system only -> follow OS).
+    final followSystem = themes['followSystem'] == true ||
+        global['themeFollowSystem'] == true ||
+        global['watchOsAppearance'] == true;
+    if (followSystem) {
+      unawaited(ThemeController.instance.applyServerMode('system'));
+      return;
     }
+
+    // Source of truth: state.global.themeMode, then themes.activeMode.
+    var raw = global['themeMode']?.toString().trim();
     if (raw == null || raw.isEmpty) {
-      final themes = schema['themes'];
-      if (themes is Map) {
-        raw = themes['activeMode']?.toString().trim();
-      }
+      raw = themes['activeMode']?.toString().trim();
     }
     if (raw != null && raw.isNotEmpty) {
       unawaited(ThemeController.instance.applyServerMode(raw));

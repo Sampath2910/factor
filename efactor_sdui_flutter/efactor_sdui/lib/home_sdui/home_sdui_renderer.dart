@@ -187,6 +187,34 @@ class HomeSduiRenderer {
     final appearance = _map(c['appearance']) ?? const <String, dynamic>{};
     final headerOverflow = _schemaOverflow('headerText');
 
+    // App-resolved brightness drives the header assets/colors (contract: swap by
+    // resolved brightness, not by imageUrl alone). Supports both the inline
+    // *Dark keys and the appearanceLight/appearanceDark blocks the backend sends.
+    final isDarkTheme = ThemeController.instance.isDark(context);
+    final appearanceLight = _map(c['appearanceLight']);
+    final appearanceDark = _map(c['appearanceDark']);
+
+    // Picks the light/dark value for the resolved brightness, falling back to
+    // the other mode's value (never regress a schema that only sends one).
+    String? byBrightness(String? light, String? dark) {
+      final l = light?.trim();
+      final d = dark?.trim();
+      final primary = isDarkTheme ? d : l;
+      final secondary = isDarkTheme ? l : d;
+      if (primary != null && primary.isNotEmpty) return primary;
+      if (secondary != null && secondary.isNotEmpty) return secondary;
+      return null;
+    }
+
+    // Resolves an explicit title/subtitle color by brightness from colorLight/
+    // colorDark on the text node or appearanceLight/appearanceDark.*titleColor.
+    Color? explicitHeaderColor(dynamic raw, String appearanceColorKey) {
+      final map = _map(raw);
+      final light = _color(map?['colorLight'] ?? appearanceLight?[appearanceColorKey]);
+      final dark = _color(map?['colorDark'] ?? appearanceDark?[appearanceColorKey]);
+      return isDarkTheme ? (dark ?? light) : (light ?? dark);
+    }
+
     String textFrom(dynamic raw) {
       final map = _map(raw);
       if (map != null) {
@@ -254,7 +282,8 @@ class HomeSduiRenderer {
           style: styleFrom(
             titleRaw,
             fallbackToken: 'typography.brandTitle',
-            fallbackColor: tokenColor('colors.textPrimary'),
+            fallbackColor: explicitHeaderColor(titleRaw, 'titleColor') ??
+                tokenColor('colors.textPrimary'),
           ),
         ),
         if (subtitle.isNotEmpty)
@@ -265,7 +294,8 @@ class HomeSduiRenderer {
             style: styleFrom(
               subtitleRaw,
               fallbackToken: 'typography.brandSubtitle',
-              fallbackColor: tokenColor('colors.textMuted'),
+              fallbackColor: explicitHeaderColor(subtitleRaw, 'subtitleColor') ??
+                  tokenColor('colors.textMuted'),
             ),
           ),
       ],
@@ -279,7 +309,13 @@ class HomeSduiRenderer {
     final useCompactLogo = breakpoint == 'narrow' || breakpoint == 'compact';
 
     if (logo != null) {
-      final source = logo['imageUrl']?.toString().trim() ?? '';
+      // Swap by resolved brightness: dark -> imageUrlDark / appearanceDark.logoUrl
+      // (e.g. efactor-logo_light.png), light -> imageUrl / appearanceLight.logoUrl.
+      final source = byBrightness(
+            (logo['imageUrl'] ?? appearanceLight?['logoUrl'])?.toString(),
+            (logo['imageUrlDark'] ?? appearanceDark?['logoUrl'])?.toString(),
+          ) ??
+          '';
       var width = _d(logo['width'] ?? logo['maxWidth']);
       var height = _d(logo['height'] ?? logo['maxHeight']);
       if (useCompactLogo) {
@@ -3339,15 +3375,29 @@ class HomeSduiRenderer {
       ...tokenNav,
       ...?_map(c['appearance']),
     };
-    final activeColor =
+    // Theme-aware bottom nav. Explicit *Light/*Dark keys (contract) win when the
+    // backend sends them; otherwise fall back to the existing brightness-aware
+    // design tokens (themes.presets.{light,dark}). This guarantees no baked
+    // single-mode bar in light mode and keeps older preset schemas working.
+    final isDarkNav = ThemeController.instance.isDark(context);
+    Color? navByBrightness(String lightKey, String darkKey) {
+      final light = _color(appearance[lightKey]);
+      final dark = _color(appearance[darkKey]);
+      return isDarkNav ? (dark ?? light) : (light ?? dark);
+    }
+
+    final activeColor = navByBrightness('activeColorLight', 'activeColorDark') ??
         tokenColor(appearance['activeColorToken']?.toString()) ??
-            tokenColor('colors.navActive');
+        tokenColor('colors.navActive');
     final inactiveColor =
-        tokenColor(appearance['inactiveColorToken']?.toString()) ??
+        navByBrightness('inactiveColorLight', 'inactiveColorDark') ??
+            tokenColor(appearance['inactiveColorToken']?.toString()) ??
             tokenColor('colors.textMuted');
-    final background = _color(appearance['backgroundColor']) ??
-        tokenColor(appearance['backgroundColorToken']?.toString()) ??
-        tokenColor('colors.navBackground');
+    final background =
+        navByBrightness('backgroundColorLight', 'backgroundColorDark') ??
+            _color(appearance['backgroundColor']) ??
+            tokenColor(appearance['backgroundColorToken']?.toString()) ??
+            tokenColor('colors.navBackground');
     final showLabels = appearance['showLabels'] != false;
     final iconSize = _d(appearance['iconSize']) ??
         _tokenNumber('typography.pageSubtitle.fontSize');
@@ -4043,7 +4093,15 @@ class HomeSduiRenderer {
     Color? fallbackColor,
   }) {
     final map = raw ?? const <String, dynamic>{};
-    final color = _color(map['color']) ??
+    // Prefer brightness-specific colors (colorLight/colorDark) over the baked
+    // single `color`, so schema text stays legible in both themes instead of
+    // painting one mode's color (e.g. dark navy title on a dark background).
+    final isDark = ThemeController.instance.isDark();
+    final brightnessColor =
+        _color(isDark ? map['colorDark'] : map['colorLight']) ??
+            _color(isDark ? map['colorLight'] : map['colorDark']);
+    final color = brightnessColor ??
+        _color(map['color']) ??
         tokenColor(map['colorToken']?.toString()) ??
         fallbackColor;
     return TextStyle(
