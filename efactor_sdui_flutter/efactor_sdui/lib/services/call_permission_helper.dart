@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,8 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'push_diagnostic_sheet.dart';
 
 /// Helper to request WhatsApp-like incoming call & floating banner permissions on Android.
 class CallPermissionHelper {
@@ -169,9 +168,14 @@ class CallPermissionHelper {
                 style: TextStyle(color: Color(0xFF64748B))),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               messenger.hideCurrentMaterialBanner();
-              if (context.mounted) showCallPermissionModal(context);
+              final p = await SharedPreferences.getInstance();
+              await p.setBool(_prefPromptShown, true);
+              // Directly run the full guided permission flow (no intermediate
+              // checklist screen): native dialogs first, then each settings page
+              // one at a time.
+              await runCallPermissionFlow(messenger);
             },
             child: const Text('Enable',
                 style: TextStyle(
@@ -182,298 +186,144 @@ class CallPermissionHelper {
     );
   }
 
-  /// Opens the self-paced permission checklist. Each permission is its own row
-  /// with its own action; tapping a row triggers exactly ONE OS prompt/settings
-  /// screen, and the sheet updates live (checks state on return). This replaces
-  /// the old single button that fired four system screens back-to-back.
-  static Future<void> showCallPermissionModal(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefPromptShown, true);
-    if (!context.mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => const _CallPermissionChecklist(),
-    );
+  /// Runs the full guided call-alert permission flow in one tap (Approach A):
+  /// the two native dialogs first (notifications, then background wake), then
+  /// each remaining special-access Settings page one at a time, auto-advancing
+  /// as the user returns from each. No intermediate checklist screen.
+  /// Android-only; Android forces a Settings toggle for overlay / full-screen /
+  /// autostart, so those pages are unavoidable, but they open sequentially.
+  static Future<void> runCallPermissionFlow(
+      ScaffoldMessengerState messenger) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await _CallPermissionFlow(messenger).start();
   }
 }
 
-/// Self-paced, lifecycle-aware checklist for the Android call-alert permissions.
-/// Shows live grant state (where the OS exposes it) and requests one permission
-/// at a time, so users are never hit with a stack of system dialogs at once.
-class _CallPermissionChecklist extends StatefulWidget {
-  const _CallPermissionChecklist();
-
-  @override
-  State<_CallPermissionChecklist> createState() =>
-      _CallPermissionChecklistState();
+/// One special-access step that can only be granted on a Settings page (overlay,
+/// full-screen intent, OEM autostart). [isGranted] is null when Android exposes
+/// no status for it (we then simply advance once the user returns).
+class _SettingsStep {
+  const _SettingsStep(this.label, this.isGranted, this.open);
+  final String label;
+  final Future<bool> Function()? isGranted;
+  final Future<void> Function() open;
 }
 
-class _CallPermissionChecklistState extends State<_CallPermissionChecklist>
-    with WidgetsBindingObserver {
-  bool _notif = false;
-  bool _overlay = false;
-  bool _battery = false;
-  bool _isChineseOem = false;
+/// Headless, lifecycle-driven sequencer. Fires the native permission dialogs,
+/// then walks the user through the Settings-page permissions one at a time,
+/// advancing on each app resume, with lightweight "N of M" SnackBars. No visible
+/// checklist sheet — the banner's single "Enable" tap drives the whole thing.
+class _CallPermissionFlow with WidgetsBindingObserver {
+  _CallPermissionFlow(this._messenger);
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _init();
-  }
+  final ScaffoldMessengerState _messenger;
+  final List<_SettingsStep> _queue = <_SettingsStep>[];
+  int _total = 0;
+  bool _active = false;
+  bool _awaitingReturn = false;
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
+  Future<void> start() async {
+    // Phase 1 — native dialogs, in sequence (no Settings pages).
+    if (!(await Permission.notification.status).isGranted) {
+      await Permission.notification.request();
+    }
+    if (!await CallPermissionHelper.isBatteryOptimizationIgnored()) {
+      await CallPermissionHelper.requestIgnoreBatteryOptimizations();
+    }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // User returns from a system settings screen -> re-read grant state so the
-    // row flips to a green check without any further taps.
-    if (state == AppLifecycleState.resumed) _refresh();
-  }
-
-  Future<void> _init() async {
+    // Phase 2 — queue the not-yet-granted special-access steps.
     final mfr = await CallPermissionHelper.getDeviceManufacturer();
     const oems = <String>[
       'vivo', 'xiaomi', 'oppo', 'realme', 'iqoo', 'poco', 'redmi', 'oneplus',
     ];
-    if (mounted) {
-      setState(() => _isChineseOem = oems.any((o) => mfr.contains(o)));
+    final isOem = oems.any((o) => mfr.contains(o));
+
+    if (!await CallPermissionHelper.canDrawOverlays()) {
+      _queue.add(const _SettingsStep(
+        'Floating Banners',
+        CallPermissionHelper.canDrawOverlays,
+        CallPermissionHelper.openOverlaySettings,
+      ));
     }
-    await _refresh();
+    // Full-screen intent: no status API -> best-effort, always included.
+    _queue.add(const _SettingsStep(
+      'Full-Screen Ringing',
+      null,
+      CallPermissionHelper.openFullScreenIntentSettings,
+    ));
+    if (isOem) {
+      _queue.add(const _SettingsStep(
+        'Auto-start',
+        null,
+        CallPermissionHelper.openAutostartSettings,
+      ));
+    }
+
+    _total = _queue.length;
+    if (_queue.isEmpty) {
+      _toast('Call alerts enabled');
+      return;
+    }
+
+    WidgetsBinding.instance.addObserver(this);
+    _active = true;
+    await _openNext();
   }
 
-  Future<void> _refresh() async {
-    final notif = (await Permission.notification.status).isGranted;
-    final overlay = await CallPermissionHelper.canDrawOverlays();
-    final battery = await CallPermissionHelper.isBatteryOptimizationIgnored();
-    if (!mounted) return;
-    setState(() {
-      _notif = notif;
-      _overlay = overlay;
-      _battery = battery;
-    });
+  Future<void> _openNext() async {
+    if (_queue.isEmpty) {
+      _finish();
+      return;
+    }
+    final step = _queue.first;
+    final index = _total - _queue.length + 1;
+    _toast('$index of $_total  •  enable ${step.label}');
+    _awaitingReturn = true;
+    await step.open();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Center(
-            child: Container(
-              width: 44,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF0284C7).withValues(alpha: 0.18),
-              border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
-            ),
-            child: const Icon(Icons.phone_in_talk,
-                color: Color(0xFF38BDF8), size: 32),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Enable Incoming Call Alerts',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 19,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.3,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Turn these on one at a time so calls can ring over your lock '
-            'screen and in other apps. Enable only what you want.',
-            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5, height: 1.4),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 18),
-          _row(
-            icon: Icons.notifications_active_outlined,
-            title: 'Call & Chat Notifications',
-            desc: 'Lets the app notify you about calls and messages.',
-            granted: _notif,
-            actionLabel: 'Enable',
-            onAction: () async {
-              await Permission.notification.request();
-              await _refresh();
-            },
-          ),
-          _row(
-            icon: Icons.chat_bubble_outline,
-            title: 'Floating Heads-Up Banners',
-            desc: 'Pop-up banners for calls and chats while in other apps.',
-            granted: _overlay,
-            actionLabel: 'Enable',
-            onAction: () => CallPermissionHelper.openOverlaySettings(),
-          ),
-          _row(
-            icon: Icons.battery_charging_full,
-            title: 'Background Call Wake-up',
-            desc: 'Keeps calls alive when the app is cleared from Recents.',
-            granted: _battery,
-            actionLabel: 'Enable',
-            onAction: () async {
-              await CallPermissionHelper.requestIgnoreBatteryOptimizations();
-              await _refresh();
-            },
-          ),
-          _row(
-            icon: Icons.fullscreen,
-            title: 'Full-Screen Lock Screen Ringing',
-            desc: 'Turns the screen on so you can answer immediately.',
-            granted: null, // Android exposes no status for this special access.
-            actionLabel: 'Open',
-            onAction: () => CallPermissionHelper.openFullScreenIntentSettings(),
-          ),
-          if (_isChineseOem)
-            _row(
-              icon: Icons.restart_alt,
-              title: 'Auto-start',
-              desc: 'Allows the app to start so calls arrive reliably.',
-              granted: null,
-              actionLabel: 'Open',
-              onAction: () => CallPermissionHelper.openAutostartSettings(),
-            ),
-          const SizedBox(height: 12),
-          const Text(
-            'Android will show its own permission screen for each — that is '
-            'expected.',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5, height: 1.3),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              TextButton.icon(
-                icon: const Icon(Icons.troubleshoot,
-                    size: 16, color: Color(0xFF38BDF8)),
-                label: const Text('Push Diagnostics',
-                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 13)),
-                onPressed: () {
-                  // Use the Navigator's own (stable) context so the diagnostics
-                  // sheet still has a valid context after this sheet pops.
-                  final nav = Navigator.of(context);
-                  final navContext = nav.context;
-                  nav.pop();
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    PushDiagnosticSheet.show(navContext);
-                  });
-                },
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Done',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !_active || !_awaitingReturn) {
+      return;
+    }
+    _awaitingReturn = false;
+    unawaited(_advance());
   }
 
-  Widget _row({
-    required IconData icon,
-    required String title,
-    required String desc,
-    required bool? granted, // null = no OS status; always actionable.
-    required String actionLabel,
-    required Future<void> Function() onAction,
-  }) {
-    final isDone = granted == true;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: isDone
-            ? Border.all(color: const Color(0xFF22C55E).withValues(alpha: 0.4))
-            : null,
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, color: const Color(0xFF38BDF8), size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(title,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(desc,
-                    style: const TextStyle(
-                        color: Color(0xFF94A3B8), fontSize: 11.5, height: 1.3)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          if (isDone)
-            const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(Icons.check_circle, color: Color(0xFF22C55E), size: 18),
-                SizedBox(width: 4),
-                Text('On',
-                    style: TextStyle(
-                        color: Color(0xFF22C55E),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-              ],
-            )
-          else
-            SizedBox(
-              height: 32,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0284C7),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  elevation: 0,
-                ),
-                onPressed: () async {
-                  await onAction();
-                  await _refresh();
-                },
-                child: Text(actionLabel,
-                    style: const TextStyle(
-                        fontSize: 12.5, fontWeight: FontWeight.w700)),
-              ),
-            ),
-        ],
+  Future<void> _advance() async {
+    // Drop the step we just showed, then skip any that are now granted.
+    if (_queue.isNotEmpty) _queue.removeAt(0);
+    while (_queue.isNotEmpty) {
+      final check = _queue.first.isGranted;
+      if (check == null) break;
+      if (await check()) {
+        _queue.removeAt(0);
+      } else {
+        break;
+      }
+    }
+    if (_queue.isEmpty) {
+      _finish();
+      return;
+    }
+    await _openNext();
+  }
+
+  void _finish() {
+    if (!_active) return;
+    _active = false;
+    WidgetsBinding.instance.removeObserver(this);
+    _toast('Call alerts setup complete');
+  }
+
+  void _toast(String msg) {
+    _messenger.clearSnackBars();
+    _messenger.showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
