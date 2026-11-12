@@ -4437,14 +4437,17 @@ Error: $error
   void _handleProfessionalSpaceBridgeMessage(String rawJson) {
     try {
       final data = jsonDecode(rawJson) as Map<String, dynamic>;
-      if (data['action']?.toString() == 'saveProfessionalSnapshot') {
-        _professionalSpaceShellReady = true;
-        debugPrint(
-          '[GridInAppWebView] Professional Space offline shell ready '
-          '(url=${data['url']}, status=${data['status']}, '
-          'serviceWorker=${data['serviceWorker']})',
-        );
-      }
+      if (data['action']?.toString() != 'saveProfessionalSnapshot') return;
+      // Per the GRID team: the real state is the `serviceWorker` field, one of
+      // 'ready' (offline shell in place), 'unavailable' (registration failed),
+      // or 'unsupported' (no SW support, e.g. iOS). The `status` field is always
+      // 'ready' and must be ignored. Only serviceWorker === 'ready' counts.
+      final sw = data['serviceWorker']?.toString();
+      _professionalSpaceShellReady = sw == 'ready';
+      debugPrint(
+        '[GridInAppWebView] Professional Space handshake: serviceWorker=$sw '
+        '-> shellReady=$_professionalSpaceShellReady (url=${data['url']})',
+      );
     } catch (e) {
       debugPrint('[GridInAppWebView] ProfessionalSpaceBridge decode failed: $e');
     }

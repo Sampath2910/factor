@@ -36,7 +36,7 @@
   - **Circle Connect (chat)** = `https://efactor.tech/index.php/grid-chat` → detected by `_isCircleConnect` (path/title contains `chat`/`circle`/`grid-chat`).
   - **Professional Space** = `https://efactor.tech/index.php/grid` → `_isProfessionalSpace`.
 - SSO: URLs carry a one-time `grid_sso` token; the server consumes it and redirects to the clean path.
-- **Native ↔ web bridges** (JS channels, must be preserved): `CircleConnectPushBridge`, `CircleConnectMediaBridge`, `CircleConnectFileBridge`, `CircleConnectOutboxBridge`, `CircleConnectChannelsBridge`, `CircleConnectNavBridge`, `SnapshotCaptureBridge`, `ProfessionalSpaceBridge` (GRID offline-shell handshake: `{action:'saveProfessionalSnapshot', url, status, serviceWorker}` — acknowledgement only). Web-facing shims: `window.CircleConnectMedia/Files/Outbox/Push`.
+- **Native ↔ web bridges** (JS channels, must be preserved): `CircleConnectPushBridge`, `CircleConnectMediaBridge`, `CircleConnectFileBridge`, `CircleConnectOutboxBridge`, `CircleConnectChannelsBridge`, `CircleConnectNavBridge`, `SnapshotCaptureBridge`, `ProfessionalSpaceBridge` (GRID offline-shell handshake: `{action:'saveProfessionalSnapshot', url, status, serviceWorker}` — ack only; key off `serviceWorker === 'ready'`, ignore `status` which is always `'ready'`; other `serviceWorker` values: `'unavailable'`/`'unsupported'`). Web-facing shims: `window.CircleConnectMedia/Files/Outbox/Push`.
 - Android native file/media: `android/app/src/main/kotlin/com/example/efactor_sdui/MainActivity.kt` channel `tech.efactor/circle_connect` (saveImageToGallery/saveVideoToGallery/openFile/saveFileToDownloads via MediaStore).
 
 ### 2.2 Offline architecture (WhatsApp-style) — **per-platform hybrid**
