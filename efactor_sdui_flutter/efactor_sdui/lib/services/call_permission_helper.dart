@@ -128,226 +128,296 @@ class CallPermissionHelper {
   }
 
   /// Checks if prompt is needed and displays the onboarding bottom sheet if not yet configured.
+  /// Non-blocking entry point, safe to call right after login. Instead of
+  /// firing OS permission dialogs or a blocking modal at startup (which stacks
+  /// unfamiliar system prompts and alarms users), it surfaces a single
+  /// dismissible banner. No OS dialog is triggered here; tapping "Enable" opens
+  /// a self-paced checklist where each permission is requested one at a time.
   static Future<void> checkAndPromptIfNeeded(BuildContext context) async {
     if (kIsWeb || !Platform.isAndroid) return;
 
-    // Check basic notification permission
-    final notifStatus = await Permission.notification.status;
-    if (!notifStatus.isGranted) {
-      await Permission.notification.request();
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final alreadyPrompted = prefs.getBool(_prefPromptShown) ?? false;
     final hasOverlay = await canDrawOverlays();
     final isBatteryIgnored = await isBatteryOptimizationIgnored();
+    final notifGranted = (await Permission.notification.status).isGranted;
+    // Everything already granted -> nothing to show.
+    if (hasOverlay && isBatteryIgnored && notifGranted) return;
 
-    // If both overlay and battery whitelist are granted, nothing needed!
-    if (hasOverlay && isBatteryIgnored) return;
-
-    // If user already dismissed it previously, don't nag every single second
-    if (alreadyPrompted) return;
+    final prefs = await SharedPreferences.getInstance();
+    // Respect a prior dismissal / prior visit to the checklist: don't re-nag.
+    if (prefs.getBool(_prefPromptShown) ?? false) return;
 
     if (!context.mounted) return;
-    await showCallPermissionModal(context);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearMaterialBanners();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        backgroundColor: const Color(0xFF0F172A),
+        leading: const Icon(Icons.phone_in_talk, color: Color(0xFF38BDF8)),
+        content: const Text(
+          'Enable call alerts so incoming calls ring over your lock screen and '
+          'in other apps.',
+          style: TextStyle(color: Colors.white, fontSize: 13.5, height: 1.35),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () async {
+              messenger.hideCurrentMaterialBanner();
+              final p = await SharedPreferences.getInstance();
+              await p.setBool(_prefPromptShown, true);
+            },
+            child: const Text('Not now',
+                style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          TextButton(
+            onPressed: () {
+              messenger.hideCurrentMaterialBanner();
+              if (context.mounted) showCallPermissionModal(context);
+            },
+            child: const Text('Enable',
+                style: TextStyle(
+                    color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
-  /// Displays the rich, WhatsApp-style permission bottom sheet.
+  /// Opens the self-paced permission checklist. Each permission is its own row
+  /// with its own action; tapping a row triggers exactly ONE OS prompt/settings
+  /// screen, and the sheet updates live (checks state on return). This replaces
+  /// the old single button that fired four system screens back-to-back.
   static Future<void> showCallPermissionModal(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefPromptShown, true);
-
     if (!context.mounted) return;
-
-    final manufacturer = await getDeviceManufacturer();
-    final isChineseOem = manufacturer.contains('vivo') ||
-        manufacturer.contains('xiaomi') ||
-        manufacturer.contains('oppo') ||
-        manufacturer.contains('realme') ||
-        manufacturer.contains('iqoo') ||
-        manufacturer.contains('poco') ||
-        manufacturer.contains('redmi') ||
-        manufacturer.contains('oneplus');
-
-    if (!context.mounted) return;
-
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Container(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-          decoration: const BoxDecoration(
-            color: Color(0xFF0F172A),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      builder: (sheetContext) => const _CallPermissionChecklist(),
+    );
+  }
+}
+
+/// Self-paced, lifecycle-aware checklist for the Android call-alert permissions.
+/// Shows live grant state (where the OS exposes it) and requests one permission
+/// at a time, so users are never hit with a stack of system dialogs at once.
+class _CallPermissionChecklist extends StatefulWidget {
+  const _CallPermissionChecklist();
+
+  @override
+  State<_CallPermissionChecklist> createState() =>
+      _CallPermissionChecklistState();
+}
+
+class _CallPermissionChecklistState extends State<_CallPermissionChecklist>
+    with WidgetsBindingObserver {
+  bool _notif = false;
+  bool _overlay = false;
+  bool _battery = false;
+  bool _isChineseOem = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _init();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // User returns from a system settings screen -> re-read grant state so the
+    // row flips to a green check without any further taps.
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _init() async {
+    final mfr = await CallPermissionHelper.getDeviceManufacturer();
+    const oems = <String>[
+      'vivo', 'xiaomi', 'oppo', 'realme', 'iqoo', 'poco', 'redmi', 'oneplus',
+    ];
+    if (mounted) {
+      setState(() => _isChineseOem = oems.any((o) => mfr.contains(o)));
+    }
+    await _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final notif = (await Permission.notification.status).isGranted;
+    final overlay = await CallPermissionHelper.canDrawOverlays();
+    final battery = await CallPermissionHelper.isBatteryOptimizationIgnored();
+    if (!mounted) return;
+    setState(() {
+      _notif = notif;
+      _overlay = overlay;
+      _battery = battery;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F172A),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Center(
+            child: Container(
+              width: 44,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF0284C7).withValues(alpha: 0.18),
+              border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
+            ),
+            child: const Icon(Icons.phone_in_talk,
+                color: Color(0xFF38BDF8), size: 32),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Enable Incoming Call Alerts',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 19,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.3,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Turn these on one at a time so calls can ring over your lock '
+            'screen and in other apps. Enable only what you want.',
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5, height: 1.4),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          _row(
+            icon: Icons.notifications_active_outlined,
+            title: 'Call & Chat Notifications',
+            desc: 'Lets the app notify you about calls and messages.',
+            granted: _notif,
+            actionLabel: 'Enable',
+            onAction: () async {
+              await Permission.notification.request();
+              await _refresh();
+            },
+          ),
+          _row(
+            icon: Icons.chat_bubble_outline,
+            title: 'Floating Heads-Up Banners',
+            desc: 'Pop-up banners for calls and chats while in other apps.',
+            granted: _overlay,
+            actionLabel: 'Enable',
+            onAction: () => CallPermissionHelper.openOverlaySettings(),
+          ),
+          _row(
+            icon: Icons.battery_charging_full,
+            title: 'Background Call Wake-up',
+            desc: 'Keeps calls alive when the app is cleared from Recents.',
+            granted: _battery,
+            actionLabel: 'Enable',
+            onAction: () async {
+              await CallPermissionHelper.requestIgnoreBatteryOptimizations();
+              await _refresh();
+            },
+          ),
+          _row(
+            icon: Icons.fullscreen,
+            title: 'Full-Screen Lock Screen Ringing',
+            desc: 'Turns the screen on so you can answer immediately.',
+            granted: null, // Android exposes no status for this special access.
+            actionLabel: 'Open',
+            onAction: () => CallPermissionHelper.openFullScreenIntentSettings(),
+          ),
+          if (_isChineseOem)
+            _row(
+              icon: Icons.restart_alt,
+              title: 'Auto-start',
+              desc: 'Allows the app to start so calls arrive reliably.',
+              granted: null,
+              actionLabel: 'Open',
+              onAction: () => CallPermissionHelper.openAutostartSettings(),
+            ),
+          const SizedBox(height: 12),
+          const Text(
+            'Android will show its own permission screen for each — that is '
+            'expected.',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5, height: 1.3),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              // Top drag indicator
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+              TextButton.icon(
+                icon: const Icon(Icons.troubleshoot,
+                    size: 16, color: Color(0xFF38BDF8)),
+                label: const Text('Push Diagnostics',
+                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 13)),
+                onPressed: () {
+                  // Use the Navigator's own (stable) context so the diagnostics
+                  // sheet still has a valid context after this sheet pops.
+                  final nav = Navigator.of(context);
+                  final navContext = nav.context;
+                  nav.pop();
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    PushDiagnosticSheet.show(navContext);
+                  });
+                },
               ),
-
-              // Glowing Call Icon
-              Container(
-                width: 68,
-                height: 68,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF0284C7).withValues(alpha: 0.18),
-                  border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
-                ),
-                child: const Icon(
-                  Icons.phone_in_talk,
-                  color: Color(0xFF38BDF8),
-                  size: 34,
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Title
-              const Text(
-                'Enable Incoming Call Alerts',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.3,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-
-              // Subtitle
-              const Text(
-                'To ring and display Answer/Decline buttons over your lock screen and while using other apps, please enable Floating Call Alerts.',
-                style: TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 14,
-                  height: 1.45,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-
-              // Feature cards
-              _buildFeatureRow(
-                icon: Icons.fullscreen,
-                title: 'Full-Screen Lock Screen Ringing',
-                desc: 'Turns your screen on and lets you answer calls immediately.',
-              ),
-              const SizedBox(height: 12),
-              _buildFeatureRow(
-                icon: Icons.chat_bubble_outline,
-                title: 'Floating Heads-Up Banners',
-                desc: 'Pop-up banners for calls and chat messages while in other apps.',
-              ),
-              const SizedBox(height: 12),
-              _buildFeatureRow(
-                icon: Icons.battery_charging_full,
-                title: 'Background Call Wake-up',
-                desc: 'Prevents phone power manager from killing calls when cleared from Recents.',
-              ),
-              const SizedBox(height: 24),
-
-              // Action Buttons
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0284C7),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
-                  onPressed: () async {
-                    Navigator.of(sheetContext).pop();
-                    // 1. Request Battery Optimization Exemption (Crucial for closed app wake)
-                    final isBatIgnored = await isBatteryOptimizationIgnored();
-                    if (!isBatIgnored) {
-                      await requestIgnoreBatteryOptimizations();
-                      await Future<void>.delayed(const Duration(milliseconds: 500));
-                    }
-
-                    // 2. Open notification channel settings (contains floating banner toggle)
-                    await openCallNotificationChannelSettings();
-
-                    // 3. Open overlay settings if needed
-                    final hasOverlay = await canDrawOverlays();
-                    if (!hasOverlay) {
-                      await Future<void>.delayed(const Duration(milliseconds: 600));
-                      await openOverlaySettings();
-                    }
-
-                    // 4. On Vivo / Xiaomi / Oppo, prompt autostart if needed
-                    if (isChineseOem) {
-                      await Future<void>.delayed(const Duration(milliseconds: 600));
-                      await openAutostartSettings();
-                    }
-                  },
-                  child: const Text(
-                    'Enable Call Alerts & Background Wake',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.troubleshoot, size: 16, color: Color(0xFF38BDF8)),
-                    label: const Text(
-                      'Push Diagnostics',
-                      style: TextStyle(color: Color(0xFF38BDF8), fontSize: 13),
-                    ),
-                    onPressed: () {
-                      Navigator.of(sheetContext).pop();
-                      PushDiagnosticSheet.show(context);
-                    },
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text(
-                      'Later',
-                      style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                    ),
-                  ),
-                ],
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Done',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
               ),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  static Widget _buildFeatureRow({
+  Widget _row({
     required IconData icon,
     required String title,
     required String desc,
+    required bool? granted, // null = no OS status; always actionable.
+    required String actionLabel,
+    required Future<void> Function() onAction,
   }) {
+    final isDone = granted == true;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
+        border: isDone
+            ? Border.all(color: const Color(0xFF22C55E).withValues(alpha: 0.4))
+            : null,
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Icon(icon, color: const Color(0xFF38BDF8), size: 20),
           const SizedBox(width: 12),
@@ -355,25 +425,54 @@ class CallPermissionHelper {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text(title,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text(
-                  desc,
-                  style: const TextStyle(
-                    color: Color(0xFF94A3B8),
-                    fontSize: 12,
-                  ),
-                ),
+                Text(desc,
+                    style: const TextStyle(
+                        color: Color(0xFF94A3B8), fontSize: 11.5, height: 1.3)),
               ],
             ),
           ),
+          const SizedBox(width: 10),
+          if (isDone)
+            const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(Icons.check_circle, color: Color(0xFF22C55E), size: 18),
+                SizedBox(width: 4),
+                Text('On',
+                    style: TextStyle(
+                        color: Color(0xFF22C55E),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ],
+            )
+          else
+            SizedBox(
+              height: 32,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0284C7),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: () async {
+                  await onAction();
+                  await _refresh();
+                },
+                child: Text(actionLabel,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700)),
+              ),
+            ),
         ],
       ),
     );
