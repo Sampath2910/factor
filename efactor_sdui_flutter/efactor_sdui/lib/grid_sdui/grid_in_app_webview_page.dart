@@ -808,6 +808,14 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   var _loading = true;
   var _showingSnapshot = false;
 
+  /// Shows a lightweight static cover over the WebView during the Professional
+  /// Space (GRID home) cold open, lifted on the web app's `gridReady` signal
+  /// (first paint) via [GridLifecycleBridge] — or on onPageFinished / a safety
+  /// timeout, whichever comes first. Scoped to Professional Space so Circle
+  /// Connect keeps its clean fade-in. A warm (kept-alive) shell never shows it.
+  bool _coverVisible = false;
+  Timer? _coverSafetyTimer;
+
   /// True once the GRID / Professional Space web app has confirmed (via
   /// [ProfessionalSpaceBridge] `saveProfessionalSnapshot`) that its service
   /// worker registered and the offline app shell is cached. Diagnostic only.
@@ -909,6 +917,16 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     _initController();
     if (_isCircleConnect) {
       GridInAppWebViewPage._lastCircleConnectController = _controller;
+    }
+    // Professional Space cold open: show the lightweight cover from the first
+    // frame; lifted on gridReady / onPageFinished / safety timeout. Set the
+    // field directly (build() hasn't run yet) and arm the safety timer.
+    if (_isProfessionalSpace) {
+      _coverVisible = true;
+      _coverSafetyTimer = Timer(
+        const Duration(seconds: 3),
+        () => _liftCover('safety-timeout'),
+      );
     }
     debugPrint(
       '[GridInAppWebView] initState: initialized controller for $_effectiveUri '
@@ -1030,6 +1048,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     WidgetsBinding.instance.removeObserver(this);
     ThemeController.instance.removeListener(_onAppThemeChanged);
     _connectingCallTimer?.cancel();
+    _coverSafetyTimer?.cancel();
     unawaited(OngoingCallService.instance.stopCall());
     PushNotificationBootstrap.instance.setActiveConversationId(null);
     CircleConnectDeviceKeyStore.instance
@@ -1133,6 +1152,17 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         'ProfessionalSpaceBridge',
         onMessageReceived: (JavaScriptMessage msg) {
           _handleProfessionalSpaceBridgeMessage(msg.message);
+        },
+      )
+      // GRID lifecycle signal from the web app. The Professional Space (GRID
+      // home) feed posts `gridReady` on FIRST PAINT (content already on screen,
+      // before the network refresh finishes), letting us lift the loading cover
+      // early instead of waiting for the full page load. Payload is parsed
+      // defensively (JSON {event,surface} or a raw 'gridReady' string).
+      ..addJavaScriptChannel(
+        'GridLifecycleBridge',
+        onMessageReceived: (JavaScriptMessage msg) {
+          _handleGridLifecycleMessage(msg.message);
         },
       )
       ..setNavigationDelegate(
@@ -1323,10 +1353,20 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             unawaited(_injectGridBackButton());
             unawaited(_injectChatSwipeBridge());
             unawaited(_injectScannerBridge());
+            // Bridge the web app's gridReady signal to lift the cover early.
+            if (_isProfessionalSpace) {
+              unawaited(_controller.runJavaScript(_gridReadyListenerJs));
+            }
           },
           onPageFinished: (url) {
             debugPrint('[GridInAppWebView] onPageFinished: $url');
             if (!mounted) return;
+            // Re-assert the gridReady listener (SPA route changes re-run JS) and
+            // lift the cover as a fallback if gridReady never arrived.
+            if (_isProfessionalSpace) {
+              unawaited(_controller.runJavaScript(_gridReadyListenerJs));
+              _liftCover('onPageFinished');
+            }
             setState(() {
               _loading = false;
               _error = null;
@@ -4455,6 +4495,60 @@ Error: $error
     }
   }
 
+  /// Handles the web app's GRID lifecycle signal (`gridReady`). Fired on first
+  /// paint of the Professional Space (GRID home) feed. Parsed defensively: the
+  /// payload may be JSON (`{event:"gridReady", surface:"home"}`) or a raw
+  /// 'gridReady' string. On a home/grid-ready event we lift the cover early.
+  void _handleGridLifecycleMessage(String raw) {
+    var event = raw.trim();
+    String? surface;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        event = (decoded['event'] ?? decoded['type'] ?? '').toString().trim();
+        surface = decoded['surface']?.toString().trim().toLowerCase();
+      }
+    } catch (_) {
+      // Not JSON — treat the raw string as the event name.
+    }
+    final isReady = event.toLowerCase() == 'gridready' || event == 'ready';
+    debugPrint(
+      '[GridInAppWebView] GridLifecycle event="$event" surface="$surface" '
+      '-> ready=$isReady',
+    );
+    if (isReady) _liftCover('gridReady');
+  }
+
+  /// Lifts the cover (idempotent). [reason] is for logs.
+  void _liftCover(String reason) {
+    _coverSafetyTimer?.cancel();
+    _coverSafetyTimer = null;
+    if (!_coverVisible) return;
+    debugPrint('[GridInAppWebView] Lifting Professional Space cover ($reason)');
+    if (mounted) setState(() => _coverVisible = false);
+  }
+
+  /// JS wiring so however the web app emits `gridReady` reaches our channel.
+  /// The `GridLifecycleBridge` channel object already exists; this also bridges
+  /// a `gridReady` CustomEvent and a `window.postMessage({event:'gridReady'})`.
+  String get _gridReadyListenerJs => '''
+(function(){
+  try {
+    if (window.__gridReadyBridged) return;
+    window.__gridReadyBridged = true;
+    function post(detail){
+      try { window.GridLifecycleBridge && window.GridLifecycleBridge.postMessage(
+        typeof detail === 'string' ? detail : JSON.stringify(detail || {event:'gridReady'})); } catch(e){}
+    }
+    window.addEventListener('gridReady', function(e){ post((e && e.detail) || {event:'gridReady'}); });
+    window.addEventListener('message', function(e){
+      var d = e && e.data;
+      if (d && (d.event === 'gridReady' || d.type === 'gridReady')) post(d);
+    });
+  } catch(e){}
+})();
+''';
+
   /// Persists a captured snapshot to the app-side store (used by both the iOS
   /// return path and the Android channel path).
   Future<void> _saveSnapshotHtml(
@@ -4797,6 +4891,15 @@ Error: $error
                 )
               else
                 _buildOfflineState(context),
+              // Professional Space cold-open cover: a STATIC full-bleed fill in
+              // the WebView background color (no per-frame animation, so it does
+              // not reintroduce the repaint cost that got the old loader removed).
+              // Lifted on gridReady (first paint) / onPageFinished / safety
+              // timeout. Only shown for Professional Space; warm shells skip it.
+              if (_coverVisible && _error == null)
+                const Positioned.fill(
+                  child: ColoredBox(color: Color(0xFF0F172A)),
+                ),
               // Full-screen animated loader removed: it ran a spinner +
               // progress bar that repainted every frame during load (hurting
               // smoothness and keeping the WebView recompositing). The WebView
