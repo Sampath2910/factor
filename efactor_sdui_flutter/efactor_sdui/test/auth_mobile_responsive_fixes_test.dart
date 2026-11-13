@@ -344,5 +344,54 @@ void main() {
     expect(state.read('signupForm.otpVisible'), isTrue);
     expect(find.text('Resend OTP'), findsOneWidget);
   });
+
+  testWidgets('Remember me checkbox maintains high-contrast dark checkColor on both light and dark themes', (tester) async {
+    for (final themeMode in [ThemeMode.dark, ThemeMode.light]) {
+      final state = AuthState(pageSchema('login'));
+      final renderer = AuthRenderer(state);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.light(),
+          darkTheme: ThemeData.dark(),
+          themeMode: themeMode,
+          home: Builder(builder: (ctx) => renderer.build(ctx)),
+        ),
+      );
+      await tester.pump();
+
+      // Find the Remember me Checkbox
+      final checkboxFinder = find.byType(Checkbox);
+      expect(checkboxFinder, findsOneWidget, reason: 'Login screen should render Remember me checkbox');
+
+      final checkbox = tester.widget<Checkbox>(checkboxFinder);
+      expect(checkbox.activeColor, const Color(0xFFE8EDF2));
+      expect(checkbox.checkColor, const Color(0xFF0F172A),
+          reason: 'CheckColor must remain black/dark on $themeMode to avoid white-on-white contrast bug');
+    }
+  });
+
+  testWidgets('Signup terms checkbox maintains high-contrast dark checkColor on light activeColor', (tester) async {
+    final state = AuthState(pageSchema('signup'));
+    final renderer = AuthRenderer(state);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.light(),
+        darkTheme: ThemeData.dark(),
+        themeMode: ThemeMode.light,
+        home: Builder(builder: (ctx) => renderer.build(ctx)),
+      ),
+    );
+    await tester.pump();
+
+    final checkboxFinder = find.byType(Checkbox);
+    expect(checkboxFinder, findsOneWidget, reason: 'Signup screen should render terms checkbox');
+
+    final checkbox = tester.widget<Checkbox>(checkboxFinder);
+    expect(checkbox.activeColor, const Color(0xFFFFFFFF));
+    expect(checkbox.checkColor, const Color(0xFF0F172A),
+        reason: 'Signup terms checkColor must be dark on white background in light mode');
+  });
 }
 

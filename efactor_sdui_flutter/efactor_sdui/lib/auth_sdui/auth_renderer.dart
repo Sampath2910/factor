@@ -1585,6 +1585,7 @@ class AuthRenderer {
         Checkbox(
           value: state.read(stateKey) == true,
           activeColor: _color(style['activeColor']),
+          checkColor: _color(style['checkColor']) ?? const Color(0xFF0F172A),
           onChanged: (value) {
             state.write(stateKey, value == true);
           },
@@ -1622,6 +1623,7 @@ class AuthRenderer {
         Checkbox(
           value: state.read(stateKey) == true,
           activeColor: _color(style['activeColor']),
+          checkColor: _color(style['checkColor']) ?? const Color(0xFF0F172A),
           onChanged: (value) {
             state.write(stateKey, value == true);
           },
