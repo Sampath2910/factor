@@ -27,6 +27,8 @@ import 'services/user_location_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Bound image memory cache to 100 MB to prevent unbounded RAM growth during scrolling
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 100 << 20;
   // Load the persisted theme choice (defaults to dark) before the first frame
   // so there is no flash of the wrong theme at startup.
   await ThemeController.instance.load();

@@ -329,11 +329,14 @@ class HomeSduiRenderer {
       }
 
       final image = _networkImageFromSchema(
+        context: context,
         source: source,
         fit: logo['objectFit'],
         alignment: logo['objectPosition'],
         errorIconToken: state.schema['rendererRequirements']?['fallbacks']
             ?['missingImage'],
+        targetWidth: width,
+        targetHeight: height,
       );
       if (image != null) {
         rowChildren.add(
@@ -395,11 +398,14 @@ class HomeSduiRenderer {
       Widget avatarChild;
       if (hasImage) {
         avatarChild = _networkImageFromSchema(
+              context: context,
               source: imageUrl,
               fit: avatarAppearance['objectFit'],
               alignment: avatarAppearance['objectPosition'],
               errorIconToken: state.schema['rendererRequirements']?['fallbacks']
                   ?['missingImage'],
+              targetWidth: avatarWidth,
+              targetHeight: avatarHeight,
             ) ??
             Text(
               initials,
@@ -1611,11 +1617,14 @@ class HomeSduiRenderer {
       final imageUrl = avatar['imageUrl']?.toString().trim() ?? '';
       if (imageUrl.isNotEmpty) {
         avatarChild = _networkImageFromSchema(
+              context: context,
               source: imageUrl,
               fit: avatarAppearance['objectFit'],
               alignment: avatarAppearance['objectPosition'],
               errorIconToken: state.schema['rendererRequirements']?['fallbacks']
                   ?['missingImage'],
+              targetWidth: width,
+              targetHeight: height,
             ) ??
             Text(initials);
       } else {
@@ -2861,23 +2870,40 @@ class HomeSduiRenderer {
     final value = _textValue(face['value'], item: item);
     final unit = _textValue(face['unit'], item: item);
 
+    final tileWidth = _d(face['width']) ??
+        _d(appearance['width']) ??
+        _d(parent['width']) ??
+        _d(parentAppearance['width']);
+    final tileHeight = _d(face['height']) ??
+        _d(appearance['height']) ??
+        _d(parent['height']) ??
+        _d(parentAppearance['height']);
+
     // Resolve the visual asset before validating textual content. Image-only
     // cube faces are valid schema content and are used by the web renderer.
     final assetId = face['assetId']?.toString().trim();
     final directImage = face['image']?.toString().trim();
     Widget? image;
     if (assetId != null && assetId.isNotEmpty) {
-      image = _assetWidget(assetId);
+      image = _assetWidget(
+        assetId,
+        context: context,
+        targetWidth: tileWidth,
+        targetHeight: tileHeight,
+      );
     }
     // A schema may publish both an assetId and the resolved image URL. If the
     // asset entry is absent/unsupported, try the explicit face image without
     // weakening HTTPS/domain security checks.
     if (image == null && directImage != null && directImage.isNotEmpty) {
       image = _networkImageFromSchema(
+        context: context,
         source: directImage,
         fit: face['imageFit'],
         alignment: face['imageAlignment'],
         errorIconToken: face['iconToken'],
+        targetWidth: tileWidth,
+        targetHeight: tileHeight,
       );
     }
     if (image != null) {
@@ -3210,6 +3236,9 @@ class HomeSduiRenderer {
     dynamic fit,
     dynamic alignment,
     dynamic errorIconToken,
+    BuildContext? context,
+    double? targetWidth,
+    double? targetHeight,
   }) {
     final uri = Uri.tryParse(source);
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
@@ -3248,12 +3277,59 @@ class HomeSduiRenderer {
       return null;
     }
 
+    final resolvedFit = _fit(fit);
+    final dpr = context != null
+        ? (MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.5)
+        : (WidgetsBinding.instance.platformDispatcher.views.firstOrNull?.devicePixelRatio ?? 2.5);
+
+    // Bounded decode dimensions: scale by device pixel ratio so the bitmap in RAM
+    // matches screen resolution rather than 4K/full native file dimensions.
+    const double maxLogicalDimension = 1080.0;
+    final hasExplicitWidth = targetWidth != null && targetWidth > 0;
+    final hasExplicitHeight = targetHeight != null && targetHeight > 0;
+
+    int? memCacheWidth;
+    int? memCacheHeight;
+
+    if (hasExplicitWidth && hasExplicitHeight) {
+      final physicalW = (targetWidth * dpr).round();
+      final physicalH = (targetHeight * dpr).round();
+      switch (resolvedFit) {
+        case BoxFit.fitWidth:
+          memCacheWidth = physicalW;
+          memCacheHeight = null;
+          break;
+        case BoxFit.fitHeight:
+          memCacheHeight = physicalH;
+          memCacheWidth = null;
+          break;
+        case BoxFit.contain:
+        case BoxFit.cover:
+        case BoxFit.fill:
+        case BoxFit.scaleDown:
+        case BoxFit.none:
+          memCacheWidth = physicalW;
+          memCacheHeight = physicalH;
+          break;
+      }
+    } else if (hasExplicitWidth) {
+      memCacheWidth = (targetWidth * dpr).round();
+    } else if (hasExplicitHeight) {
+      memCacheHeight = (targetHeight * dpr).round();
+    } else {
+      // Size unknown: cap to a safe upper bound (1080 logical px) to prevent
+      // multi-megapixel decodes from swamping GPU/RAM.
+      memCacheWidth = (maxLogicalDimension * dpr).round();
+    }
+
     return CachedNetworkImage(
       imageUrl: source,
       cacheManager: SduiNetworkImageCache.manager,
-      fit: _fit(fit),
+      fit: resolvedFit,
       alignment: _alignment(alignment),
       filterQuality: FilterQuality.medium,
+      memCacheWidth: memCacheWidth,
+      memCacheHeight: memCacheHeight,
       placeholder: (_, __) => const Center(
         child: SizedBox(
           width: 24,
@@ -3328,7 +3404,12 @@ class HomeSduiRenderer {
     return hosts;
   }
 
-  Widget? _assetWidget(String assetId) {
+  Widget? _assetWidget(
+    String assetId, {
+    BuildContext? context,
+    double? targetWidth,
+    double? targetHeight,
+  }) {
     dynamic raw;
     final assets = state.schema['assets'];
 
@@ -3352,11 +3433,16 @@ class HomeSduiRenderer {
 
     final source = asset['source']?.toString();
     if (source == null || source.isEmpty) return null;
+    final assetWidth = _d(asset['width']) ?? targetWidth;
+    final assetHeight = _d(asset['height']) ?? targetHeight;
     return _networkImageFromSchema(
+      context: context,
       source: source,
       fit: asset['fit'],
       alignment: asset['alignment'],
       errorIconToken: asset['errorIconToken'],
+      targetWidth: assetWidth,
+      targetHeight: assetHeight,
     );
   }
 
@@ -4157,7 +4243,7 @@ class HomeSduiRenderer {
       return <BoxShadow>[
         BoxShadow(
           color: color,
-          blurRadius: _d(current['blur']) ?? 0,
+          blurRadius: (_d(current['blur']) ?? 0).clamp(0.0, 10.0),
           spreadRadius: _d(current['spread']) ?? 0,
           offset: Offset(
             _d(current['offsetX']) ?? 0,
@@ -4190,7 +4276,7 @@ class HomeSduiRenderer {
       BoxShadow(
         color: color,
         offset: Offset(offsetX, offsetY),
-        blurRadius: blur,
+        blurRadius: blur.clamp(0.0, 10.0),
         spreadRadius: spread,
       ),
     ];
@@ -4360,6 +4446,8 @@ class _RotatingCardState extends State<_RotatingCard>
   late final AnimationController _cycleController;
   bool _animationsAllowed = true;
   final Map<int, Widget> _cachedFaces = <int, Widget>{};
+  ModalRoute<dynamic>? _route;
+  Animation<double>? _secondaryAnimation;
 
   @override
   void initState() {
@@ -4372,7 +4460,29 @@ class _RotatingCardState extends State<_RotatingCard>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _cachedFaces.clear();
+    final newRoute = ModalRoute.of(context);
+    if (_route != newRoute) {
+      _secondaryAnimation?.removeListener(_onRouteAnimationTick);
+      _route = newRoute;
+      _secondaryAnimation = newRoute?.secondaryAnimation;
+      _secondaryAnimation?.addListener(_onRouteAnimationTick);
+    }
     _syncAnimation();
+  }
+
+  void _onRouteAnimationTick() {
+    if (!mounted) return;
+    final isCovered = (_secondaryAnimation?.value ?? 0.0) > 0.0 ||
+        (_route != null && !_route!.isCurrent);
+    if (isCovered) {
+      if (_cycleController.isAnimating) {
+        _cycleController.stop(canceled: false);
+      }
+    } else {
+      if (!_cycleController.isAnimating && _animationsAllowed) {
+        _startRepeatingIfNeeded(preserveProgress: true);
+      }
+    }
   }
 
   @override
@@ -4404,7 +4514,10 @@ class _RotatingCardState extends State<_RotatingCard>
     if (!pauseWhenInactive) return;
 
     if (state == AppLifecycleState.resumed) {
-      _startRepeatingIfNeeded(preserveProgress: true);
+      if (_route == null ||
+          (_route!.isCurrent && (_secondaryAnimation?.value ?? 0.0) <= 0.0)) {
+        _startRepeatingIfNeeded(preserveProgress: true);
+      }
     } else {
       _cycleController.stop(canceled: false);
     }
@@ -4412,6 +4525,9 @@ class _RotatingCardState extends State<_RotatingCard>
 
   @override
   void dispose() {
+    _secondaryAnimation?.removeListener(_onRouteAnimationTick);
+    _secondaryAnimation = null;
+    _route = null;
     WidgetsBinding.instance.removeObserver(this);
     _cycleController.dispose();
     super.dispose();
@@ -4443,6 +4559,10 @@ class _RotatingCardState extends State<_RotatingCard>
 
   void _startRepeatingIfNeeded({required bool preserveProgress}) {
     if (!_animationsAllowed || widget.faces.length <= 1) return;
+    if (_route != null &&
+        (!_route!.isCurrent || (_secondaryAnimation?.value ?? 0.0) > 0.0)) {
+      return;
+    }
 
     final durationMs = _cycleDurationMs();
     if (durationMs <= 0) return;
@@ -5152,11 +5272,29 @@ class _RotatingCardState extends State<_RotatingCard>
         ? _progressFor(cycle)
         : _CubeProgress(segmentIndex: defaultIndex, easedFlip: 0, rawFlip: 0);
 
+    final currentIndex = progress.segmentIndex % widget.faces.length;
+
+    // Fast-path: during stationary dwell (63.6% of cycle) or when animations are disabled,
+    // directly render the current face, bypassing trigonometric sorting, 3D matrices, and 4-face stacks.
+    if (progress.rawFlip <= 0.001 || !_animationsAllowed) {
+      final faceWidget = _getOrBuildFace(currentIndex);
+      if (radius != null && radius > 0) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          clipBehavior: Clip.antiAlias,
+          child: faceWidget,
+        );
+      }
+      return ClipRect(
+        clipBehavior: Clip.antiAlias,
+        child: faceWidget,
+      );
+    }
+
     final animationRadiansPerFace = _animationDegreesPerFace() * math.pi / 180;
 
     final parentAngle =
         (progress.segmentIndex + progress.easedFlip) * animationRadiansPerFace;
-    final currentIndex = progress.segmentIndex % widget.faces.length;
 
     final sortedSideIndices = List<int>.generate(totalSides, (i) => i)
       ..sort((a, b) {
