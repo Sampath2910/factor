@@ -4495,25 +4495,31 @@ Error: $error
     }
   }
 
-  /// Handles the web app's GRID lifecycle signal (`gridReady`). Fired on first
-  /// paint of the Professional Space (GRID home) feed. Parsed defensively: the
-  /// payload may be JSON (`{event:"gridReady", surface:"home"}`) or a raw
-  /// 'gridReady' string. On a home/grid-ready event we lift the cover early.
+  /// Handles the web app's GRID lifecycle signal. Per the web team's contract
+  /// (signalReady.js), the web app calls
+  /// `window.GridLifecycleBridge.postMessage(JSON.stringify(payload))` on FIRST
+  /// PAINT, exactly once per page load (idempotent — no second signal). Payload:
+  /// `{ "action": "gridReady", "surface": "home"|"professional", "url": ... }`.
+  /// NOTE the key is `action` (not `event`). Both surfaces mean "lift the cover".
+  /// Also handles the bare `window.gridReady()` ping (posts `{action:'gridReady'}`).
   void _handleGridLifecycleMessage(String raw) {
-    var event = raw.trim();
+    var action = raw.trim();
     String? surface;
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map) {
-        event = (decoded['event'] ?? decoded['type'] ?? '').toString().trim();
+        action =
+            (decoded['action'] ?? decoded['event'] ?? decoded['type'] ?? '')
+                .toString()
+                .trim();
         surface = decoded['surface']?.toString().trim().toLowerCase();
       }
     } catch (_) {
-      // Not JSON — treat the raw string as the event name.
+      // Not JSON — treat the raw string as the action name.
     }
-    final isReady = event.toLowerCase() == 'gridready' || event == 'ready';
+    final isReady = action.toLowerCase() == 'gridready' || action == 'ready';
     debugPrint(
-      '[GridInAppWebView] GridLifecycle event="$event" surface="$surface" '
+      '[GridInAppWebView] GridLifecycle action="$action" surface="$surface" '
       '-> ready=$isReady',
     );
     if (isReady) _liftCover('gridReady');
@@ -4528,23 +4534,23 @@ Error: $error
     if (mounted) setState(() => _coverVisible = false);
   }
 
-  /// JS wiring so however the web app emits `gridReady` reaches our channel.
-  /// The `GridLifecycleBridge` channel object already exists; this also bridges
-  /// a `gridReady` CustomEvent and a `window.postMessage({event:'gridReady'})`.
+  /// Installs the `window.gridReady()` compatibility hook per the web team's
+  /// contract: the GRID web app calls `window.gridReady()` (no args) on first
+  /// paint IF we've injected it, as a bare ping. We bridge it to the native
+  /// `GridLifecycleBridge` channel. (The web app ALSO posts the full payload
+  /// directly to `GridLifecycleBridge` — that path needs no injection; this hook
+  /// is just the earliest, arg-less signal.)
   String get _gridReadyListenerJs => '''
 (function(){
   try {
-    if (window.__gridReadyBridged) return;
-    window.__gridReadyBridged = true;
-    function post(detail){
-      try { window.GridLifecycleBridge && window.GridLifecycleBridge.postMessage(
-        typeof detail === 'string' ? detail : JSON.stringify(detail || {event:'gridReady'})); } catch(e){}
+    if (!window.gridReady) {
+      window.gridReady = function(){
+        try {
+          window.GridLifecycleBridge &&
+            window.GridLifecycleBridge.postMessage(JSON.stringify({action:'gridReady'}));
+        } catch(e){}
+      };
     }
-    window.addEventListener('gridReady', function(e){ post((e && e.detail) || {event:'gridReady'}); });
-    window.addEventListener('message', function(e){
-      var d = e && e.data;
-      if (d && (d.event === 'gridReady' || d.type === 'gridReady')) post(d);
-    });
   } catch(e){}
 })();
 ''';
