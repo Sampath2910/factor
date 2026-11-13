@@ -1196,6 +1196,7 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
                   accessToken: widget.accessToken,
                   source: IotSchemaSource.fromEnvironment(),
                   embedInHostShell: true,
+                  isActive: embedIot,
                   schemaRefreshEpoch: _iotRefreshEpoch,
                   onOpenDevice: ({
                     required String modelId,
@@ -1225,6 +1226,7 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
                 accessToken: widget.accessToken,
                 userId: widget.userId,
                 embedInHostShell: true,
+                isActive: embedGrid,
                 includeTopSafeArea: topSafeArea,
                 schemaRefreshEpoch: _gridRefreshEpoch,
               )

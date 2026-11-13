@@ -27,6 +27,7 @@ class DynamicGridSduiPage extends StatefulWidget {
     this.userId,
     this.embedInHostShell = false,
     this.includeTopSafeArea = false,
+    this.isActive = true,
     this.schemaRefreshEpoch = 0,
     this.repository,
     this.enableAutoRefresh = true,
@@ -43,6 +44,9 @@ class DynamicGridSduiPage extends StatefulWidget {
   /// apply SafeArea top inset internally so Grid's dark/light background paints
   /// edge-to-edge behind the status bar.
   final bool includeTopSafeArea;
+
+  /// When embedded in a host shell, indicates whether this tab is active.
+  final bool isActive;
 
   /// Bumped by the Home host when this tab is shown again so the live schema
   /// is refetched instead of the IndexedStack keeping a stale first paint.
@@ -112,8 +116,10 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
 
   void _startAutoRefreshTimer() {
     _autoRefreshTimer?.cancel();
+    if (widget.embedInHostShell && !widget.isActive) return;
     _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) {
       if (!mounted || _state == null) return;
+      if (widget.embedInHostShell && !widget.isActive) return;
       if (ModalRoute.of(context)?.isCurrent == false) return;
       _revalidateInBackground(forceFull: false);
     });
@@ -242,6 +248,16 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     } else if (oldWidget.schemaRefreshEpoch != widget.schemaRefreshEpoch) {
       _revalidateInBackground(forceFull: true);
     }
+
+    if (oldWidget.isActive != widget.isActive) {
+      if (widget.isActive) {
+        if (widget.enableAutoRefresh) _startAutoRefreshTimer();
+        _revalidateInBackground(forceFull: false);
+      } else {
+        _autoRefreshTimer?.cancel();
+        _autoRefreshTimer = null;
+      }
+    }
   }
 
   @override
@@ -358,6 +374,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
 
   Future<void> _revalidateInBackground({bool forceFull = false}) async {
     if (!mounted || _revalidateInProgress) return;
+    if (widget.embedInHostShell && !widget.isActive) return;
     if (ModalRoute.of(context)?.isCurrent == false) return;
     _revalidateInProgress = true;
     try {

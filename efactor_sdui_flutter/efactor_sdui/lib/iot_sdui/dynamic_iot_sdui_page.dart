@@ -27,6 +27,7 @@ class DynamicIotSduiPage extends StatefulWidget {
     required this.source,
     this.onOpenDevice,
     this.embedInHostShell = false,
+    this.isActive = true,
     this.schemaRefreshEpoch = 0,
   });
 
@@ -51,6 +52,11 @@ class DynamicIotSduiPage extends StatefulWidget {
   /// When true, Home keeps its app shell (including the schema bottom bar)
   /// and this page fills only the shell body.
   final bool embedInHostShell;
+
+  /// When embedded in a host shell (e.g. IndexedStack), indicates whether
+  /// this tab is currently the active/visible surface. When false, background
+  /// polling is paused to save CPU, battery, and network resources.
+  final bool isActive;
 
   /// Bumped by the Home host when this tab is shown again so the live schema
   /// is refetched instead of the IndexedStack keeping a stale first paint.
@@ -129,18 +135,31 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
 
   void _startDeviceStatePolling() {
     _nodeStatusSubscription ??= EfactorCloudService.instance.nodeStatusUpdates
-        .listen((_) => unawaited(_refreshDeviceState()));
+        .listen((_) {
+      if (!mounted) return;
+      if (widget.embedInHostShell && !widget.isActive) return;
+      if (ModalRoute.of(context)?.isCurrent == false) return;
+      unawaited(_refreshDeviceState());
+    });
 
     _deviceStateTimer?.cancel();
+    if (widget.embedInHostShell && !widget.isActive) return;
     _deviceStateTimer = Timer.periodic(
       _deviceStateRefreshInterval,
-      (_) => unawaited(_refreshDeviceState()),
+      (_) {
+        if (!mounted) return;
+        if (widget.embedInHostShell && !widget.isActive) return;
+        if (ModalRoute.of(context)?.isCurrent == false) return;
+        unawaited(_refreshDeviceState());
+      },
     );
   }
 
   Future<void> _refreshDeviceState() async {
     final state = _state;
     if (!mounted || state == null || _deviceStateRefreshInProgress) return;
+    if (widget.embedInHostShell && !widget.isActive) return;
+    if (ModalRoute.of(context)?.isCurrent == false) return;
 
     _deviceStateRefreshInProgress = true;
     try {
@@ -251,6 +270,16 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
     } else if (oldWidget.schemaRefreshEpoch != widget.schemaRefreshEpoch) {
       _refreshLiveSchema();
     }
+
+    if (oldWidget.isActive != widget.isActive) {
+      if (widget.isActive) {
+        _startDeviceStatePolling();
+        unawaited(_refreshDeviceState());
+      } else {
+        _deviceStateTimer?.cancel();
+        _deviceStateTimer = null;
+      }
+    }
   }
 
   @override
@@ -259,8 +288,10 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
       if (_schemaIsStaleForResume) {
         _refreshLiveSchema();
       }
-      _startDeviceStatePolling();
-      unawaited(_refreshDeviceState());
+      if (!widget.embedInHostShell || widget.isActive) {
+        _startDeviceStatePolling();
+        unawaited(_refreshDeviceState());
+      }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       _deviceStateTimer?.cancel();
