@@ -227,10 +227,22 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _schemaIsStaleForResume) {
-      // Foreground recovery is intentionally low-frequency. Normal live schema
-      // invalidation is driven by the existing Efactor Cloud WebSocket.
-      _refreshLiveSchema();
+    if (state == AppLifecycleState.resumed) {
+      // Resume the background schema poll that was paused while backgrounded.
+      if (widget.enableAutoRefresh) {
+        _startAutoRefreshTimer();
+      }
+      if (_schemaIsStaleForResume) {
+        // Foreground recovery is intentionally low-frequency. Normal live schema
+        // invalidation is driven by the existing Efactor Cloud WebSocket.
+        _refreshLiveSchema();
+      }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      // Stop the 10s api_creation.php poll while the app is not visible, to
+      // save battery and mobile data. Re-armed on resume above.
+      _autoRefreshTimer?.cancel();
     }
   }
 

@@ -3942,22 +3942,29 @@ Error: $error
     if (_isProfessionalSpace) {
       // Let the web app's own history unwind FIRST (an open image lightbox /
       // modal pushes a history entry via history.pushState), so Android back
-      // closes the modal instead of exiting the whole page. Only when there is
-      // no web history left (feed root) do we exit to the hub.
+      // closes the modal instead of exiting the whole page.
       if (await _controller.canGoBack()) {
         await _controller.goBack();
         return;
       }
+      // No web history left. If we're on a Professional Space SUBPAGE (e.g.
+      // /grid/team, /grid/profile, /grid/jobs), return to the feed INSIDE the
+      // WebView rather than exiting to native Home. Only exit when already on
+      // the root feed.
       final currentUrlStr = await _controller.currentUrl();
-      if (currentUrlStr != null && currentUrlStr.isNotEmpty) {
-        final currentUri = Uri.tryParse(currentUrlStr);
-        if (currentUri != null &&
-            GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
-          if (!mounted || _isPopping) return;
-          _safeExitToGrid();
-          return;
-        }
+      final currentUri = (currentUrlStr != null && currentUrlStr.isNotEmpty)
+          ? Uri.tryParse(currentUrlStr)
+          : null;
+      if (currentUri != null &&
+          !GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
+        await _controller.loadRequest(
+          Uri.parse('${currentUri.origin}/index.php/grid'),
+        );
+        return;
       }
+      if (!mounted || _isPopping) return;
+      _safeExitToGrid();
+      return;
     }
 
     final canGoBack = await _controller.canGoBack();
@@ -3999,22 +4006,29 @@ Error: $error
     if (_isProfessionalSpace) {
       // Let the web app's own history unwind FIRST (an open image lightbox /
       // modal pushes a history entry via history.pushState), so Android back
-      // closes the modal instead of exiting the whole page. Only when there is
-      // no web history left (feed root) do we exit to the hub.
+      // closes the modal instead of exiting the whole page.
       if (await _controller.canGoBack()) {
         await _controller.goBack();
         return;
       }
+      // No web history left. If we're on a Professional Space SUBPAGE (e.g.
+      // /grid/team, /grid/profile, /grid/jobs), return to the feed INSIDE the
+      // WebView rather than exiting to native Home. Only exit when already on
+      // the root feed.
       final currentUrlStr = await _controller.currentUrl();
-      if (currentUrlStr != null && currentUrlStr.isNotEmpty) {
-        final currentUri = Uri.tryParse(currentUrlStr);
-        if (currentUri != null &&
-            GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
-          if (!mounted || _isPopping) return;
-          _safeExitToGrid();
-          return;
-        }
+      final currentUri = (currentUrlStr != null && currentUrlStr.isNotEmpty)
+          ? Uri.tryParse(currentUrlStr)
+          : null;
+      if (currentUri != null &&
+          !GridInAppWebViewPage.isProfessionalSpaceRootUrl(currentUri)) {
+        await _controller.loadRequest(
+          Uri.parse('${currentUri.origin}/index.php/grid'),
+        );
+        return;
       }
+      if (!mounted || _isPopping) return;
+      _safeExitToGrid();
+      return;
     }
 
     final canGoBack = await _controller.canGoBack();

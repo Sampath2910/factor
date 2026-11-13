@@ -27,8 +27,12 @@ import 'services/user_location_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Bound image memory cache to 100 MB to prevent unbounded RAM growth during scrolling
+  // Bound image memory cache to prevent unbounded RAM growth during scrolling:
+  // both a byte ceiling (100 MB) and an object-count ceiling. The default count
+  // limit is 1000 live images, which can fragment the heap on lower-memory
+  // Android devices; 300 is ample for a feed while keeping the count bounded.
   PaintingBinding.instance.imageCache.maximumSizeBytes = 100 << 20;
+  PaintingBinding.instance.imageCache.maximumSize = 300;
   // Load the persisted theme choice (defaults to dark) before the first frame
   // so there is no flash of the wrong theme at startup.
   await ThemeController.instance.load();
