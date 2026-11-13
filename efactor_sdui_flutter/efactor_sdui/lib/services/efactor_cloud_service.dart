@@ -192,9 +192,13 @@ class EfactorCloudService {
       debugPrintStack(stackTrace: stackTrace);
     }
 
-    // Local mDNS is independent of the cloud socket. Start it so sendData can
-    // prefer LAN routing when the node is on the same network.
-    await ensureDiscoveryStarted();
+    // Local mDNS is independent of the cloud socket. Defer discovery slightly
+    // (3 seconds) so it does not compete with initial dashboard rendering.
+    unawaited(
+      Future<void>.delayed(const Duration(seconds: 3), () {
+        ensureDiscoveryStarted();
+      }),
+    );
   }
 
   /// Plugin logs go to debug output and are forwarded to any active log sinks.
