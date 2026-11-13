@@ -154,10 +154,10 @@ class AuthSecureStorage {
         await Future.wait([
           _storage.write(key: _rememberMeKey, value: 'true'),
           _storage.write(key: _rememberedIdentityKey, value: identity.trim()),
-          if (password != null && password.isNotEmpty)
-            _storage.write(key: _rememberedPasswordKey, value: password)
-          else
-            _safeDelete(_rememberedPasswordKey),
+          // Security (audit 3.1): never persist the raw password. "Remember me"
+          // keeps only the identity (username); the password field is retyped.
+          // Always purge any value previously stored under the legacy key.
+          _safeDelete(_rememberedPasswordKey),
         ]);
       } else {
         await Future.wait([
@@ -176,12 +176,13 @@ class AuthSecureStorage {
       final values = await Future.wait<String?>([
         _safeRead(_rememberMeKey),
         _safeRead(_rememberedIdentityKey),
-        _safeRead(_rememberedPasswordKey),
       ]);
       return <String, dynamic>{
         'rememberMe': values[0] == 'true',
         'identity': values[1] ?? '',
-        'password': values[2] ?? '',
+        // Password is no longer persisted (audit 3.1); always empty so the
+        // login form pre-fills only the username.
+        'password': '',
       };
     } catch (e) {
       debugPrint('[AUTH][SECURE_STORAGE] Error reading remembered identity: $e');

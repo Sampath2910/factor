@@ -219,6 +219,22 @@ class AuthState extends ChangeNotifier {
         return;
       }
 
+      // Audit 3.2: don't assume a stored session is valid. If the JWT is
+      // expired, require re-login instead of booting into an authenticated
+      // state that then 401s on every request. (No refresh endpoint exists per
+      // the backend; strategy is re-login on expiry.) The remembered identity
+      // was already restored above, so the login form stays pre-filled.
+      // isJwtExpired fails open (returns false for non-JWT/parse errors), so a
+      // valid non-standard token is never logged out by mistake.
+      if (isJwtExpired(token)) {
+        debugPrint(
+          '[AuthState] restoreSession: stored access token expired -> require re-login',
+        );
+        _write(_state, 'auth.isAuthenticated', false);
+        notifyListeners();
+        return;
+      }
+
       _write(_state, 'auth.accessToken', token);
       _write(_state, 'auth.accesstoken', token);
 

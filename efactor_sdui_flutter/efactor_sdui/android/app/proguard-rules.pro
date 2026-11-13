@@ -13,3 +13,25 @@
 -keep class com.google.protobuf.** { *; }
 -keep class com.google.crypto.tink.** { *; }
 -keep class org.greenrobot.eventbus.** { *; }
+
+# --- Audit 5.2: R8 keep rules for release code shrinking ---
+
+# WebView JS bridges: webview_flutter exposes @JavascriptInterface methods that
+# R8 must not rename/strip, or the native<->web channels break.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keep class * extends android.webkit.WebChromeClient { *; }
+
+# Firebase Cloud Messaging / push.
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+
+# Keep enum machinery (R8 can break valueOf()/values() used by name).
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+# Preserve annotations/signatures used by reflection-based libraries.
+-keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod

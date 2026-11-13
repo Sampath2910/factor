@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -9,6 +10,16 @@ plugins {
 // Apply only when Firebase config is present so local builds still work.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
+}
+
+// Release signing (audit 5.2): load a real keystore from android/key.properties
+// when present. When it is absent (local/dev), release falls back to the debug
+// signing config so builds keep working with no change.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
 android {
@@ -49,11 +60,33 @@ android {
                 keyPassword = "android"
             }
         }
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the real release keystore when android/key.properties exists,
+            // otherwise fall back to debug signing (unchanged dev behavior).
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+            // Audit 5.2: enable R8 code shrinking/obfuscation for release. NOTE:
+            // resource shrinking is intentionally left OFF — this is a
+            // schema-driven (SDUI) app that can reference resources dynamically
+            // by name, which resource shrinking could strip. R8 affects RELEASE
+            // builds only (debug is untouched); a release build must be tested
+            // on-device before shipping, and proguard-rules.pro extended if any
+            // reflection-based code is stripped.
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
