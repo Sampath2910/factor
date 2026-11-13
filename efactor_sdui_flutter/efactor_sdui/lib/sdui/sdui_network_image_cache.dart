@@ -19,13 +19,14 @@ class SduiNetworkImageCache {
     ),
   );
 
-  /// Proactive warm and local disk save of all image URLs found in a schema document.
+  /// Proactive warm and local disk save of priority image URLs found in a schema document.
   ///
   /// Uses [CacheManager.getSingleFile] which downloads and persists missing files to disk,
-  /// while immediately serving already-cached files without re-downloading.
+  /// while immediately serving already-cached files without re-downloading. Throttles
+  /// downloads to prevent thrashing native graphics buffer pools.
   static Future<void> prefetchSchemaImages(
     Map<String, dynamic> schema, {
-    int maxUrls = 150,
+    int maxUrls = 30,
   }) async {
     await runZonedGuarded(() async {
       try {
@@ -34,6 +35,7 @@ class SduiNetworkImageCache {
         for (final url in urls) {
           try {
             await manager.getSingleFile(url);
+            await Future<void>.delayed(const Duration(milliseconds: 25));
           } catch (_) {
             // Offline or unreachable during prefetch — continue; cache hit later if already saved.
           }

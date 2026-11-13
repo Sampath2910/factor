@@ -32,6 +32,7 @@ class SchemaLoadQueue {
   Future<void> startAfterLogin({
     required String accessToken,
     int? userId,
+    Duration initialDelay = const Duration(milliseconds: 2500),
   }) {
     final token = accessToken.trim();
     if (token.isEmpty) return Future<void>.value();
@@ -41,7 +42,7 @@ class SchemaLoadQueue {
     _enqueueFront(_PrefetchTask('iot', _runIot));
     _enqueueFront(_PrefetchTask('grid:${userId ?? 0}', _runGrid));
     _enqueueFront(_PrefetchTask('home:${userId ?? 0}', _runHome));
-    unawaited(_kick());
+    unawaited(_kick(delay: initialDelay));
     return Future<void>.value();
   }
 
@@ -207,8 +208,11 @@ class SchemaLoadQueue {
     _queue.insert(0, task);
   }
 
-  Future<void> _kick() {
+  Future<void> _kick({Duration delay = Duration.zero}) {
     if (_pumping) return Future<void>.value();
+    if (delay > Duration.zero) {
+      return Future<void>.delayed(delay, _run);
+    }
     return _run();
   }
 
@@ -239,19 +243,19 @@ class SchemaLoadQueue {
   Future<void> _runHome() async {
     if (_token.isEmpty) return;
     final schema = await loadHome(accessToken: _token, userId: _userId);
-    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
+    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema, maxUrls: 30));
   }
 
   Future<void> _runIot() async {
     if (_token.isEmpty) return;
     final schema = await loadIot(accessToken: _token);
-    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
+    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema, maxUrls: 20));
   }
 
   Future<void> _runGrid() async {
     if (_token.isEmpty) return;
     final schema = await loadGrid(accessToken: _token, userId: _userId);
-    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
+    unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema, maxUrls: 20));
   }
 }
 
