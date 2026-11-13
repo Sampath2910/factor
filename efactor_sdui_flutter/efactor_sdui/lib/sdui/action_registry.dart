@@ -302,7 +302,36 @@ class ActionRegistry {
       final url = AppState.rewritePublicApiUrl(target);
       if (url != null) {
         try {
-          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+          final uri = Uri.parse(url);
+          // Per the backend navigation contract, honor the per-action `openIn`
+          // flag instead of always escaping to the system browser:
+          //   inAppWebView            -> in-app browser view
+          //   external/browser/...    -> system browser
+          //   (missing)               -> first-party *.efactor.tech in-app,
+          //                              anything else system browser.
+          final openIn = (action['openIn'] ?? parameters?['openIn'])
+              ?.toString()
+              .trim()
+              .toLowerCase();
+          final host = uri.host.toLowerCase();
+          final isFirstParty =
+              host == 'efactor.tech' || host == 'www.efactor.tech';
+          final bool inApp;
+          if (openIn == 'inappwebview') {
+            inApp = true;
+          } else if (openIn == 'external' ||
+              openIn == 'browser' ||
+              openIn == 'externalapplication') {
+            inApp = false;
+          } else {
+            inApp = isFirstParty; // missing flag: first-party stays in-app
+          }
+          await launchUrl(
+            uri,
+            mode: inApp
+                ? LaunchMode.inAppBrowserView
+                : LaunchMode.externalApplication,
+          );
         } catch (e) {
           debugPrint('[SDUI] Error launching navigation URL $url: $e');
         }

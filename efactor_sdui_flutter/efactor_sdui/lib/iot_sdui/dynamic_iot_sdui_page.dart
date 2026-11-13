@@ -499,21 +499,19 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
       return _openSchemaOverlay(action);
     }
 
-    if (type == 'navigate') {
+    if (type == 'navigate' || type == 'popToRoute') {
       final route = action['route']?.toString().trim();
       if (route == null || route.isEmpty) {
         throw const FormatException('IoT navigate action requires route.');
       }
 
+      // The only navigate payload the backend emits is `popToRoute`
+      // (route:/iot/devices after add/delete success), i.e. return to the IoT
+      // Devices list. The app has no named-route table (pushNamed has no
+      // generator), so we pop back to the underlying Devices page.
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
-        return null;
       }
-
-      if (mounted) {
-        await Navigator.of(context).pushNamed(route);
-      }
-
       return null;
     }
 

@@ -602,7 +602,9 @@ class IotSduiState extends ChangeNotifier {
   }) {
     final type = (action['action'] ?? action['type'])?.toString().trim();
 
-    if (type == 'navigate') {
+    // `popToRoute` is the backend's navigate payload (e.g. route:/iot/devices
+    // after add/delete success → return to the IoT Devices list).
+    if (type == 'navigate' || type == 'popToRoute') {
       return action['route']?.toString().trim().isNotEmpty == true &&
           hostActionHandler != null;
     }
@@ -682,7 +684,7 @@ class IotSduiState extends ChangeNotifier {
     try {
       _lastError = null;
 
-      if (type == 'navigate') {
+      if (type == 'navigate' || type == 'popToRoute') {
         final handler = hostActionHandler;
         if (handler == null) {
           return _fail('No navigation host handler is registered.');
