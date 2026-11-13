@@ -97,6 +97,13 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
   bool _isHandlingBack = false;
   bool _iotSurfaceOpened = false;
   bool _gridSurfaceOpened = false;
+
+  /// True while the Grid tab's kept-alive Professional Space host is revealed.
+  /// When true the shell hides its app bar + bottom navigation so Professional
+  /// Space is fullscreen (matching the pre-keep-alive pushed-route appearance),
+  /// without disposing the warm WebView. Driven by the Grid page via
+  /// [DynamicGridSduiPage.onFullscreenChanged].
+  bool _professionalSpaceFullscreen = false;
   bool _iotWasEmbedded = false;
   bool _gridWasEmbedded = false;
   int _iotRefreshEpoch = 0;
@@ -1072,7 +1079,11 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
           },
           child: Scaffold(
             backgroundColor: background,
-            appBar: appBar,
+            // Hide the shell chrome while the Grid tab's kept-alive Professional
+            // Space host is fullscreen, so it covers the whole screen (no top
+            // back bar, no bottom nav) exactly like the old pushed-route did —
+            // the warm WebView stays mounted/alive underneath.
+            appBar: _professionalSpaceFullscreen ? null : appBar,
             body: _buildShellBody(
               context,
               state: state,
@@ -1080,11 +1091,14 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
               rootId: rootId,
               topSafeArea: !hasHistory,
             ),
-            bottomNavigationBar: bottomId == null
-                ? null
-                : renderer.buildComponent(context, bottomId),
+            bottomNavigationBar:
+                _professionalSpaceFullscreen || bottomId == null
+                    ? null
+                    : renderer.buildComponent(context, bottomId),
             floatingActionButton:
-                fabId == null ? null : renderer.buildComponent(context, fabId),
+                _professionalSpaceFullscreen || fabId == null
+                    ? null
+                    : renderer.buildComponent(context, fabId),
           ),
         );
 
@@ -1229,10 +1243,16 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
                 isActive: embedGrid,
                 includeTopSafeArea: topSafeArea,
                 schemaRefreshEpoch: _gridRefreshEpoch,
+                onFullscreenChanged: _onGridFullscreenChanged,
               )
             : const SizedBox.shrink(),
       ],
     );
+  }
+
+  void _onGridFullscreenChanged(bool fullscreen) {
+    if (!mounted || _professionalSpaceFullscreen == fullscreen) return;
+    setState(() => _professionalSpaceFullscreen = fullscreen);
   }
 
   bool? _asBool(dynamic value) {

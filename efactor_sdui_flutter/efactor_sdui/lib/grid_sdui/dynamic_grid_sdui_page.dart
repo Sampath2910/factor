@@ -31,7 +31,14 @@ class DynamicGridSduiPage extends StatefulWidget {
     this.schemaRefreshEpoch = 0,
     this.repository,
     this.enableAutoRefresh = true,
+    this.onFullscreenChanged,
   });
+
+  /// Notifies the host shell when the kept-alive Professional Space host is
+  /// revealed (true) or hidden (false), so the shell can hide/show its app bar
+  /// and bottom navigation for a fullscreen Professional Space. Null when the
+  /// page is not embedded in a shell.
+  final ValueChanged<bool>? onFullscreenChanged;
 
   final String accessToken;
   final int? userId;
@@ -549,6 +556,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     );
     setState(() => _professionalSpaceRevealed = true);
     _professionalSpaceReveal.value = true;
+    widget.onFullscreenChanged?.call(true); // host hides app bar + bottom nav
   }
 
   /// Hides the Professional Space host (keeps it mounted/alive). Called by the
@@ -557,6 +565,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     if (!mounted) return;
     setState(() => _professionalSpaceRevealed = false);
     _professionalSpaceReveal.value = false;
+    widget.onFullscreenChanged?.call(false); // host restores app bar + bottom nav
   }
 
   @override
