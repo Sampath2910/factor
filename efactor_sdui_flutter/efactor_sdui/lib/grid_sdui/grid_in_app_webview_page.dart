@@ -48,6 +48,8 @@ class GridInAppWebViewPage extends StatefulWidget {
     this.showAppBar = false,
     this.accessToken,
     this.userId,
+    this.onRequestHide,
+    this.revealSignal,
   });
 
   final Uri uri;
@@ -55,6 +57,23 @@ class GridInAppWebViewPage extends StatefulWidget {
   final bool showAppBar;
   final String? accessToken;
   final int? userId;
+
+  /// When set, this page is hosted by a persistent keep-alive host (the Grid Hub
+  /// for Professional Space) rather than pushed as its own route. Exiting then
+  /// HIDES the page (keeping it mounted/alive for instant re-open) instead of
+  /// `Navigator.pop()`. Null for every normal route-pushed page (unchanged).
+  final VoidCallback? onRequestHide;
+
+  /// Driven by the keep-alive host: flips true when this (mounted) page is
+  /// revealed and false when hidden. On reveal we re-mark it foreground and ask
+  /// the web app to refresh silently (`efactor-webview-visible`) — no reload.
+  /// Null for normal route-pushed pages.
+  final ValueListenable<bool>? revealSignal;
+
+  /// Master switch for the Professional Space keep-alive host. When false,
+  /// Professional Space uses the normal push/pop route path — i.e. today's exact
+  /// behavior, zero diff. Flip to false to instantly revert the keep-alive.
+  static const bool professionalSpaceKeepAlive = true;
 
   static bool isExternalScheme(Uri uri) {
     final scheme = uri.scheme.toLowerCase();
@@ -816,6 +835,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   bool _coverVisible = false;
   Timer? _coverSafetyTimer;
 
+  /// For a keep-alive-hosted page (Professional Space): whether it is currently
+  /// revealed. Defaults true (first open is revealed). Drives PopScope.canPop so
+  /// a HIDDEN-but-mounted page never hijacks the host's back button.
+  bool _hostRevealed = true;
+
   /// True once the GRID / Professional Space web app has confirmed (via
   /// [ProfessionalSpaceBridge] `saveProfessionalSnapshot`) that its service
   /// worker registered and the offline app shell is cached. Diagnostic only.
@@ -928,6 +952,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         () => _liftCover('safety-timeout'),
       );
     }
+    // Keep-alive host reveal signal: re-mark foreground + silent refresh on each
+    // reveal (the first reveal coincides with this initState, which already set
+    // _activeState above and will load fresh content, so no extra work needed).
+    widget.revealSignal?.addListener(_onRevealSignalChanged);
     debugPrint(
       '[GridInAppWebView] initState: initialized controller for $_effectiveUri '
       '(isCircleConnect: $_isCircleConnect, userId: ${widget.userId})',
@@ -1054,7 +1082,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     CircleConnectDeviceKeyStore.instance
         .removeKeyStatusListener(_onDeviceKeyStatusChanged);
     CircleConnectFileService.instance.onBridgeEvent = null;
-    if (!_isCircleConnect) {
+    widget.revealSignal?.removeListener(_onRevealSignalChanged);
+    // Preserve the warm shell for both keep-alive surfaces (Circle Connect and
+    // Professional Space); evict only other one-off webviews.
+    if (!_isCircleConnect && !_isProfessionalSpace) {
       GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
     }
     _outboxSyncedSub?.cancel();
@@ -3658,6 +3689,18 @@ Error: $error
 
   void _safeExitToGrid() {
     if (!mounted || _isPopping) return;
+    // Keep-alive host (Professional Space): HIDE instead of popping, so the
+    // mounted WebView stays alive for an instant re-open. Clear the foreground
+    // marker first so incoming-call behavior matches a closed page (same as the
+    // dispose path did for a popped route).
+    if (widget.onRequestHide != null) {
+      if (GridInAppWebViewPage._activeState == this) {
+        GridInAppWebViewPage._activeState = null;
+      }
+      IncomingCallService.instance.onCircleConnectReadinessChanged();
+      widget.onRequestHide!.call();
+      return;
+    }
     _isPopping = true;
     final nav = Navigator.of(context);
     if (nav.canPop()) {
@@ -3897,6 +3940,14 @@ Error: $error
     }
 
     if (_isProfessionalSpace) {
+      // Let the web app's own history unwind FIRST (an open image lightbox /
+      // modal pushes a history entry via history.pushState), so Android back
+      // closes the modal instead of exiting the whole page. Only when there is
+      // no web history left (feed root) do we exit to the hub.
+      if (await _controller.canGoBack()) {
+        await _controller.goBack();
+        return;
+      }
       final currentUrlStr = await _controller.currentUrl();
       if (currentUrlStr != null && currentUrlStr.isNotEmpty) {
         final currentUri = Uri.tryParse(currentUrlStr);
@@ -3946,6 +3997,14 @@ Error: $error
     }
 
     if (_isProfessionalSpace) {
+      // Let the web app's own history unwind FIRST (an open image lightbox /
+      // modal pushes a history entry via history.pushState), so Android back
+      // closes the modal instead of exiting the whole page. Only when there is
+      // no web history left (feed root) do we exit to the hub.
+      if (await _controller.canGoBack()) {
+        await _controller.goBack();
+        return;
+      }
       final currentUrlStr = await _controller.currentUrl();
       if (currentUrlStr != null && currentUrlStr.isNotEmpty) {
         final currentUri = Uri.tryParse(currentUrlStr);
@@ -4534,6 +4593,30 @@ Error: $error
     if (mounted) setState(() => _coverVisible = false);
   }
 
+  /// Called when the keep-alive host reveals or hides this mounted page. On
+  /// reveal we re-mark it foreground (so incoming-call behavior matches a shown
+  /// route) and dispatch `efactor-webview-visible` so the web app refreshes the
+  /// feed in the background — no reload, instant UI. Hiding is handled by the
+  /// back/exit path (`_safeExitToGrid` -> onRequestHide).
+  void _onRevealSignalChanged() {
+    final revealed = widget.revealSignal?.value ?? false;
+    // Rebuild so the PopScope's canPop reflects visibility: while HIDDEN the
+    // mounted page must NOT intercept the host's back button; while REVEALED it
+    // intercepts back to hide itself.
+    if (mounted) {
+      setState(() => _hostRevealed = revealed);
+    } else {
+      _hostRevealed = revealed;
+    }
+    if (!revealed) return;
+    GridInAppWebViewPage._activeState = this;
+    IncomingCallService.instance.onCircleConnectReadinessChanged();
+    unawaited(_controller.runJavaScript(
+      "window.dispatchEvent(new Event('efactor-webview-visible'));",
+    ));
+    debugPrint('[GridInAppWebView] Professional Space revealed -> silent refresh');
+  }
+
   /// Installs the `window.gridReady()` compatibility hook per the web team's
   /// contract: the GRID web app calls `window.gridReady()` (no args) on first
   /// paint IF we've injected it, as a bare ping. We bridge it to the native
@@ -4853,7 +4936,11 @@ Error: $error
   Widget build(BuildContext context) {
     final title = widget.title?.trim();
     return PopScope(
-      canPop: false,
+      // Normal (route-pushed) pages keep canPop:false and handle back via
+      // _handlePopScope — unchanged. A keep-alive-hosted page (Professional
+      // Space) that is HIDDEN must allow the pop so it does not hijack the
+      // host's back button; while revealed it intercepts back to hide itself.
+      canPop: widget.onRequestHide != null && !_hostRevealed,
       onPopInvokedWithResult: (bool didPop, dynamic result) =>
           _handlePopScope(didPop),
       child: Scaffold(

@@ -74,12 +74,26 @@ class GridShellPool {
     return path.contains('circle') || path.contains('chat');
   }
 
+  /// Checks if a URI represents Professional Space (the GRID home feed).
+  bool isProfessionalSpaceUri(Uri uri) {
+    final path = uri.path.toLowerCase();
+    if (path.contains('chat') || path.contains('circle')) return false;
+    return path.contains('professional') ||
+        path.contains('space') ||
+        path == '/grid' ||
+        path == '/grid/' ||
+        path == '/index.php/grid' ||
+        path == '/index.php/grid/';
+  }
+
   /// Removes a shell from the pool when its route is popped and disposed.
-  /// Circle Connect is preserved across route pop/re-open unless [force] is true.
+  /// Circle Connect and Professional Space are kept warm across pop/re-open
+  /// unless [force] is true (Professional Space's real keep-alive is the
+  /// persistent host on the Grid Hub; this guard is a safety net).
   void removeShell(Uri uri, {int? userId, bool force = false}) {
-    if (!force && isCircleConnectUri(uri)) {
+    if (!force && (isCircleConnectUri(uri) || isProfessionalSpaceUri(uri))) {
       debugPrint(
-        '[GridShellPool] removeShell: preserving warm Circle Connect shell for $uri',
+        '[GridShellPool] removeShell: preserving warm shell for $uri',
       );
       return;
     }

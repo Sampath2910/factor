@@ -74,6 +74,15 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   String? _activeSchemaRev;
   bool _revalidateInProgress = false;
 
+  // --- Professional Space keep-alive host (lazy-mounted, kept alive) ---
+  // The PS WebView is created on first open and then kept mounted (offstage when
+  // hidden) so every subsequent open is instant. Gated by
+  // GridInAppWebViewPage.professionalSpaceKeepAlive; when off, PS uses the normal
+  // route-push path (unchanged).
+  Widget? _professionalSpaceShell;
+  bool _professionalSpaceRevealed = false;
+  final ValueNotifier<bool> _professionalSpaceReveal = ValueNotifier<bool>(false);
+
   static const Duration _resumeRefreshAfter = Duration(seconds: 30);
   static const Duration _schemaEventDebounce = Duration(milliseconds: 250);
   static const Duration _autoRefreshInterval = Duration(seconds: 10);
@@ -270,6 +279,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     _autoRefreshTimer?.cancel();
     _state?.dispose();
     _loadingThemeState?.dispose();
+    _professionalSpaceReveal.dispose();
     if (widget.repository == null) {
       _repository.dispose();
     }
@@ -497,6 +507,16 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       activeSchema: _state?.schema,
     );
     if (!mounted) return false;
+
+    // Professional Space: reveal the kept-alive host instead of pushing a new
+    // route (created lazily on first open, then mounted/alive for instant
+    // re-open). Everything else keeps the normal route-push path unchanged.
+    if (GridInAppWebViewPage.professionalSpaceKeepAlive &&
+        GridShellPool.instance.isProfessionalSpaceUri(authenticatedUri)) {
+      _revealProfessionalSpace(authenticatedUri, title: title);
+      return true;
+    }
+
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => GridShellPool.instance.getOrCreateWarmShell(
@@ -512,6 +532,31 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       ),
     );
     return true;
+  }
+
+  /// Creates the Professional Space shell on first open, then reveals it. On
+  /// later opens the already-mounted shell is revealed instantly and told to
+  /// refresh silently (via its revealSignal) — no reload, no new route.
+  void _revealProfessionalSpace(Uri uri, {String? title}) {
+    _professionalSpaceShell ??= GridInAppWebViewPage(
+      key: const ValueKey('professional_space_keepalive'),
+      uri: uri,
+      title: title,
+      accessToken: widget.accessToken,
+      userId: widget.userId,
+      onRequestHide: _hideProfessionalSpace,
+      revealSignal: _professionalSpaceReveal,
+    );
+    setState(() => _professionalSpaceRevealed = true);
+    _professionalSpaceReveal.value = true;
+  }
+
+  /// Hides the Professional Space host (keeps it mounted/alive). Called by the
+  /// page's back/exit path via onRequestHide.
+  void _hideProfessionalSpace() {
+    if (!mounted) return;
+    setState(() => _professionalSpaceRevealed = false);
+    _professionalSpaceReveal.value = false;
   }
 
   @override
@@ -585,46 +630,75 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       if (background != null) {
         embedded = ColoredBox(color: background, child: embedded);
       }
-      return AnnotatedRegion<SystemUiOverlayStyle>(
-        value: overlayStyle,
-        sized: false,
-        child: Theme(data: themedData, child: embedded),
+      return _withProfessionalSpaceHost(
+        AnnotatedRegion<SystemUiOverlayStyle>(
+          value: overlayStyle,
+          sized: false,
+          child: Theme(data: themedData, child: embedded),
+        ),
       );
     }
 
-    return Theme(
-      data: themedData,
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: overlayStyle,
-        sized: false,
-        child: Scaffold(
-          backgroundColor: background,
-          appBar: AppBar(
+    return _withProfessionalSpaceHost(
+      Theme(
+        data: themedData,
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: overlayStyle,
+          sized: false,
+          child: Scaffold(
             backgroundColor: background,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-            foregroundColor: foreground,
-            systemOverlayStyle: overlayStyle,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.troubleshoot, size: 20),
-                tooltip: 'Push Notification & Call Diagnostics',
-                onPressed: () {
-                  PushDiagnosticSheet.show(
-                    context,
-                    userId: widget.userId?.toString(),
-                    accessToken: widget.accessToken,
-                  );
-                },
-              ),
-            ],
-          ),
-          body: SafeArea(
-            top: false,
-            child: body,
+            appBar: AppBar(
+              backgroundColor: background,
+              elevation: 0,
+              surfaceTintColor: Colors.transparent,
+              foregroundColor: foreground,
+              systemOverlayStyle: overlayStyle,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.troubleshoot, size: 20),
+                  tooltip: 'Push Notification & Call Diagnostics',
+                  onPressed: () {
+                    PushDiagnosticSheet.show(
+                      context,
+                      userId: widget.userId?.toString(),
+                      accessToken: widget.accessToken,
+                    );
+                  },
+                ),
+              ],
+            ),
+            body: SafeArea(
+              top: false,
+              child: body,
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Overlays the kept-alive Professional Space shell above the hub. The shell
+  /// stays mounted (so re-open is instant) and is simply hidden via [Offstage]
+  /// when not revealed. Returns the hub unchanged when keep-alive is off or the
+  /// shell has not been created yet (lazy — first open creates it).
+  Widget _withProfessionalSpaceHost(Widget hub) {
+    final shell = _professionalSpaceShell;
+    if (!GridInAppWebViewPage.professionalSpaceKeepAlive || shell == null) {
+      return hub;
+    }
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(child: hub),
+        Positioned.fill(
+          child: Offstage(
+            offstage: !_professionalSpaceRevealed,
+            child: TickerMode(
+              enabled: _professionalSpaceRevealed,
+              child: shell,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
