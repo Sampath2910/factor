@@ -114,6 +114,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     _autoRefreshTimer?.cancel();
     _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) {
       if (!mounted || _state == null) return;
+      if (ModalRoute.of(context)?.isCurrent == false) return;
       _revalidateInBackground(forceFull: false);
     });
   }
@@ -357,6 +358,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
 
   Future<void> _revalidateInBackground({bool forceFull = false}) async {
     if (!mounted || _revalidateInProgress) return;
+    if (ModalRoute.of(context)?.isCurrent == false) return;
     _revalidateInProgress = true;
     try {
       final SchemaSyncResult result = await _repository.revalidate(
