@@ -1035,7 +1035,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     CircleConnectDeviceKeyStore.instance
         .removeKeyStatusListener(_onDeviceKeyStatusChanged);
     CircleConnectFileService.instance.onBridgeEvent = null;
-    GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
+    if (!_isCircleConnect) {
+      GridShellPool.instance.removeShell(widget.uri, userId: widget.userId);
+    }
     _outboxSyncedSub?.cancel();
     _connectivitySub?.cancel();
     _tokenRefreshSub?.cancel();

@@ -68,8 +68,21 @@ class GridShellPool {
     return _warmedShells.putIfAbsent(key, shellBuilder);
   }
 
+  /// Checks if a URI represents Circle Connect.
+  bool isCircleConnectUri(Uri uri) {
+    final path = uri.path.toLowerCase();
+    return path.contains('circle') || path.contains('chat');
+  }
+
   /// Removes a shell from the pool when its route is popped and disposed.
-  void removeShell(Uri uri, {int? userId}) {
+  /// Circle Connect is preserved across route pop/re-open unless [force] is true.
+  void removeShell(Uri uri, {int? userId, bool force = false}) {
+    if (!force && isCircleConnectUri(uri)) {
+      debugPrint(
+        '[GridShellPool] removeShell: preserving warm Circle Connect shell for $uri',
+      );
+      return;
+    }
     final key = _poolKey(uri, userId: userId);
     debugPrint('[GridShellPool] removeShell: key=$key');
     _warmedShells.remove(key);
