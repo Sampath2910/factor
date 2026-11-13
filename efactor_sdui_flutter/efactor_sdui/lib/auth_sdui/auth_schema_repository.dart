@@ -66,13 +66,51 @@ class AuthSchemaRepository {
 
   /// Loads the Auth SDUI schema.
   ///
-  /// Network-first on startup: attempts to fetch the authoritative live schema
-  /// from the server first (with a fast 4s timeout) so the app renders the
-  /// updated schema immediately without displaying an old schema first.
+  /// Cache/asset-first on startup: loads the local cache or bundled asset
+  /// immediately (<5ms) so the app opens instantly with zero splash-screen freeze.
+  /// Background revalidation (_syncSchema) in AuthUiGate automatically fetches
+  /// any remote schema updates asynchronously.
   ///
-  /// If the network request fails or times out (offline mode), falls back
-  /// gracefully to the newest local cache or bundled production asset.
+  /// When [forceRefresh] is true (e.g. manual pull-to-refresh), it performs a direct
+  /// authoritative network fetch first.
   Future<Map<String, dynamic>> load({bool forceRefresh = false}) async {
+    if (!forceRefresh) {
+      final cached = await _readUsableCache(allowStale: true);
+      final bundled = await _loadBundledAsset();
+
+      final cachedRev = cached != null ? _revision(cached.schema) : null;
+      final bundledRev = bundled != null ? _revision(bundled) : null;
+
+      // Prefer bundled asset if it has a higher revision than stale cache
+      if (bundled != null &&
+          (cached == null ||
+              (bundledRev != null &&
+                  cachedRev != null &&
+                  bundledRev > cachedRev))) {
+        return _finalize(
+          _cloneMap(bundled),
+          source: 'asset://assets/auth_ui_schema.json',
+          cacheHit: true,
+        );
+      }
+
+      if (cached != null) {
+        return _finalize(
+          _cloneMap(cached.schema),
+          source: 'local-auth-schema-cache',
+          cacheHit: true,
+        );
+      }
+
+      if (bundled != null) {
+        return _finalize(
+          _cloneMap(bundled),
+          source: 'asset://assets/auth_ui_schema.json-fallback',
+          cacheHit: true,
+        );
+      }
+    }
+
     try {
       final canonical = await _fetchFullCanonical(
         forceRefresh: forceRefresh,

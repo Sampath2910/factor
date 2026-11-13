@@ -62,9 +62,6 @@ Future<void> main() async {
       initialAuthSchema = schema;
       initialAuthState = AuthState(schema);
       await initialAuthState.restoreSession();
-      if (initialAuthState.isAuthenticated) {
-        await LocationStartupGate.prewarm();
-      }
     } catch (e) {
       debugPrint('[Main] Startup prewarm error: $e');
     }

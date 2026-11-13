@@ -10,7 +10,6 @@ import '../sdui/sdui_network_image_cache.dart';
 import '../services/app_cache_manager.dart';
 import '../services/efactor_cloud_service.dart';
 import '../services/incoming_call_service.dart';
-import '../services/location_startup_gate.dart';
 import '../services/schema_invalidation_event.dart';
 import '../services/schema_prefetch.dart';
 import 'auth_renderer.dart';
@@ -101,9 +100,6 @@ class _AuthUiGateState extends State<AuthUiGate> with WidgetsBindingObserver {
   Future<void> _initFromInitialSchema() async {
     try {
       await _state!.restoreSession();
-      if (_state!.isAuthenticated) {
-        await LocationStartupGate.prewarm();
-      }
     } catch (e) {
       debugPrint('[AUTH][GATE] Error restoring initial session: $e');
     }
