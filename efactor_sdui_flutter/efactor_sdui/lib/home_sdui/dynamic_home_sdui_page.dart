@@ -1212,50 +1212,59 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
           : 0,
       sizing: StackFit.expand,
       children: <Widget>[
-        homeSafeBody,
+        TickerMode(
+          enabled: showingHome,
+          child: homeSafeBody,
+        ),
         _iotSurfaceOpened
-            ? SafeArea(
-                bottom: false,
-                top: topSafeArea,
-                child: DynamicIotSduiPage(
-                  key: const ValueKey<String>('home-host-iot'),
-                  accessToken: widget.accessToken,
-                  source: IotSchemaSource.fromEnvironment(),
-                  embedInHostShell: true,
-                  isActive: embedIot,
-                  schemaRefreshEpoch: _iotRefreshEpoch,
-                  onOpenDevice: ({
-                    required String modelId,
-                    required String nodeId,
-                    String? deviceName,
-                    bool? online,
-                  }) async {
-                    final handler = widget.onOpenDevice;
-                    if (handler == null) {
-                      throw StateError(
-                        'No Home Device SDUI host callback is registered.',
+            ? TickerMode(
+                enabled: embedIot,
+                child: SafeArea(
+                  bottom: false,
+                  top: topSafeArea,
+                  child: DynamicIotSduiPage(
+                    key: const ValueKey<String>('home-host-iot'),
+                    accessToken: widget.accessToken,
+                    source: IotSchemaSource.fromEnvironment(),
+                    embedInHostShell: true,
+                    isActive: embedIot,
+                    schemaRefreshEpoch: _iotRefreshEpoch,
+                    onOpenDevice: ({
+                      required String modelId,
+                      required String nodeId,
+                      String? deviceName,
+                      bool? online,
+                    }) async {
+                      final handler = widget.onOpenDevice;
+                      if (handler == null) {
+                        throw StateError(
+                          'No Home Device SDUI host callback is registered.',
+                        );
+                      }
+                      await handler(
+                        modelId: modelId,
+                        nodeId: nodeId,
+                        deviceName: deviceName,
+                        online: online,
                       );
-                    }
-                    await handler(
-                      modelId: modelId,
-                      nodeId: nodeId,
-                      deviceName: deviceName,
-                      online: online,
-                    );
-                  },
+                    },
+                  ),
                 ),
               )
             : const SizedBox.shrink(),
         _gridSurfaceOpened
-            ? DynamicGridSduiPage(
-                key: const ValueKey<String>('home-host-grid'),
-                accessToken: widget.accessToken,
-                userId: widget.userId,
-                embedInHostShell: true,
-                isActive: embedGrid,
-                includeTopSafeArea: topSafeArea,
-                schemaRefreshEpoch: _gridRefreshEpoch,
-                onFullscreenChanged: _onGridFullscreenChanged,
+            ? TickerMode(
+                enabled: embedGrid,
+                child: DynamicGridSduiPage(
+                  key: const ValueKey<String>('home-host-grid'),
+                  accessToken: widget.accessToken,
+                  userId: widget.userId,
+                  embedInHostShell: true,
+                  isActive: embedGrid,
+                  includeTopSafeArea: topSafeArea,
+                  schemaRefreshEpoch: _gridRefreshEpoch,
+                  onFullscreenChanged: _onGridFullscreenChanged,
+                ),
               )
             : const SizedBox.shrink(),
       ],
