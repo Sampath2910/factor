@@ -75,7 +75,12 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
 
   static const Duration _resumeRefreshAfter = Duration(seconds: 30);
   static const Duration _schemaEventDebounce = Duration(milliseconds: 250);
-  static const Duration _autoRefreshInterval = Duration(seconds: 10);
+  // Fallback-only poll. Live device online/power status arrives via the
+  // nodeStatusUpdates WebSocket, and schema edits via the schemaInvalidations
+  // push, so this timer is just a safety net when the socket is down. Kept long
+  // to avoid the data/flash churn of re-downloading the full Home schema every
+  // few seconds (was 10s).
+  static const Duration _autoRefreshInterval = Duration(seconds: 60);
 
   DateTime? _lastSchemaLoadAt;
   bool _schemaRefreshInProgress = false;
