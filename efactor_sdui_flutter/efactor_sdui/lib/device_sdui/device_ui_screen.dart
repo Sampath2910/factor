@@ -69,6 +69,74 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
   int _schemaEpoch = 0;
   static const Duration _schemaEventDebounce = Duration(milliseconds: 250);
 
+  /// Re-opening the same model within this window reuses the in-memory schema
+  /// and skips the full background page re-sync (network + merge + rebuild),
+  /// which is the main reason a second open felt as slow as the first. The
+  /// static map survives across screen instances (each open is a new State).
+  /// Freshness is still driven live by the `schema_changed` websocket and by
+  /// pull-to-refresh, so this only suppresses *redundant* work.
+  static const Duration _modelSyncFreshWindow = Duration(minutes: 2);
+  static final Map<String, DateTime> _lastModelSyncAt = <String, DateTime>{};
+
+  String get _modelSyncKey => '${widget.modelId.trim()}:${widget.nodeId.trim()}';
+
+  bool get _isModelSyncStale {
+    final last = _lastModelSyncAt[_modelSyncKey];
+    if (last == null) return true;
+    return DateTime.now().difference(last) >= _modelSyncFreshWindow;
+  }
+
+  void _markModelSynced() => _lastModelSyncAt[_modelSyncKey] = DateTime.now();
+
+  /// Background page merges are coalesced: each page the sequential sync
+  /// delivers is buffered here and applied in one `setState` via
+  /// [_flushPendingPageMerges], instead of rebuilding the whole device tree
+  /// once per page.
+  static const Duration _pageMergeFlushDelay = Duration(milliseconds: 400);
+  final Map<int, Map<String, dynamic>> _pendingPageMerges =
+      <int, Map<String, dynamic>>{};
+  Timer? _pageMergeFlushTimer;
+
+  void _flushPendingPageMerges() {
+    if (!mounted || _pendingPageMerges.isEmpty) return;
+    final base = _schema;
+    if (base == null) {
+      _pendingPageMerges.clear();
+      return;
+    }
+
+    final pages = _pendingPageMerges.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    _pendingPageMerges.clear();
+
+    var unified = base;
+    for (final entry in pages) {
+      unified = SchemaRepository.mergeDevicePageSchema(unified, entry.value);
+    }
+
+    final baseControls = (base['controls'] as List?)?.length ?? 0;
+    final unifiedControls = (unified['controls'] as List?)?.length ?? 0;
+    if (base['_clientSchemaHash'] == unified['_clientSchemaHash'] &&
+        baseControls == unifiedControls) {
+      // Nothing actually changed — do not rebuild the tree.
+      return;
+    }
+
+    debugPrint(
+      '[DeviceUiScreen] SILENT UPDATE APPLIED (coalesced ${pages.length} page(s))',
+    );
+    setState(() {
+      _schema = unified;
+      totalPageCount = math.max(
+        totalPageCount,
+        SchemaRepository.publishedPageCount(unified),
+      );
+      _schemaEpoch++;
+      _isLoading = false;
+      _errorMessage = null;
+    });
+  }
+
   StreamSubscription<SchemaInvalidationEvent>? _schemaInvalidationSubscription;
   StreamSubscription<SchemaUpdateNotification>? _schemaSyncSubscription;
   Timer? _schemaEventDebounceTimer;
@@ -194,7 +262,13 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
           _errorMessage = null;
         });
       }
-      unawaited(_cacheRemainingPages());
+      // Fast re-open: the model was synced recently, so skip the full
+      // background page re-sync. Pages the user hasn't visited still load
+      // lazily via _loadSchemaPage, and schema_changed/pull-to-refresh keep
+      // the open page live.
+      if (_isModelSyncStale) {
+        unawaited(_cacheRemainingPages());
+      }
       return;
     }
 
@@ -238,6 +312,13 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
         final unified = current != null
             ? SchemaRepository.mergeDevicePageSchema(current, merged)
             : merged;
+        // Skip the rebuild when the server document matches what we already
+        // painted from cache — avoids a full multi-MB tree rebuild on open.
+        if (current != null &&
+            schemaFingerprint(current) == schemaFingerprint(unified)) {
+          unawaited(_cacheRemainingPages());
+          return;
+        }
         setState(() {
           _schema = unified;
           totalPageCount = math.max(
@@ -268,6 +349,7 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
   void dispose() {
     _loadGeneration++;
     _schemaEventDebounceTimer?.cancel();
+    _pageMergeFlushTimer?.cancel();
     _schemaInvalidationSubscription?.cancel();
     _schemaSyncSubscription?.cancel();
     _repository.dispose();
@@ -286,6 +368,10 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
       _pageSchemas[1] ??= _schema!;
     }
 
+    // Record that a full sync ran for this model so an immediate re-open can
+    // reuse the in-memory schema instead of repeating this network+merge work.
+    _markModelSynced();
+
     try {
       await ModelSchemaCache.instance.syncModel(
         modelId: model,
@@ -294,8 +380,10 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
         onPageUpdated: (pageNo, updatedSchema) {
           if (!mounted) return;
           _pageSchemas[pageNo] = updatedSchema;
-          final current = _schema;
-          if (current == null) {
+
+          // First-ever paint: show the page immediately so the user is not
+          // held on the loader.
+          if (_schema == null) {
             setState(() {
               _schema = updatedSchema;
               totalPageCount = math.max(
@@ -308,26 +396,16 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
             });
             return;
           }
-          final unified = SchemaRepository.mergeDevicePageSchema(
-            current,
-            updatedSchema,
-          );
-          final currentControlsCount = (current['controls'] as List?)?.length ?? 0;
-          final unifiedControlsCount = (unified['controls'] as List?)?.length ?? 0;
-          if (current['_clientSchemaHash'] != unified['_clientSchemaHash'] ||
-              currentControlsCount != unifiedControlsCount) {
-            debugPrint('[DeviceUiScreen] SILENT UPDATE APPLIED for page $pageNo');
-            setState(() {
-              _schema = unified;
-              totalPageCount = math.max(
-                totalPageCount,
-                SchemaRepository.publishedPageCount(unified),
-              );
-              _schemaEpoch++;
-              _isLoading = false;
-              _errorMessage = null;
-            });
-          }
+
+          // Background pages: accumulate and flush a SINGLE rebuild instead of
+          // one full replaceSchema()+rebuild per page. On a cold open the
+          // sequential sync delivers each page ~300ms apart, which previously
+          // produced ~11 full-tree rebuilds; the coalesced flush yields the
+          // identical final merged schema in one pass.
+          _pendingPageMerges[pageNo] = updatedSchema;
+          _pageMergeFlushTimer?.cancel();
+          _pageMergeFlushTimer =
+              Timer(_pageMergeFlushDelay, _flushPendingPageMerges);
         },
       );
     } catch (error, stackTrace) {
@@ -821,8 +899,23 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
   /// The cloud socket answers state queries; it does not volunteer the current
   /// value of every parameter. Without an explicit request, a change made on
   /// the physical remote is never reported to this screen.
-  static const Duration _liveStatePollInterval = Duration(seconds: 10);
+  ///
+  /// Adaptive cadence: poll fast (10s) while the device is actively changing,
+  /// and back off to 30s once it has been idle (several consecutive polls with
+  /// no change) to stop the constant no-op network/decode/ingest churn. The
+  /// cadence snaps back to 10s immediately on any real change, on app resume,
+  /// and on user interaction, so external physical-remote changes still surface
+  /// quickly during active use.
+  static const Duration _livePollFast = Duration(seconds: 10);
+  static const Duration _livePollIdle = Duration(seconds: 30);
+  static const int _livePollIdleThreshold = 3;
+  int _livePollIdleCount = 0;
   Timer? _liveStateTimer;
+
+  /// Verbose raw cloud-message logging. OFF by default: it prints the entire
+  /// websocket payload on every push, which floods the console and stutters
+  /// the UI while telemetry streams. Flip to true only when debugging.
+  static const bool _verboseRemoteRaw = false;
   StreamSubscription<bool>? _cloudConnectionSubscription;
 
   void _logScreenMetricsIfChanged(
@@ -885,12 +978,15 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
       _state.applyLiveOnline(widget.initialOnline!);
     }
     _renderer = SduiRenderer(_state);
+    // User interaction / real state changes notify the AppState; use that to
+    // snap the adaptive live poll back to its fast cadence.
+    _state.addListener(_onDeviceActivity);
     WidgetsBinding.instance.addObserver(this);
     _cloudMessageSubscription = EfactorCloudService.instance.cloudMessages
         .listen(_onIncomingCloudMessage);
     _cloudConnectionSubscription =
         EfactorCloudService.instance.connectionChanges.listen((connected) {
-      if (connected) unawaited(_requestLiveDeviceState());
+      if (connected) _startLiveStatePolling();
     });
     unawaited(_hydrateCachedParameters());
     unawaited(_syncLiveOnline());
@@ -917,11 +1013,40 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
 
   void _startLiveStatePolling() {
     _liveStateTimer?.cancel();
-    unawaited(_requestLiveDeviceState());
-    _liveStateTimer = Timer.periodic(
-      _liveStatePollInterval,
-      (_) => unawaited(_requestLiveDeviceState()),
+    // A fresh view (open / resume / reconnect) starts on the fast cadence.
+    _livePollIdleCount = 0;
+    unawaited(_pollLiveStateAndReschedule());
+  }
+
+  Future<void> _pollLiveStateAndReschedule() async {
+    final changed = await _requestLiveDeviceState();
+    if (!mounted) return;
+    if (changed > 0) {
+      _livePollIdleCount = 0;
+    } else {
+      _livePollIdleCount++;
+    }
+    _scheduleNextLivePoll();
+  }
+
+  void _scheduleNextLivePoll() {
+    if (!mounted) return;
+    _liveStateTimer?.cancel();
+    final interval = _livePollIdleCount >= _livePollIdleThreshold
+        ? _livePollIdle
+        : _livePollFast;
+    _liveStateTimer = Timer(
+      interval,
+      () => unawaited(_pollLiveStateAndReschedule()),
     );
+  }
+
+  /// Snaps the poll cadence back to fast whenever device state changes or the
+  /// user interacts, so a pending backoff never delays a reaction.
+  void _onDeviceActivity() {
+    if (!mounted || _livePollIdleCount == 0) return;
+    _livePollIdleCount = 0;
+    _scheduleNextLivePoll();
   }
 
   /// Asks the cloud socket for this node's current state.
@@ -931,12 +1056,12 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
   /// power flag. The full schema document is not downloaded here:
   /// `meta.links.parameters` is the same multi-megabyte `api_schema.php`
   /// document already stored on disk.
-  Future<void> _requestLiveDeviceState() async {
-    if (!mounted) return;
+  Future<int> _requestLiveDeviceState() async {
+    if (!mounted) return 0;
 
     final cloud = EfactorCloudService.instance;
     final token = widget.accessToken.trim();
-    if (token.isEmpty) return;
+    if (token.isEmpty) return 0;
 
     if (!cloud.cloudConnected) {
       // Prefer the socket for getAllNodes, but never block the HTTP
@@ -957,7 +1082,7 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
       }
     }
 
-    if (!mounted) return;
+    if (!mounted) return 0;
     try {
       final updated = await _state.refreshLiveNodeParams();
       if (updated > 0) {
@@ -965,8 +1090,10 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
           '[DEVICE_SDUI][LIVE_STATE] updated $updated live parameter(s)',
         );
       }
+      return updated;
     } catch (error) {
       debugPrint('[DEVICE_SDUI][LIVE_STATE] auto_get_nodes_params failed: $error');
+      return 0;
     }
   }
 
@@ -1007,8 +1134,10 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
       return;
     }
 
-    // ignore: avoid_print
-    print('[DEVICE_SDUI][REMOTE_RAW] matched node=$targetNode msg=$message');
+    if (_verboseRemoteRaw) {
+      // ignore: avoid_print
+      print('[DEVICE_SDUI][REMOTE_RAW] matched node=$targetNode msg=$message');
+    }
     _state.ingestCloudPayload(message, nodeId: widget.nodeId);
   }
 
@@ -1072,6 +1201,7 @@ class _DeviceContentScreenState extends State<_DeviceContentScreen>
     _cloudConnectionSubscription?.cancel();
     _cloudMessageSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _state.removeListener(_onDeviceActivity);
     _state.dispose();
     super.dispose();
   }

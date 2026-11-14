@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 void logDebug(String message) {
+  // No-op in release builds: these are developer diagnostics only, and keeping
+  // them out of production avoids synchronous logcat I/O on hot paths.
+  if (kReleaseMode) return;
   // ignore: avoid_print
   print(message);
 }

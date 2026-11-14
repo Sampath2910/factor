@@ -1166,6 +1166,18 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Verbose per-parameter live-sync logging. OFF by default: these lines fire
+  /// for every matched websocket value, which floods the console and stutters
+  /// the UI while telemetry streams. Flip to true only when debugging the
+  /// remote-sync matcher.
+  static const bool _verboseRemoteSync = false;
+
+  void _logRemoteSync(String message) {
+    if (!_verboseRemoteSync) return;
+    // ignore: avoid_print
+    print(message);
+  }
+
   /// Attempts to apply a live parameter against current parameters, declared
   /// controls, fuzzy matches, and protocol aliases. Returns true if matched.
   bool _tryApplyRemoteParameter(String cleanName, dynamic value) {
@@ -1175,8 +1187,7 @@ class AppState extends ChangeNotifier {
     if (_parameters.containsKey(cleanName)) {
       if (_applyRemoteBinding('device.parameters.$cleanName', value)) {
         matched = true;
-        // ignore: avoid_print
-        print('[SDUI][REMOTE_SYNC] direct match: $cleanName = $value');
+        _logRemoteSync('[SDUI][REMOTE_SYNC] direct match: $cleanName = $value');
       }
     }
 
@@ -1205,8 +1216,7 @@ class AppState extends ChangeNotifier {
       if (_parameters.containsKey(chScopedKey)) {
         if (_applyRemoteBinding('device.parameters.$chScopedKey', value)) {
           matched = true;
-          // ignore: avoid_print
-          print(
+          _logRemoteSync(
             '[SDUI][REMOTE_SYNC] channel-scoped match: $cleanName -> $chScopedKey = $value',
           );
         }
@@ -1228,8 +1238,7 @@ class AppState extends ChangeNotifier {
             lowerKey.contains(baseLower)) {
           if (_applyRemoteBinding('device.parameters.$key', value)) {
             matched = true;
-            // ignore: avoid_print
-            print(
+            _logRemoteSync(
               '[SDUI][REMOTE_SYNC] channel matched $cleanName -> $key = $value',
             );
           }
@@ -1249,8 +1258,7 @@ class AppState extends ChangeNotifier {
         }
         if (_applyRemoteBinding('device.parameters.$key', value)) {
           matched = true;
-          // ignore: avoid_print
-          print(
+          _logRemoteSync(
             '[SDUI][REMOTE_SYNC] channel control match $cleanName -> $key = $value',
           );
         }
@@ -1275,8 +1283,7 @@ class AppState extends ChangeNotifier {
           lowerKey.contains(lowerName)) {
         if (_applyRemoteBinding('device.parameters.$key', value)) {
           matched = true;
-          // ignore: avoid_print
-          print('[SDUI][REMOTE_SYNC] matched $cleanName -> $key = $value');
+          _logRemoteSync('[SDUI][REMOTE_SYNC] matched $cleanName -> $key = $value');
         }
       }
     }
@@ -1309,8 +1316,7 @@ class AppState extends ChangeNotifier {
               fieldDesc == lowerName) {
             if (_applyRemoteBinding('device.parameters.$key', value)) {
               matched = true;
-              // ignore: avoid_print
-              print(
+              _logRemoteSync(
                 '[SDUI][REMOTE_SYNC] indexed response match $cleanName -> $key = $value',
               );
             }
@@ -1339,8 +1345,7 @@ class AppState extends ChangeNotifier {
             lowerKey.contains(lowerName)) {
           if (_applyRemoteBinding('device.parameters.$key', value)) {
             matched = true;
-            // ignore: avoid_print
-            print(
+            _logRemoteSync(
               '[SDUI][REMOTE_SYNC] matched from control $cleanName -> $key = $value',
             );
           }
@@ -1359,8 +1364,7 @@ class AppState extends ChangeNotifier {
       if (!_parameterAliasMatches(ctrl, key, lowerName)) continue;
       if (_applyRemoteBinding('device.parameters.$key', value)) {
         matched = true;
-        // ignore: avoid_print
-        print(
+        _logRemoteSync(
           '[SDUI][REMOTE_SYNC] alias match $cleanName -> $key = $value',
         );
       }
