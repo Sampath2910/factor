@@ -1728,6 +1728,12 @@ class AppState extends ChangeNotifier {
       queryParameters: <String, String>{
         'action': 'auto_get_nodes_params',
         'node_id': nodeId,
+        // Backend's canonical URL includes device_id alongside node_id. For
+        // single-device nodes device_id == node_id (the app already treats them
+        // as equal — see EfactorDeviceApiTransport.sendData, deviceId: nodeId),
+        // so sending both matches the backend contract and is a no-op for nodes
+        // where they coincide. Extra param is ignored by the backend otherwise.
+        'device_id': nodeId,
       },
     );
   }
