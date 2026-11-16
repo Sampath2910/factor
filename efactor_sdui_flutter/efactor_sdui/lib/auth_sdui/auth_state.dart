@@ -170,7 +170,7 @@ class AuthState extends ChangeNotifier {
   }
 
   /// Returns true if a JWT token has expired based on its 'exp' claim.
-  static bool isJwtExpired(String token) {
+  static bool isJwtExpired(String token, {Duration leeway = Duration.zero}) {
     try {
       final parts = token.split('.');
       if (parts.length != 3) return false;
@@ -181,7 +181,9 @@ class AuthState extends ChangeNotifier {
       final exp = (payload['exp'] as num?)?.toInt();
       if (exp == null) return false;
       final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      return nowSec >= exp;
+      // `leeway` lets callers treat a token that is about to expire as already
+      // expired, so it can be refreshed proactively instead of 401-ing mid-use.
+      return nowSec + leeway.inSeconds >= exp;
     } catch (_) {
       return false;
     }
@@ -219,35 +221,54 @@ class AuthState extends ChangeNotifier {
         return;
       }
 
-      // Backend is authoritative for token validity (see AuthSecureStorage
-      // docs). The efactor backend stamps every freshly issued JWT with a fixed,
-      // long-past `exp` (a static 2022 timestamp) and does NOT enforce it —
-      // protected endpoints return 200 with these "expired" tokens. A
-      // client-side expiry check therefore rejected EVERY valid token on cold
-      // start (process death / "clear from recents"), logging the user out on
-      // every relaunch even though the session was perfectly usable. We no
-      // longer interpret `exp` on the client: a stored token always restores the
-      // session. Genuine invalidation is still handled by the existing
-      // 401/onAuthenticationFailure path, which clears the session and routes to
-      // login when a protected API actually rejects the token.
-      _write(_state, 'auth.accessToken', token);
-      _write(_state, 'auth.accesstoken', token);
+      // The backend now issues real token lifetimes (exp = now + 1h) and
+      // provides a refresh endpoint. On cold start with an expired (or
+      // about-to-expire) access token, refresh it using the stored refresh
+      // token instead of logging the user out. Only require a fresh login if
+      // the refresh itself fails (e.g. the refresh token is also expired, or the
+      // user still holds a legacy 2022 token the server no longer honors). A
+      // 60s leeway refreshes proactively so a protected call does not 401 right
+      // after launch. isJwtExpired fails open (false) for non-JWT/parse errors,
+      // so a valid non-standard token is never force-refreshed by mistake.
+      var effectiveStored = stored;
+      var effectiveToken = token;
+      if (isJwtExpired(token, leeway: const Duration(seconds: 60))) {
+        debugPrint(
+          '[AuthState] restoreSession: access token expired/expiring -> '
+          'attempting refresh',
+        );
+        final refreshed = await _refreshAccessToken();
+        if (refreshed == null) {
+          debugPrint(
+            '[AuthState] restoreSession: refresh failed -> require re-login',
+          );
+          _write(_state, 'auth.isAuthenticated', false);
+          notifyListeners();
+          return;
+        }
+        effectiveToken = refreshed;
+        // Re-read so id/refresh tokens reflect what the refresh persisted.
+        effectiveStored = await _secureStorage.readSession();
+      }
 
-      _write(_state, 'auth.idToken', stored['idToken']);
-      _write(_state, 'auth.idtoken', stored['idToken']);
+      _write(_state, 'auth.accessToken', effectiveToken);
+      _write(_state, 'auth.accesstoken', effectiveToken);
 
-      _write(_state, 'auth.refreshToken', stored['refreshToken']);
-      _write(_state, 'auth.refreshtoken', stored['refreshToken']);
+      _write(_state, 'auth.idToken', effectiveStored['idToken']);
+      _write(_state, 'auth.idtoken', effectiveStored['idToken']);
 
-      _write(_state, 'auth.username', stored['username']);
+      _write(_state, 'auth.refreshToken', effectiveStored['refreshToken']);
+      _write(_state, 'auth.refreshtoken', effectiveStored['refreshToken']);
 
-      _write(_state, 'auth.email', stored['email']);
+      _write(_state, 'auth.username', effectiveStored['username']);
 
-      _write(_state, 'auth.userType', stored['userType']);
-      _write(_state, 'auth.user_type', stored['userType']);
+      _write(_state, 'auth.email', effectiveStored['email']);
 
-      _write(_state, 'auth.userId', stored['userId']);
-      _write(_state, 'auth.user_id', stored['userId']);
+      _write(_state, 'auth.userType', effectiveStored['userType']);
+      _write(_state, 'auth.user_type', effectiveStored['userType']);
+
+      _write(_state, 'auth.userId', effectiveStored['userId']);
+      _write(_state, 'auth.user_id', effectiveStored['userId']);
 
       _write(_state, 'auth.isAuthenticated', true);
 
@@ -257,6 +278,84 @@ class AuthState extends ChangeNotifier {
       debugPrintStack(stackTrace: stackTrace);
       _write(_state, 'auth.isAuthenticated', false);
     }
+  }
+
+  /// Exchanges the stored refresh token for a fresh access token via the
+  /// backend refresh endpoint (POST api.php?action=refresh_token
+  /// { "refreshtoken": <jwt> }). On success the new tokens are persisted and
+  /// returned; on any failure (no refresh token, non-2xx, missing accesstoken,
+  /// network error) it returns null and never throws, so callers can fall back
+  /// to re-login. Does not itself flip auth state — the caller decides.
+  Future<String?> _refreshAccessToken() async {
+    final stored = await _secureStorage.readSession();
+    final refresh = _nonEmpty(stored['refreshToken']);
+    if (refresh == null) {
+      debugPrint('[AuthState] refresh: no stored refresh token');
+      return null;
+    }
+    try {
+      final response = await _client
+          .post(
+            Uri.parse('https://efactor.tech/v8/api.php?action=refresh_token'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(<String, String>{'refreshtoken': refresh}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint('[AuthState] refresh: HTTP ${response.statusCode}');
+        return null;
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) return null;
+      final newAccess =
+          _nonEmpty(decoded['accesstoken']) ?? _nonEmpty(decoded['accessToken']);
+      if (newAccess == null) {
+        debugPrint('[AuthState] refresh: response missing accesstoken');
+        return null;
+      }
+      final newId =
+          _nonEmpty(decoded['idtoken']) ?? _nonEmpty(decoded['idToken']);
+      final newRefresh = _nonEmpty(decoded['refreshtoken']) ??
+          _nonEmpty(decoded['refreshToken']) ??
+          refresh;
+      // Persist the refreshed tokens, preserving the stored identity fields.
+      await _secureStorage.saveSession(
+        accessToken: newAccess,
+        idToken: newId ?? stored['idToken'],
+        refreshToken: newRefresh,
+        username: stored['username'],
+        email: stored['email'],
+        userType: stored['userType'],
+        userId: stored['userId'],
+      );
+      debugPrint('[AuthState] refresh: new access token obtained');
+      return newAccess;
+    } catch (e) {
+      debugPrint('[AuthState] refresh failed: $e');
+      return null;
+    }
+  }
+
+  /// Public entry point for a protected-call 401: try to recover the session by
+  /// refreshing the access token. Returns true if a fresh token was obtained
+  /// and written into state (caller can retry), false if the caller should
+  /// clear the session and route to login. Never throws.
+  Future<bool> refreshSession() async {
+    final refreshed = await _refreshAccessToken();
+    if (refreshed == null) return false;
+    _write(_state, 'auth.accessToken', refreshed);
+    _write(_state, 'auth.accesstoken', refreshed);
+    final stored = await _secureStorage.readSession();
+    _write(_state, 'auth.idToken', stored['idToken']);
+    _write(_state, 'auth.idtoken', stored['idToken']);
+    _write(_state, 'auth.refreshToken', stored['refreshToken']);
+    _write(_state, 'auth.refreshtoken', stored['refreshToken']);
+    _write(_state, 'auth.isAuthenticated', true);
+    notifyListeners();
+    return true;
   }
 
   Future<void> clearSession({bool notify = true}) async {

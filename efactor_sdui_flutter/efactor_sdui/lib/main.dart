@@ -453,6 +453,11 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
                   accessToken: widget.authState.accessToken ?? '',
                   initialOnline: online,
                   onAuthenticationFailure: () async {
+                    // Recover with a token refresh before logging out; only
+                    // clear the session if the refresh also fails.
+                    if (await widget.authState.refreshSession()) {
+                      return;
+                    }
                     final currentUserId = _authenticatedUserId();
                     final currentToken = widget.authState.accessToken;
                     await AppCacheManager.clearAllOnLogout(
@@ -524,6 +529,11 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
                           accessToken: widget.authState.accessToken ?? '',
                           initialOnline: online,
                           onAuthenticationFailure: () async {
+                            // Recover with a token refresh before logging out;
+                            // only clear the session if the refresh also fails.
+                            if (await widget.authState.refreshSession()) {
+                              return;
+                            }
                             await EfactorCloudService.instance.disconnect();
                             await widget.authState.clearSession();
                           },
