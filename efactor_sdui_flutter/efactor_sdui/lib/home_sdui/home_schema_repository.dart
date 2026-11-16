@@ -185,7 +185,7 @@ class HomeSchemaRepository {
   static const Duration _cacheMaxAge = Duration(hours: 24);
 
   String _cacheKey(int? userId) {
-    return 'efactor.home.server_schema.v4.user_${userId ?? 0}';
+    return 'efactor.home.server_schema.v5.user_${userId ?? 0}';
   }
 
   Future<Map<String, dynamic>?> _readCache({
@@ -304,7 +304,7 @@ class HomeSchemaRepository {
   /// Already-parsed Home schema for this user in the current process.
   /// Lets the Home screen paint immediately when revisiting in-session.
   static Map<String, dynamic>? peekMemory({int? userId}) {
-    final cached = _memoryCache['efactor.home.server_schema.v4.user_${userId ?? 0}'];
+    final cached = _memoryCache['efactor.home.server_schema.v5.user_${userId ?? 0}'];
     if (cached == null) return null;
     cached['_clientHomeSchemaCacheHit'] = true;
     return cached;
@@ -313,7 +313,7 @@ class HomeSchemaRepository {
   /// Clears in-memory cache for the specified user or all users.
   static void clearMemoryCache({int? userId}) {
     if (userId != null) {
-      _memoryCache.remove('efactor.home.server_schema.v4.user_$userId');
+      _memoryCache.remove('efactor.home.server_schema.v5.user_$userId');
       _inFlight.remove('$userId|live');
       _inFlight.remove('$userId|any');
     } else {
@@ -326,7 +326,7 @@ class HomeSchemaRepository {
   static Future<void> clearUserCache({required int? userId}) async {
     _memoryCache.clear();
     _inFlight.clear();
-    final key = 'efactor.home.server_schema.v4.user_${userId ?? 0}';
+    final key = 'efactor.home.server_schema.v5.user_${userId ?? 0}';
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(key);

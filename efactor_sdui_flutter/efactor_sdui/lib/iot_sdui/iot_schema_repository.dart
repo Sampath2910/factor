@@ -444,7 +444,10 @@ class IotSchemaRepository {
       hash ^= BigInt.from(byte);
       hash = (hash * prime) & mask;
     }
-    return 'efactor.iot.server_schema.v2.${hash.toRadixString(16)}';
+    // Version bumped v2 -> v3 (P4) to force a one-time fresh fetch after the
+    // backend's schema deploy (tokens moved out of the URL into the
+    // Authorization header), so stale cached schemas are not reused.
+    return 'efactor.iot.server_schema.v3.${hash.toRadixString(16)}';
   }
 
   Future<Map<String, dynamic>?> _readCache({bool allowStale = false}) async {
