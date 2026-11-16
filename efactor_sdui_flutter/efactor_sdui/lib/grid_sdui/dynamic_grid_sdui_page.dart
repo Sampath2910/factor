@@ -90,6 +90,16 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   bool _professionalSpaceRevealed = false;
   final ValueNotifier<bool> _professionalSpaceReveal = ValueNotifier<bool>(false);
 
+  // --- Circle Connect keep-alive host (lazy-mounted, kept alive) ---
+  // Mirrors the Professional Space host above: the Circle Connect WebView is
+  // created on first open and then kept mounted (offstage when hidden) so every
+  // subsequent open is instant. Gated by
+  // GridInAppWebViewPage.circleConnectKeepAlive; when off, Circle Connect uses
+  // the normal route-push path (unchanged).
+  Widget? _circleConnectShell;
+  bool _circleConnectRevealed = false;
+  final ValueNotifier<bool> _circleConnectReveal = ValueNotifier<bool>(false);
+
   static const Duration _resumeRefreshAfter = Duration(seconds: 30);
   static const Duration _schemaEventDebounce = Duration(milliseconds: 250);
   static const Duration _autoRefreshInterval = Duration(seconds: 10);
@@ -287,6 +297,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     _state?.dispose();
     _loadingThemeState?.dispose();
     _professionalSpaceReveal.dispose();
+    _circleConnectReveal.dispose();
     if (widget.repository == null) {
       _repository.dispose();
     }
@@ -515,6 +526,15 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     );
     if (!mounted) return false;
 
+    // Circle Connect: reveal the kept-alive host instead of pushing a new route
+    // (created lazily on first open, then mounted/alive for instant re-open).
+    // Mirrors the Professional Space path below.
+    if (GridInAppWebViewPage.circleConnectKeepAlive &&
+        GridShellPool.instance.isCircleConnectUri(authenticatedUri)) {
+      _revealCircleConnect(authenticatedUri, title: title);
+      return true;
+    }
+
     // Professional Space: reveal the kept-alive host instead of pushing a new
     // route (created lazily on first open, then mounted/alive for instant
     // re-open). Everything else keeps the normal route-push path unchanged.
@@ -565,6 +585,36 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     if (!mounted) return;
     setState(() => _professionalSpaceRevealed = false);
     _professionalSpaceReveal.value = false;
+    widget.onFullscreenChanged?.call(false); // host restores app bar + bottom nav
+  }
+
+  /// Creates the Circle Connect shell on first open, then reveals it. On later
+  /// opens the already-mounted shell is revealed instantly and told to refresh
+  /// silently (via its revealSignal) — no reload, no new route. Mirrors
+  /// [_revealProfessionalSpace].
+  void _revealCircleConnect(Uri uri, {String? title}) {
+    _circleConnectShell ??= GridInAppWebViewPage(
+      key: const ValueKey('circle_connect_keepalive'),
+      uri: uri,
+      title: title,
+      accessToken: widget.accessToken,
+      userId: widget.userId,
+      onRequestHide: _hideCircleConnect,
+      revealSignal: _circleConnectReveal,
+    );
+    setState(() => _circleConnectRevealed = true);
+    _circleConnectReveal.value = true;
+    widget.onFullscreenChanged?.call(true); // host hides app bar + bottom nav
+  }
+
+  /// Hides the Circle Connect host (keeps it mounted/alive). Called by the
+  /// page's back/exit path via onRequestHide. Gap C is enforced inside the page
+  /// (_safeExitToGrid): it will not invoke this while a call is active, so a
+  /// live call's camera/mic is never orphaned by an Offstage hide.
+  void _hideCircleConnect() {
+    if (!mounted) return;
+    setState(() => _circleConnectRevealed = false);
+    _circleConnectReveal.value = false;
     widget.onFullscreenChanged?.call(false); // host restores app bar + bottom nav
   }
 
@@ -639,7 +689,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       if (background != null) {
         embedded = ColoredBox(color: background, child: embedded);
       }
-      return _withProfessionalSpaceHost(
+      return _withKeepAliveHosts(
         AnnotatedRegion<SystemUiOverlayStyle>(
           value: overlayStyle,
           sized: false,
@@ -648,7 +698,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       );
     }
 
-    return _withProfessionalSpaceHost(
+    return _withKeepAliveHosts(
       Theme(
         data: themedData,
         child: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -686,27 +736,46 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     );
   }
 
-  /// Overlays the kept-alive Professional Space shell above the hub. The shell
-  /// stays mounted (so re-open is instant) and is simply hidden via [Offstage]
-  /// when not revealed. Returns the hub unchanged when keep-alive is off or the
-  /// shell has not been created yet (lazy — first open creates it).
-  Widget _withProfessionalSpaceHost(Widget hub) {
-    final shell = _professionalSpaceShell;
-    if (!GridInAppWebViewPage.professionalSpaceKeepAlive || shell == null) {
+  /// Overlays the kept-alive Circle Connect and Professional Space shells above
+  /// the hub. Each shell stays mounted (so re-open is instant) and is simply
+  /// hidden via [Offstage] when not revealed. A shell that has not been created
+  /// yet (lazy — first open creates it) or whose keep-alive flag is off adds no
+  /// overlay, so the hub renders exactly as before. Circle Connect and
+  /// Professional Space are mutually exclusive by URI, so at most one overlay is
+  /// revealed at a time.
+  Widget _withKeepAliveHosts(Widget hub) {
+    final psShell = _professionalSpaceShell;
+    final ccShell = _circleConnectShell;
+    final bool psActive =
+        GridInAppWebViewPage.professionalSpaceKeepAlive && psShell != null;
+    final bool ccActive =
+        GridInAppWebViewPage.circleConnectKeepAlive && ccShell != null;
+    if (!psActive && !ccActive) {
       return hub;
     }
     return Stack(
       children: <Widget>[
         Positioned.fill(child: hub),
-        Positioned.fill(
-          child: Offstage(
-            offstage: !_professionalSpaceRevealed,
-            child: TickerMode(
-              enabled: _professionalSpaceRevealed,
-              child: shell,
+        if (ccActive)
+          Positioned.fill(
+            child: Offstage(
+              offstage: !_circleConnectRevealed,
+              child: TickerMode(
+                enabled: _circleConnectRevealed,
+                child: ccShell,
+              ),
             ),
           ),
-        ),
+        if (psActive)
+          Positioned.fill(
+            child: Offstage(
+              offstage: !_professionalSpaceRevealed,
+              child: TickerMode(
+                enabled: _professionalSpaceRevealed,
+                child: psShell,
+              ),
+            ),
+          ),
       ],
     );
   }

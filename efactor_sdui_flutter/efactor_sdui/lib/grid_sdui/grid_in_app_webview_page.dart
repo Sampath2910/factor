@@ -75,6 +75,13 @@ class GridInAppWebViewPage extends StatefulWidget {
   /// behavior, zero diff. Flip to false to instantly revert the keep-alive.
   static const bool professionalSpaceKeepAlive = true;
 
+  /// Master switch for the Circle Connect keep-alive host. Mirrors
+  /// [professionalSpaceKeepAlive]: when true, Circle Connect is mounted once and
+  /// hidden via Offstage (instant re-open, like Professional Space); when false
+  /// it falls back to the normal push/pop route path — today's exact behavior.
+  /// Flip to false to instantly revert the Circle Connect keep-alive.
+  static const bool circleConnectKeepAlive = true;
+
   static bool isExternalScheme(Uri uri) {
     final scheme = uri.scheme.toLowerCase();
     if (scheme == 'whatsapp' ||
@@ -1112,9 +1119,20 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
       params = const PlatformWebViewControllerCreationParams();
     }
 
+    // Pre-paint WebView canvas fill, shown before the web app renders. Circle
+    // Connect's real surface is #0b141a (dark) / #ffffff (light) per the Circle
+    // Connect team; using the generic slate #0F172A flashed the wrong shade on
+    // open. Only Circle Connect is retinted; other surfaces (Professional Space
+    // / GRID) keep their existing #0F172A so nothing that works today changes.
+    final Color webViewBackground = _isCircleConnect
+        ? (ThemeController.instance.isDark()
+            ? const Color(0xFF0B141A)
+            : const Color(0xFFFFFFFF))
+        : const Color(0xFF0F172A);
+
     _controller = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF0F172A))
+      ..setBackgroundColor(webViewBackground)
       ..addJavaScriptChannel(
         'CircleConnectPushBridge',
         onMessageReceived: (JavaScriptMessage msg) {
@@ -3694,6 +3712,20 @@ Error: $error
     // marker first so incoming-call behavior matches a closed page (same as the
     // dispose path did for a popped route).
     if (widget.onRequestHide != null) {
+      // Gap C (Circle Connect keep-alive): a kept-alive WebView keeps its JS
+      // runtime, timers, WebSocket AND any active getUserMedia (camera/mic) when
+      // hidden via Offstage. Never silently Offstage a LIVE call — that would
+      // leave the hidden WebView holding the camera/mic. If a call is active,
+      // keep Circle Connect on top (ignore the back-to-hide) so media is never
+      // orphaned; the user ends/leaves the call from inside Circle Connect,
+      // which releases media before any hide can occur.
+      if (_isCircleConnect && OngoingCallService.instance.isCallActive) {
+        debugPrint(
+          '[GridInAppWebView] back-to-hide ignored: active call in progress '
+          '(keeping Circle Connect visible so camera/mic is not orphaned).',
+        );
+        return;
+      }
       if (GridInAppWebViewPage._activeState == this) {
         GridInAppWebViewPage._activeState = null;
       }
