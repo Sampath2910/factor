@@ -76,15 +76,13 @@ class IotSduiRenderer {
               layout['maximumContentWidth'],
         );
 
+        // Fix 5: keep the raw component maps here and defer the (non-trivial)
+        // responsive resolution into the lazy list builder below, so we only
+        // resolve the components actually being built for the viewport instead
+        // of every component on every page build.
         final components = <Map<String, dynamic>>[
           for (final raw in state.components)
-            if (_map(raw) case final component?)
-              schemaRuntime.resolveResponsiveMap(
-                component,
-                viewportWidth,
-                logicalHeight: viewportHeight,
-                orientation: orientation,
-              ),
+            if (_map(raw) case final component?) component,
         ];
 
         Widget content = SchemaPullToRefresh(
@@ -153,16 +151,35 @@ class IotSduiRenderer {
                 ),
                 sliver: SliverToBoxAdapter(child: _buildHeader(context, page)),
               ),
-              for (final component in components)
-                SliverPadding(
-                  padding: EdgeInsets.only(
-                    left: pagePadding.left,
-                    right: pagePadding.right,
-                  ),
-                  sliver: SliverToBoxAdapter(
-                    child: _buildComponent(context, component),
+              // Lazy component list (Fix 1): a SliverList only builds and lays
+              // out the components currently in/near the viewport, instead of
+              // the previous SliverToBoxAdapter-per-component which built every
+              // card eagerly on every frame. Each card is wrapped in a
+              // RepaintBoundary (Fix 2) so a live-value update repaints only the
+              // card that changed, not the whole scroll layer. Horizontal page
+              // padding is applied once to the whole list via SliverPadding.
+              SliverPadding(
+                padding: EdgeInsets.only(
+                  left: pagePadding.left,
+                  right: pagePadding.right,
+                ),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final resolved = schemaRuntime.resolveResponsiveMap(
+                        components[index],
+                        viewportWidth,
+                        logicalHeight: viewportHeight,
+                        orientation: orientation,
+                      );
+                      return RepaintBoundary(
+                        child: _buildComponent(context, resolved),
+                      );
+                    },
+                    childCount: components.length,
                   ),
                 ),
+              ),
               if (state.lastError != null)
                 SliverPadding(
                   padding: EdgeInsets.only(

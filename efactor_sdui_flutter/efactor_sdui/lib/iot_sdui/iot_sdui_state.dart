@@ -1140,6 +1140,17 @@ class IotSduiState extends ChangeNotifier {
       }
     }
 
+    // P3 (defense-in-depth): always send the access token via the Authorization
+    // Bearer header to trusted efactor hosts, even if the schema did not declare
+    // header auth — and never in the URL. The backend now expects the Bearer
+    // header. Only added when no Authorization header is already present, so a
+    // schema-declared auth scheme is never overridden.
+    if (token.isNotEmpty &&
+        _isTrustedEfactorHost(uri.host) &&
+        !headers.keys.any((k) => k.toLowerCase() == 'authorization')) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
     final method = contract['method']?.toString().trim().toUpperCase() ?? 'GET';
     final body = _resolveTemplate(
       contract['body'],
@@ -1244,7 +1255,21 @@ class IotSduiState extends ChangeNotifier {
                 )
               : _softFail(_redact(error.toString()));
         } else {
-          rethrow;
+          // Non-GET action/mutation (or a GET with no page to fall back on):
+          // the request already failed with a network/transport error (e.g.
+          // the backend reset the connection on device_card_click). Do NOT
+          // rethrow — a fire-and-forget caller leaves it uncaught, surfacing as
+          // an "Unhandled Exception" with no user feedback. Convert it to the
+          // same handled fail path the rest of this method uses (sets
+          // _lastError/_lastWarning, returns null). The request is NOT retried
+          // here, so a mutation is never silently replayed.
+          return reportError
+              ? _fail(
+                  'IoT API "$sourceName" failed: ${_redact(error.toString())}',
+                )
+              : _softFail(
+                  'IoT API "$sourceName" failed: ${_redact(error.toString())}',
+                );
         }
       }
 
@@ -1564,12 +1589,38 @@ class IotSduiState extends ChangeNotifier {
       return;
     }
 
+    // Fix 4 (no-op suppression): status refreshes (15s poll + cloud WS) land
+    // here constantly, but the device data is usually identical to what is
+    // already on screen. Only notify (which rebuilds the visible cards) when the
+    // merged device list actually changed. The comparison is wrapped so that if
+    // it ever fails we fall back to notifying — identical to today's behavior,
+    // so this can never hide a real update.
+    final List<Map<String, dynamic>>? before = _liveDevices;
     if (response?['mergeInto']?.toString() == 'devices') {
       _mergeNodeStatus(response!, _mapList(value));
     } else {
       _liveDevices = _mapList(value);
     }
-    notifyListeners();
+    if (_deviceListsDiffer(before, _liveDevices)) {
+      notifyListeners();
+    }
+  }
+
+  /// True when the two device lists differ (so a rebuild is warranted). Returns
+  /// true on any comparison error so callers always notify on doubt — this guard
+  /// only ever *skips* a rebuild when the data is provably unchanged.
+  bool _deviceListsDiffer(
+    List<Map<String, dynamic>>? a,
+    List<Map<String, dynamic>>? b,
+  ) {
+    if (identical(a, b)) return false;
+    if (a == null || b == null) return true;
+    if (a.length != b.length) return true;
+    try {
+      return jsonEncode(a) != jsonEncode(b);
+    } catch (_) {
+      return true;
+    }
   }
 
   void _mergeNodeStatus(
@@ -1812,6 +1863,11 @@ class IotSduiState extends ChangeNotifier {
 
     final uri = resolveUrl(resolved);
     return uri != null && !_isLoopback(uri);
+  }
+
+  bool _isTrustedEfactorHost(String host) {
+    final h = host.trim().toLowerCase();
+    return h == 'efactor.tech' || h.endsWith('.efactor.tech');
   }
 
   String _normalizeRuntimeAuthorizationHeader(String name, String value) {

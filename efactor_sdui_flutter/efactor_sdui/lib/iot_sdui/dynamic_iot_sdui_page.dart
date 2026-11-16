@@ -87,6 +87,13 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
   StreamSubscription<Map<String, dynamic>>? _nodeStatusSubscription;
   bool _deviceStateRefreshInProgress = false;
 
+  // Debounce for cloud node-status pushes: these can arrive in rapid bursts,
+  // and each refresh does an HTTP read + JSON parse + merge + rebuild on the
+  // main isolate. Coalesce a burst into a single refresh so scrolling/gestures
+  // are not starved by back-to-back refreshes.
+  static const Duration _statusRefreshDebounce = Duration(milliseconds: 600);
+  Timer? _statusRefreshDebounceTimer;
+
   late IotSchemaRepository _repository;
   IotSduiState? _state;
   IotSduiRenderer? _renderer;
@@ -139,7 +146,15 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
       if (!mounted) return;
       if (widget.embedInHostShell && !widget.isActive) return;
       if (ModalRoute.of(context)?.isCurrent == false) return;
-      unawaited(_refreshDeviceState());
+      // Coalesce bursts: restart the debounce timer on each push and only
+      // refresh once it goes quiet for _statusRefreshDebounce.
+      _statusRefreshDebounceTimer?.cancel();
+      _statusRefreshDebounceTimer = Timer(_statusRefreshDebounce, () {
+        if (!mounted) return;
+        if (widget.embedInHostShell && !widget.isActive) return;
+        if (ModalRoute.of(context)?.isCurrent == false) return;
+        unawaited(_refreshDeviceState());
+      });
     });
 
     _deviceStateTimer?.cancel();
@@ -1479,6 +1494,7 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
     _loadGeneration++;
     _schemaEventDebounceTimer?.cancel();
     _deviceStateTimer?.cancel();
+    _statusRefreshDebounceTimer?.cancel();
     _nodeStatusSubscription?.cancel();
     _schemaInvalidationSubscription?.cancel();
     _cloudConnectionSubscription?.cancel();
