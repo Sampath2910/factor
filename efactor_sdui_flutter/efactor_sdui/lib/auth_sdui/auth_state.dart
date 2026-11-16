@@ -189,6 +189,23 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  // First non-empty claim from a JWT payload; null on any parse failure.
+  static String? jwtClaim(String? token, List<String> claims) {
+    if (token == null) return null;
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      ) as Map<String, dynamic>;
+      for (final c in claims) {
+        final v = payload[c];
+        if (v != null && v.toString().trim().isNotEmpty) return v.toString();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> restoreRememberedIdentity() async {
     try {
       final remembered = await _secureStorage.readRememberedIdentity();
@@ -999,7 +1016,13 @@ class AuthState extends ChangeNotifier {
     }
 
     final accessToken = resolved['accesstoken'] ?? resolved['accessToken'];
-    final userId = resolved['user_id'] ?? resolved['userId'];
+    var userId = resolved['user_id'] ?? resolved['userId'];
+    // Server omits a top-level user_id; the id lives in the JWT (custom:user_id).
+    userId ??= jwtClaim(
+          _nonEmpty(resolved['idtoken'] ?? resolved['idToken']),
+          const ['custom:user_id', 'user_id', 'sub'],
+        ) ??
+        jwtClaim(accessToken, const ['custom:user_id', 'user_id', 'sub']);
     if (accessToken == null) {
       throw FormatException('$source access token is missing.');
     }
@@ -1076,8 +1099,11 @@ class AuthState extends ChangeNotifier {
     );
 
     final userId = _nonEmpty(
-      _readDynamic(_lastResponseBody, path('userIdPath', 'user_id')),
-    );
+          _readDynamic(_lastResponseBody, path('userIdPath', 'user_id')),
+        ) ??
+        // Server omits a top-level user_id; the id lives in the JWT (custom:user_id).
+        jwtClaim(idToken, const ['custom:user_id', 'user_id', 'sub']) ??
+        jwtClaim(accessToken, const ['custom:user_id', 'user_id', 'sub']);
 
     if (userId == null) {
       throw FormatException(
