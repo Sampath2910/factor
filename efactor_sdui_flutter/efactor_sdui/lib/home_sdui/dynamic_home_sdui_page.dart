@@ -1078,6 +1078,8 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
           canPop: false,
           onPopInvokedWithResult: (didPop, _) async {
             if (didPop || _isHandlingBack) return;
+            // A fullscreen keep-alive WebView (Professional Space / Circle Connect) owns back.
+            if (_professionalSpaceFullscreen) return;
             _isHandlingBack = true;
             try {
               final handled = await state.back();
