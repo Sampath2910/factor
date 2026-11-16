@@ -219,22 +219,17 @@ class AuthState extends ChangeNotifier {
         return;
       }
 
-      // Audit 3.2: don't assume a stored session is valid. If the JWT is
-      // expired, require re-login instead of booting into an authenticated
-      // state that then 401s on every request. (No refresh endpoint exists per
-      // the backend; strategy is re-login on expiry.) The remembered identity
-      // was already restored above, so the login form stays pre-filled.
-      // isJwtExpired fails open (returns false for non-JWT/parse errors), so a
-      // valid non-standard token is never logged out by mistake.
-      if (isJwtExpired(token)) {
-        debugPrint(
-          '[AuthState] restoreSession: stored access token expired -> require re-login',
-        );
-        _write(_state, 'auth.isAuthenticated', false);
-        notifyListeners();
-        return;
-      }
-
+      // Backend is authoritative for token validity (see AuthSecureStorage
+      // docs). The efactor backend stamps every freshly issued JWT with a fixed,
+      // long-past `exp` (a static 2022 timestamp) and does NOT enforce it —
+      // protected endpoints return 200 with these "expired" tokens. A
+      // client-side expiry check therefore rejected EVERY valid token on cold
+      // start (process death / "clear from recents"), logging the user out on
+      // every relaunch even though the session was perfectly usable. We no
+      // longer interpret `exp` on the client: a stored token always restores the
+      // session. Genuine invalidation is still handled by the existing
+      // 401/onAuthenticationFailure path, which clears the session and routes to
+      // login when a protected API actually rejects the token.
       _write(_state, 'auth.accessToken', token);
       _write(_state, 'auth.accesstoken', token);
 
