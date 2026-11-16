@@ -4474,6 +4474,8 @@ Error: $error
   }
 
   Future<void> _persistSnapshot() async {
+    // Return early if offline DOM restoration is disabled to prevent memory leaks and bridge OOM.
+    if (!_restoreDomSnapshotOffline) return;
     // Professional Space (GRID) owns its own offline (grid/sw.js shell) with the
     // server as source of truth. Per the GRID device-storage contract, do not
     // back up / snapshot its DOM.
@@ -4524,6 +4526,7 @@ Error: $error
     for (var i = 0; i < document.styleSheets.length; i++) {
       try {
         var sheet = document.styleSheets[i];
+        if (sheet.ownerNode && sheet.ownerNode.id === '__offline_compiled_styles') continue;
         var rules = sheet.cssRules || sheet.rules;
         if (rules) {
           for (var j = 0; j < rules.length; j++) {
