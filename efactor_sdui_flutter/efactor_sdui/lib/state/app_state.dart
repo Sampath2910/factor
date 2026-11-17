@@ -717,6 +717,11 @@ class AppState extends ChangeNotifier {
     final previousPageId = activePage['id']?.toString();
 
     _schema = patch.schema;
+    // The device-frame source cache is keyed off the schema; a replaced schema
+    // must invalidate it so the next resolve rebuilds from the new document.
+    _schemaGeneration++;
+    _cachedFrameSources = null;
+    _cachedFrameSourcesKey = null;
     _schemaRuntime = null;
     _schemaRuntimeFingerprint = null;
 
@@ -4743,35 +4748,30 @@ class AppState extends ChangeNotifier {
     return const <String, dynamic>{};
   }
 
-  /// Resolves the canonical protocol frame declared by the Device schema.
-  ///
-  /// The transport contract may point at a schema path such as:
-  ///   deviceConfig.devices[0].pages
-  ///
-  /// A frame is then selected by the control's runtime page name and its
-  /// declared frame/parameter name. No model, parameter id or protocol byte is
-  /// hardcoded here.
-  Map<String, dynamic>? _resolveCanonicalDeviceConfigFrame(
-    Map<String, dynamic> control,
+  // --- Device-frame source cache -------------------------------------------
+  // The list of schema frame-source page maps depends ONLY on the active schema
+  // and the runtime node id, never on the control being resolved. Previously it
+  // was rebuilt (walking the multi-MB schema) for every control on every
+  // rebuild. It is now memoized and reused; the per-control matching below is
+  // unchanged, so the resolved frame is identical. Invalidated when the schema
+  // is replaced (_schemaGeneration bump) or when the node id changes (cache key).
+  int _schemaGeneration = 0;
+  List<({dynamic pages, String label})>? _cachedFrameSources;
+  String? _cachedFrameSourcesKey;
+
+  /// Builds (and caches) the schema frame-source page maps for the current
+  /// schema + runtime node. Behaviour-identical to the previous inline build;
+  /// only memoized so it is not recomputed per control per frame.
+  List<({dynamic pages, String label})> _deviceFrameSources(
+    String? runtimeNodeId,
+    String? sourcePath,
   ) {
-    final contract = _deviceCommandsContract();
-    final sourcePath = contract['frameSource']?.toString().trim();
+    final cacheKey =
+        '$_schemaGeneration|${runtimeNodeId ?? ''}|${sourcePath ?? ''}';
+    final cached = _cachedFrameSources;
+    if (cached != null && _cachedFrameSourcesKey == cacheKey) return cached;
 
-    // Build a list of schema-declared frame sources. This remains completely
-    // model/device agnostic:
-    //
-    // 1) dataSources/apiContracts.deviceCommands.frameSource (authoritative
-    //    declaration when present);
-    // 2) node_details[].config for the CURRENT runtime node, when backend
-    //    publishes the canonical device config there;
-    // 3) root deviceConfig as the legacy/current generated projection;
-    // 4) state/deviceState config projections as compatibility copies.
-    //
-    // A source is only useful if a frame can be deterministically matched to
-    // the control. We never infer protocol bytes and never treat an unrelated
-    // generic frame as the requested control frame.
     final sources = <({dynamic pages, String label})>[];
-
     void addSource(dynamic pages, String label) {
       if (pages is! Map) return;
       final alreadyAdded = sources.any(
@@ -4786,12 +4786,6 @@ class AppState extends ChangeNotifier {
       addSource(_resolveSchemaPath(sourcePath), sourcePath);
     }
 
-    // node_details is a server projection of the device configuration. Prefer
-    // only the entry whose id exactly matches the runtime-selected node.
-    // This prevents a stale/truncated schema node from silently controlling a
-    // different physical device.
-    final identity = resolveDeviceIdentity();
-    final runtimeNodeId = identity.nodeId?.trim();
     final nodeDetails = _schema['node_details'];
     if (nodeDetails is List &&
         runtimeNodeId != null &&
@@ -4854,6 +4848,45 @@ class AppState extends ChangeNotifier {
         }
       }
     }
+
+    _cachedFrameSources = sources;
+    _cachedFrameSourcesKey = cacheKey;
+    return sources;
+  }
+
+  /// Resolves the canonical protocol frame declared by the Device schema.
+  ///
+  /// The transport contract may point at a schema path such as:
+  ///   deviceConfig.devices[0].pages
+  ///
+  /// A frame is then selected by the control's runtime page name and its
+  /// declared frame/parameter name. No model, parameter id or protocol byte is
+  /// hardcoded here.
+  Map<String, dynamic>? _resolveCanonicalDeviceConfigFrame(
+    Map<String, dynamic> control,
+  ) {
+    final contract = _deviceCommandsContract();
+    final sourcePath = contract['frameSource']?.toString().trim();
+
+    // Build a list of schema-declared frame sources. This remains completely
+    // model/device agnostic:
+    //
+    // 1) dataSources/apiContracts.deviceCommands.frameSource (authoritative
+    //    declaration when present);
+    // 2) node_details[].config for the CURRENT runtime node, when backend
+    //    publishes the canonical device config there;
+    // 3) root deviceConfig as the legacy/current generated projection;
+    // 4) state/deviceState config projections as compatibility copies.
+    //
+    // A source is only useful if a frame can be deterministically matched to
+    // the control. We never infer protocol bytes and never treat an unrelated
+    // generic frame as the requested control frame.
+    // node_details/deviceConfig/state projections are a function of the schema
+    // and the runtime node only, so the source list is built once and cached
+    // (see _deviceFrameSources). The per-control matching below is unchanged.
+    final identity = resolveDeviceIdentity();
+    final runtimeNodeId = identity.nodeId?.trim();
+    final sources = _deviceFrameSources(runtimeNodeId, sourcePath);
 
     if (sources.isEmpty) return null;
 
