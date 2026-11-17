@@ -3316,6 +3316,13 @@ class _PageSliderState extends State<_PageSlider> {
               return PageView.builder(
                 controller: _controller,
                 itemCount: widget.pages.length,
+                // Pre-build the immediately adjacent page (current ±1) while the
+                // current page is settled, so a swipe finds the next page's heavy
+                // widget tree already built instead of building it mid-gesture.
+                // Combined with _KeepAlivePageSlide (visited pages stay built),
+                // this removes the per-page build stall on swipe. Only neighbours
+                // are pre-built, so the memory/CPU cost stays bounded.
+                allowImplicitScrolling: true,
                 onPageChanged: (index) {
                   if (widget.state.activePageIndex != index) {
                     widget.state.activePageIndex = index;
