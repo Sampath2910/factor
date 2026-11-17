@@ -2150,6 +2150,22 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           resolve('');
         }
       });
+    },
+    openGallery: function(photoOnly) {
+      return new Promise(function(resolve) {
+        var id = 'gal_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        window.__mediaCallbacks = window.__mediaCallbacks || {};
+        window.__mediaCallbacks[id] = resolve;
+        if (window.CircleConnectMediaBridge) {
+          window.CircleConnectMediaBridge.postMessage(JSON.stringify({
+            action: 'openGallery',
+            photoOnly: photoOnly === true,
+            callbackId: id
+          }));
+        } else {
+          resolve(null);
+        }
+      });
     }
   };
 
@@ -3432,6 +3448,40 @@ Error: $error
         if (callbackId != null && callbackId.isNotEmpty) {
           final js =
               'window.__onMediaResolved && window.__onMediaResolved(${jsonEncode(callbackId)}, ${jsonEncode(localPath)});';
+          await _controller.runJavaScript(js);
+        }
+      } else if (action == 'openGallery') {
+        // Circle Connect camera screen "Gallery" button -> native Photo Gallery
+        // / Albums (not the Files/Documents manager). photoOnly=true picks images
+        // only; otherwise images + videos. Resolves with {path,url,fileName,type}
+        // or null when the user cancels.
+        final picker = ImagePicker();
+        final photoOnly = data['photoOnly'] == true;
+        XFile? file;
+        try {
+          file = photoOnly
+              ? await picker.pickImage(source: ImageSource.gallery)
+              : await picker.pickMedia();
+        } catch (e) {
+          debugPrint('[GridInAppWebView] openGallery pick failed: $e');
+          file = null;
+        }
+        dynamic result;
+        if (file != null) {
+          final lower = file.name.toLowerCase();
+          final isVideo = lower.endsWith('.mp4') ||
+              lower.endsWith('.mov') ||
+              lower.endsWith('.mkv');
+          result = <String, dynamic>{
+            'path': file.path,
+            'url': Uri.file(file.path).toString(),
+            'fileName': file.name,
+            'type': isVideo ? 'video' : 'photo',
+          };
+        }
+        if (callbackId != null && callbackId.isNotEmpty) {
+          final js =
+              'window.__onMediaResolved && window.__onMediaResolved(${jsonEncode(callbackId)}, ${jsonEncode(result)});';
           await _controller.runJavaScript(js);
         }
       }
