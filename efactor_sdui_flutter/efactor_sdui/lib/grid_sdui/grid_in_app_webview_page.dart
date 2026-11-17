@@ -2151,15 +2151,38 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         }
       });
     },
-    openGallery: function(photoOnly) {
+    openGallery: function(arg) {
+      // Accept both a boolean (openGallery(true)) and an options object
+      // (openGallery({ photoOnly: true })).
+      var photoOnly = (arg && typeof arg === 'object')
+        ? (arg.photoOnly === true)
+        : (arg === true);
       return new Promise(function(resolve) {
         var id = 'gal_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         window.__mediaCallbacks = window.__mediaCallbacks || {};
-        window.__mediaCallbacks[id] = resolve;
+        window.__mediaCallbacks[id] = function(result) {
+          // Deliver via BOTH contracts so either integration style works:
+          //  - Promise: const m = await window.CircleConnectMedia.openGallery(...)
+          //  - Event:   window.addEventListener('circleConnectMediaPicked', ...)
+          try {
+            if (result) {
+              window.dispatchEvent(new CustomEvent('circleConnectMediaPicked', {
+                detail: {
+                  url: result.dataUrl || result.url,
+                  fileName: result.fileName,
+                  type: result.type,
+                  path: result.path,
+                  dataUrl: result.dataUrl
+                }
+              }));
+            }
+          } catch (e) {}
+          resolve(result);
+        };
         if (window.CircleConnectMediaBridge) {
           window.CircleConnectMediaBridge.postMessage(JSON.stringify({
             action: 'openGallery',
-            photoOnly: photoOnly === true,
+            photoOnly: photoOnly,
             callbackId: id
           }));
         } else {
