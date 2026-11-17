@@ -214,6 +214,8 @@ class AppState extends ChangeNotifier {
     }
 
     var applied = 0;
+    _beginNotifyBatch();
+    try {
     for (final entry in cached.entries) {
       final key = entry.key.toString().trim();
       if (key.isEmpty) continue;
@@ -251,6 +253,9 @@ class AppState extends ChangeNotifier {
           '[DEVICE_PARAMS][CACHE] hydrate rejected $key=${entry.value}: $error',
         );
       }
+    }
+    } finally {
+      _endNotifyBatch();
     }
 
     logDebug(
@@ -445,6 +450,49 @@ class AppState extends ChangeNotifier {
   /// passes its own binding back into [setBinding]. A remote/server update only
   /// knows the parameter key, so without this fan-out it pings a channel that
   /// no widget is listening on and the UI keeps the stale value.
+  // --- Notify coalescing ----------------------------------------------------
+  // A telemetry poll or cache hydration applies many parameters at once; each
+  // would otherwise fire notifyListeners() and rebuild the whole device page
+  // (every control is wrapped in AnimatedBuilder(animation: state)). While a
+  // batch is open these are coalesced into a SINGLE rebuild when the batch
+  // closes, so loading values no longer freezes scrolling/swiping. A single
+  // user-initiated update runs with no batch open and stays immediate. Nested
+  // batches are reference-counted, so this is safe to compose.
+  int _notifyBatchDepth = 0;
+  bool _notifyBatchDirty = false;
+
+  @override
+  void notifyListeners() {
+    if (_notifyBatchDepth > 0) {
+      _notifyBatchDirty = true;
+      return;
+    }
+    super.notifyListeners();
+  }
+
+  void _beginNotifyBatch() {
+    _notifyBatchDepth++;
+  }
+
+  void _endNotifyBatch() {
+    if (_notifyBatchDepth > 0) _notifyBatchDepth--;
+    if (_notifyBatchDepth == 0 && _notifyBatchDirty) {
+      _notifyBatchDirty = false;
+      super.notifyListeners();
+    }
+  }
+
+  /// Runs [body], coalescing every notifyListeners() it triggers into one
+  /// rebuild at the end. Used for bulk value ingestion.
+  T _batchNotify<T>(T Function() body) {
+    _beginNotifyBatch();
+    try {
+      return body();
+    } finally {
+      _endNotifyBatch();
+    }
+  }
+
   void _notifyParameterChanged(String key, {String? originBinding}) {
     _parameterRevision++;
 
@@ -1705,7 +1753,8 @@ class AppState extends ChangeNotifier {
       final decoded = response.body.length > 50 * 1024
           ? await compute(_appStateJsonDecode, response.body)
           : jsonDecode(response.body);
-      final changed = ingestCloudPayload(decoded, nodeId: nodeId);
+      final changed =
+          _batchNotify(() => ingestCloudPayload(decoded, nodeId: nodeId));
       logDebug('[SDUI][LIVE_PARAMS] changed=$changed');
       return changed;
     } catch (error) {
