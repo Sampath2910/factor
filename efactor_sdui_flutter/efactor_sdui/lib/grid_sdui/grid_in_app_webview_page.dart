@@ -3472,11 +3472,36 @@ Error: $error
           final isVideo = lower.endsWith('.mp4') ||
               lower.endsWith('.mov') ||
               lower.endsWith('.mkv');
+          // Inline preview as a base64 data URL (images only). A local file://
+          // path can't be rendered directly inside the https WebView, so this
+          // lets the web preview the picked image before upload. Videos are
+          // skipped (too large to base64 inline) -> dataUrl stays null.
+          String? dataUrl;
+          if (!isVideo) {
+            try {
+              final bytes = await file.readAsBytes();
+              // Cap the inline preview so the JS payload stays reasonable; larger
+              // images still upload fine via path, just without a base64 preview.
+              if (bytes.length <= 15 * 1024 * 1024) {
+                final mime = lower.endsWith('.png')
+                    ? 'image/png'
+                    : lower.endsWith('.gif')
+                        ? 'image/gif'
+                        : lower.endsWith('.webp')
+                            ? 'image/webp'
+                            : 'image/jpeg';
+                dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+              }
+            } catch (e) {
+              debugPrint('[GridInAppWebView] openGallery dataUrl build failed: $e');
+            }
+          }
           result = <String, dynamic>{
             'path': file.path,
             'url': Uri.file(file.path).toString(),
             'fileName': file.name,
             'type': isVideo ? 'video' : 'photo',
+            'dataUrl': dataUrl,
           };
         }
         if (callbackId != null && callbackId.isNotEmpty) {
