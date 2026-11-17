@@ -97,6 +97,47 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
       <int, Map<String, dynamic>>{};
   Timer? _pageMergeFlushTimer;
 
+  /// Fresh re-open optimization: merge locally-cached pages into the live
+  /// schema in the background so a swipe finds each page already present (no
+  /// per-swipe merge, no loader flash). Cache-only — it never hits the network;
+  /// any page that is not on disk is skipped and still loads lazily on demand,
+  /// so there is no regression for an un-synced page. The actual merge reuses
+  /// the existing coalesced flush, producing a single rebuild.
+  Future<void> _preMergeCachedPages() async {
+    if (!SchemaRepository.storeDevicePagesLocally) return;
+    final base = _schema;
+    if (base == null) return;
+    final total = SchemaRepository.publishedPageCount(base);
+    for (var pageNo = 2; pageNo <= total; pageNo++) {
+      if (!mounted) return;
+      // Already in the live schema — nothing to merge for this page.
+      if (SchemaRepository.pageSlotReady(_schema ?? base, pageNo)) continue;
+      // Only merge pages that are actually cached on disk (no network fetch).
+      final onDisk = await _repository.cachedPageExists(
+        modelId: modelNo,
+        nodeId: nodeId,
+        pageNo: pageNo,
+      );
+      if (!onDisk) continue;
+      try {
+        final page = await _repository.loadSchemaPage(
+          modelId: modelNo,
+          nodeId: nodeId,
+          pageNo: pageNo,
+          forceRefresh: false, // cache-first; cachedPageExists guarantees a hit
+        );
+        if (!mounted) return;
+        _pageSchemas[pageNo] = page;
+        _pendingPageMerges[pageNo] = page;
+      } catch (_) {
+        // Ignore; the page still loads lazily on demand.
+      }
+    }
+    if (mounted && _pendingPageMerges.isNotEmpty) {
+      _flushPendingPageMerges();
+    }
+  }
+
   void _flushPendingPageMerges() {
     if (!mounted || _pendingPageMerges.isEmpty) return;
     final base = _schema;
@@ -268,6 +309,13 @@ class _DeviceUiScreenState extends State<DeviceUiScreen> {
       // the open page live.
       if (_isModelSyncStale) {
         unawaited(_cacheRemainingPages());
+      } else {
+        // Fresh re-open: the pages are cached on disk but not yet merged into
+        // the live schema, so swiping to one would merge it on demand and
+        // briefly flash the page loader. Pre-merge the already-cached pages in
+        // the background (cache-only, coalesced into a single rebuild) so
+        // navigation is instant without any network work.
+        unawaited(_preMergeCachedPages());
       }
       return;
     }
