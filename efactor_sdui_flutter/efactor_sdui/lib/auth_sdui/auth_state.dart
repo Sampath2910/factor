@@ -169,26 +169,6 @@ class AuthState extends ChangeNotifier {
     return key != null && key.isNotEmpty && read(key) == true;
   }
 
-  /// Returns true if a JWT token has expired based on its 'exp' claim.
-  static bool isJwtExpired(String token, {Duration leeway = Duration.zero}) {
-    try {
-      final parts = token.split('.');
-      if (parts.length != 3) return false;
-      final normalized = base64Url.normalize(parts[1]);
-      final payload = jsonDecode(
-        utf8.decode(base64Url.decode(normalized)),
-      ) as Map<String, dynamic>;
-      final exp = (payload['exp'] as num?)?.toInt();
-      if (exp == null) return false;
-      final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      // `leeway` lets callers treat a token that is about to expire as already
-      // expired, so it can be refreshed proactively instead of 401-ing mid-use.
-      return nowSec + leeway.inSeconds >= exp;
-    } catch (_) {
-      return false;
-    }
-  }
-
   // First non-empty claim from a JWT payload; null on any parse failure.
   static String? jwtClaim(String? token, List<String> claims) {
     if (token == null) return null;
@@ -238,35 +218,15 @@ class AuthState extends ChangeNotifier {
         return;
       }
 
-      // The backend now issues real token lifetimes (exp = now + 1h) and
-      // provides a refresh endpoint. On cold start with an expired (or
-      // about-to-expire) access token, refresh it using the stored refresh
-      // token instead of logging the user out. Only require a fresh login if
-      // the refresh itself fails (e.g. the refresh token is also expired, or the
-      // user still holds a legacy 2022 token the server no longer honors). A
-      // 60s leeway refreshes proactively so a protected call does not 401 right
-      // after launch. isJwtExpired fails open (false) for non-JWT/parse errors,
-      // so a valid non-standard token is never force-refreshed by mistake.
-      var effectiveStored = stored;
-      var effectiveToken = token;
-      if (isJwtExpired(token, leeway: const Duration(seconds: 60))) {
-        debugPrint(
-          '[AuthState] restoreSession: access token expired/expiring -> '
-          'attempting refresh',
-        );
-        final refreshed = await _refreshAccessToken();
-        if (refreshed == null) {
-          debugPrint(
-            '[AuthState] restoreSession: refresh failed -> require re-login',
-          );
-          _write(_state, 'auth.isAuthenticated', false);
-          notifyListeners();
-          return;
-        }
-        effectiveToken = refreshed;
-        // Re-read so id/refresh tokens reflect what the refresh persisted.
-        effectiveStored = await _secureStorage.readSession();
-      }
+      // The backend is authoritative for session validity: the client does NOT
+      // interpret the access-token expiry. A stored session is restored as-is
+      // and stays signed in until an explicit logout or until a protected API
+      // actually rejects the token (handled reactively by the 401/403 path,
+      // which refreshes first and only logs out if the refresh also fails).
+      // Interpreting `exp` here previously logged users out ~1h after login
+      // whenever the proactive refresh failed; that is intentionally removed.
+      final effectiveStored = stored;
+      final effectiveToken = token;
 
       _write(_state, 'auth.accessToken', effectiveToken);
       _write(_state, 'auth.accesstoken', effectiveToken);
