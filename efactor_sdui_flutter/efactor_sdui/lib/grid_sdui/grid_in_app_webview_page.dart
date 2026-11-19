@@ -1563,6 +1563,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     final hasDeviceKey =
         await CircleConnectDeviceKeyStore.instance.hasDeviceKey();
     final hasDeviceKeyJs = hasDeviceKey ? 'true' : 'false';
+    // Stable per-install id (Circle Connect spec §1). Minted/persisted natively
+    // and exposed so the web page uses it instead of its own localStorage id.
+    final installationId =
+        await CircleConnectDeviceKeyStore.instance.ensureInstallationId();
+    final installationIdJs = jsonEncode(installationId);
     final js = '''
 (function() {
   var fcmToken = $tokenJson;
@@ -2000,6 +2005,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   window.CircleConnectPush.openFileSupported = true;
   window.CircleConnectPush.saveFileSupported = true;
   window.CircleConnectPush.hasDeviceKey = $hasDeviceKeyJs;
+  window.CircleConnectPush.installationId = $installationIdJs;
   window.CircleConnectPush._token = fcmToken;
   window.CircleConnectPush.getToken = function() {
     return window.__efactor_fcm_token || "";
@@ -2033,6 +2039,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     api.openFileSupported = true;
     api.saveFileSupported = true;
     api.hasDeviceKey = $hasDeviceKeyJs;
+    api.installationId = $installationIdJs;
     api.setDeviceKey = function(deviceKey, installationId) {
       api.hasDeviceKey = true;
       post({

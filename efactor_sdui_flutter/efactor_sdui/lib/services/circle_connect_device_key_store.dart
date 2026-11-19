@@ -109,9 +109,16 @@ class CircleConnectDeviceKeyStore {
     final cleanId = installationId.trim();
     if (cleanKey.isEmpty) return;
 
+    // Preserve any existing installation id. The native side mints a stable
+    // per-install id (see ensureInstallationId) which the web page adopts, so a
+    // web-supplied id must never overwrite the authoritative native one.
+    final existingInstallId = await getInstallationId();
+    final shouldWriteInstallId =
+        cleanId.isNotEmpty && (existingInstallId == null || existingInstallId.isEmpty);
+
     try {
       await _storage.write(key: _kDeviceKey, value: cleanKey);
-      if (cleanId.isNotEmpty) {
+      if (shouldWriteInstallId) {
         await _storage.write(key: _kInstallationId, value: cleanId);
       }
       if (baseUrl != null && baseUrl.isNotEmpty) {
@@ -131,7 +138,7 @@ class CircleConnectDeviceKeyStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kDeviceKeyFallback, cleanKey);
-      if (cleanId.isNotEmpty) {
+      if (shouldWriteInstallId) {
         await prefs.setString(_kInstallationIdFallback, cleanId);
       }
       if (baseUrl != null && baseUrl.isNotEmpty) {
@@ -194,6 +201,34 @@ class CircleConnectDeviceKeyStore {
     return null;
   }
 
+  /// Returns the stable per-install UUID, generating and persisting one on the
+  /// first call. It is never regenerated for an existing install — it survives
+  /// login and logout — so `(user, installation)` stays stable across
+  /// logout/login. Only a fresh reinstall (cleared storage) yields a new id.
+  /// (Circle Connect spec §1: the native-minted installation id the web page
+  /// adopts in place of its own localStorage id.)
+  Future<String> ensureInstallationId() async {
+    final existing = await getInstallationId();
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final id = generateUuidV4();
+    try {
+      await _storage.write(key: _kInstallationId, value: id);
+    } catch (e) {
+      debugPrint(
+          '[CircleConnectKeyStore] Error persisting installation id (secure): $e');
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kInstallationIdFallback, id);
+    } catch (e) {
+      debugPrint(
+          '[CircleConnectKeyStore] Error persisting installation id (fallback): $e');
+    }
+    debugPrint('[CircleConnectKeyStore] Generated new installation id.');
+    return id;
+  }
+
   /// Retrieves the stored API base URL.
   Future<String> getBaseUrl({String? hintUrl}) async {
     if (hintUrl != null && hintUrl.isNotEmpty) {
@@ -241,7 +276,9 @@ class CircleConnectDeviceKeyStore {
         }
       }
       await _storage.delete(key: _kDeviceKey);
-      await _storage.delete(key: _kInstallationId);
+      // NOTE: the installation id is intentionally NOT deleted here. It is a
+      // stable per-install identifier that must survive logout and 401 key
+      // revocation (Circle Connect spec §1); only a fresh reinstall clears it.
       await _storage.delete(key: _kBaseUrl);
     } catch (e) {
       debugPrint('[CircleConnectKeyStore] Error clearing device key from secure storage: $e');
@@ -249,7 +286,7 @@ class CircleConnectDeviceKeyStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kDeviceKeyFallback);
-      await prefs.remove(_kInstallationIdFallback);
+      // Installation id fallback is intentionally retained (see note above).
       await prefs.remove(_kBaseUrlFallback);
     } catch (e) {
       debugPrint('[CircleConnectKeyStore] Error clearing device key from fallback prefs: $e');

@@ -469,6 +469,58 @@ void notificationTapBackground(NotificationResponse response) async {
   }
 }
 
+/// Handles a silent `NOTIFICATION_CLEAR` data push (multi-device tray sync,
+/// Circle Connect spec §4). When any of the user's other devices reads/replies/
+/// opens a chat, the server fans out this silent push to the rest; on receipt we
+/// cancel the conversation notification this device previously posted (keyed by
+/// `tag = conv-<id>`). It carries no banner — never show any UI for it.
+///
+/// Returns true when the push was a NOTIFICATION_CLEAR (and was handled), so the
+/// caller can stop processing. Pass an already-initialized [plugin] (foreground);
+/// when omitted (background isolate), a minimal plugin is initialized here.
+Future<bool> handleNotificationClear(
+  Map<String, dynamic> data, {
+  FlutterLocalNotificationsPlugin? plugin,
+}) async {
+  final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+  if (type != 'NOTIFICATION_CLEAR') return false;
+
+  final convId = (data['conversation_id'] ??
+          data['conversationId'] ??
+          data['chat_id'] ??
+          data['chatId'] ??
+          '')
+      .toString()
+      .trim();
+  if (convId.isEmpty) return true; // handled: nothing to cancel
+
+  try {
+    final p = plugin ?? FlutterLocalNotificationsPlugin();
+    if (plugin == null) {
+      // Background isolate: the plugin is not yet initialized here.
+      const androidInit = AndroidInitializationSettings('ic_notification');
+      try {
+        await p.initialize(
+          const InitializationSettings(
+            android: androidInit,
+            iOS: DarwinInitializationSettings(),
+          ),
+        );
+      } catch (_) {}
+    }
+    final notifId = GridChatMessage.notificationIdForConversation(convId);
+    final tag = (data['tag'] ?? 'conv-$convId').toString().trim();
+    await p.cancel(notifId, tag: tag.isNotEmpty ? tag : null);
+    await p.cancel(notifId);
+    await GridChatMessageNotifications.instance.clearConversation(convId, p);
+    debugPrint(
+        '[PushBootstrap] NOTIFICATION_CLEAR handled for conv=$convId tag=$tag');
+  } catch (e) {
+    debugPrint('[PushBootstrap] handleNotificationClear error: $e');
+  }
+  return true;
+}
+
 /// Top-level FCM background handler (must stay top-level for the isolate).
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -476,6 +528,14 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   final data = Map<String, dynamic>.from(message.data);
   final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+
+  // Multi-device tray sync (spec §4): a silent NOTIFICATION_CLEAR means another
+  // of the user's devices handled this conversation. Cancel our notification and
+  // stop — no delivery report, no banner.
+  if (type == 'NOTIFICATION_CLEAR') {
+    await handleNotificationClear(data);
+    return;
+  }
 
   // 1. CRITICAL: Extract conversation_id and message_id and fire delivery report
   // IMMEDIATELY on line 1 of the background isolate, in parallel with all other work.
@@ -1790,6 +1850,13 @@ Data: $data
 Notification: ${message.notification?.title} | ${message.notification?.body}
 ========================================================================
 ''');
+
+    // Multi-device tray sync (spec §4): silent NOTIFICATION_CLEAR from the server
+    // when another of the user's devices handled this chat — cancel locally, no UI.
+    if (type == 'NOTIFICATION_CLEAR') {
+      await handleNotificationClear(data, plugin: _local);
+      return;
+    }
 
     final callId = (data['call_id'] ?? data['callId'] ?? data['id'] ?? '')
         .toString()
