@@ -5172,112 +5172,6 @@ class AppState extends ChangeNotifier {
     return value != null && value > 0 ? value : null;
   }
 
-  /// Backend write-gating decision for a control (device-schema normalizer
-  /// build 2026-11-19.1+). Returns:
-  ///   true  → pack & send a device protocol frame (device-ready);
-  ///   false → Cloud parameter write only (not device-ready / preferred cloud);
-  ///   null  → the control carries none of the gating fields (older schema),
-  ///           so the legacy device-first behaviour is used unchanged.
-  ///
-  /// `writeReady` is already computed by the backend to be false for empty /
-  /// `00` / `0x00` CommandId or Function Code, so we never re-derive packability.
-  bool? _controlDeviceWriteDecision(Map<String, dynamic> control) {
-    final hasWriteReady = control.containsKey('writeReady');
-    final hasSupported = control.containsKey('deviceWriteSupported');
-    final hasPreferred = control.containsKey('preferredTransport');
-    if (!hasWriteReady && !hasSupported && !hasPreferred) return null;
-
-    final preferred =
-        control['preferredTransport']?.toString().trim().toLowerCase();
-    if (preferred == 'cloud') return false;
-
-    final writeReady = control['writeReady'] == true;
-    final supported = control['deviceWriteSupported'] == true;
-    if (writeReady && supported) return true;
-
-    // Fields present but not device-ready → Cloud. The backend will not invent
-    // protocol bytes, so device packing is impossible here.
-    return false;
-  }
-
-  /// Extracts the backend-declared `missingFrameValues` for a control as a
-  /// list of human-readable field names (e.g. `CommandId`, `Function Code`).
-  List<String> _controlMissingFrameValues(Map<String, dynamic> control) {
-    final raw = control['missingFrameValues'];
-    if (raw is List) {
-      return raw
-          .map((e) => e?.toString().trim() ?? '')
-          .where((e) => e.isNotEmpty)
-          .toList();
-    }
-    if (raw is String && raw.trim().isNotEmpty) return <String>[raw.trim()];
-    return const <String>[];
-  }
-
-  /// Builds a Cloud-only parameter write (`preferredTransport: "cloud"`):
-  /// `parameter` + `value` to the REST parameters endpoint, with NO protocol
-  /// frame and NO CommandId/FunctionCode. This path is kept fully separate from
-  /// the device-frame path so a Cloud write never triggers a device pack.
-  DeviceCommandRequest? _buildCloudOnlyRequest({
-    required Map<String, dynamic> control,
-    required String binding,
-    required dynamic value,
-  }) {
-    final identity = resolveDeviceIdentity();
-    final modelId = identity.modelId;
-    final nodeId = identity.nodeId;
-    final controlId = control['id']?.toString() ?? 'unknown';
-
-    if (modelId == null || nodeId == null) {
-      _showCommandError(
-        '[Device Command] Cannot send command: runtime modelId or nodeId is missing.\n'
-        'Control: $controlId',
-      );
-      return null;
-    }
-
-    final contract = _deviceCommandsContract();
-    final rawEndpoint = contract['url']?.toString() ??
-        _schema['meta']?['links']?['parameters']?.toString();
-    final endpoint = rewritePublicApiUrl(rawEndpoint);
-    if (endpoint == null || endpoint.isEmpty) {
-      _showCommandError(
-        '[Device Command] Cloud parameter endpoint is unavailable.\n'
-        'Control: $controlId',
-      );
-      return null;
-    }
-
-    final mappedProtocolValue =
-        DeviceFrameBuilder.resolveProtocolValue(control, value);
-
-    final missing = _controlMissingFrameValues(control);
-    logDebug(
-      '[CLOUD WRITE] control=$controlId binding=$binding appValue=$value '
-      'protocolValue=${mappedProtocolValue ?? "<unmapped>"} endpoint=$endpoint '
-      'reason=${missing.isEmpty ? "preferredCloud" : "missing:${missing.join(",")}"}',
-    );
-
-    return DeviceCommandRequest(
-      modelId: modelId,
-      nodeId: nodeId,
-      parameter: control['parameterName']?.toString() ??
-          control['parameter']?.toString() ??
-          '',
-      parameterKey: control['parameterKey']?.toString() ?? '',
-      value: value,
-      endpointUrl: endpoint,
-      accessToken: _accessToken.isNotEmpty ? _accessToken : null,
-      binding: binding,
-      controlId: controlId,
-      protocol: 'cloud',
-      pageName: control['pageName']?.toString(),
-      protocolValue: mappedProtocolValue,
-      // finalFrame / commandId / functionCode intentionally omitted → the
-      // payload carries only parameter + value (a Cloud parameter write).
-    );
-  }
-
   DeviceCommandRequest? _buildCommandRequest({
     required Map<String, dynamic> control,
     required String binding,
@@ -5545,24 +5439,11 @@ class AppState extends ChangeNotifier {
     final previous = _optimisticPrevious.remove(binding);
     final isAccordionToggle = AppState.frameRevealsResponseRows(control) ||
         control['revealsResponse'] == true;
-
-    // Transport gating (backend normalizer build 2026-11-19.1+):
-    //   true  → device protocol frame; false → Cloud-only; null → legacy
-    //   (no gating fields present) → keep today's device-first behaviour.
-    final decision = _controlDeviceWriteDecision(control);
-    final useCloudOnly = decision == false;
-
-    final request = useCloudOnly
-        ? _buildCloudOnlyRequest(
-            control: control,
-            binding: binding,
-            value: value,
-          )
-        : _buildCommandRequest(
-            control: control,
-            binding: binding,
-            value: value,
-          );
+    final request = _buildCommandRequest(
+      control: control,
+      binding: binding,
+      value: value,
+    );
     if (request == null) {
       if (hadOptimisticPrevious && !isAccordionToggle) {
         _rollbackBinding(binding, previous);
@@ -5574,14 +5455,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Cloud-only writes go straight to the HTTP/REST parameters transport,
-      // never through the device-command path — so a successful Cloud write can
-      // never fall into a device pack (and never shows the incomplete-frame
-      // error). Device-ready / legacy controls keep the existing dispatch
-      // (including its local→cloud connectivity fallback).
-      final result = useCloudOnly
-          ? await _transport.send(request)
-          : await _sendDeviceCommand(request);
+      final result = await _sendDeviceCommand(request);
       if (!result.accepted) {
         if (!isAccordionToggle) {
           _showCommandError(result.message ?? '[Device Command] Unknown error.');
