@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
 import 'package:http/http.dart' as http;
 
 import '../data/schema_repository.dart';
@@ -126,7 +127,7 @@ class SchemaSyncManager {
 
   static Map<String, dynamic> _deepCloneMap(Map<String, dynamic> source) {
     return Map<String, dynamic>.from(
-      (jsonDecode(jsonEncode(source)) as Map).cast<dynamic, dynamic>(),
+      (deepCopyJson(source) as Map).cast<dynamic, dynamic>(),
     );
   }
 

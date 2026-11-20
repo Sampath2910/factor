@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
 
 /// Small RFC-6902 compatible JSON Patch executor used for schema deltas.
 ///
@@ -268,7 +268,7 @@ class AuthJsonPatch {
     if (value == null || value is bool || value is num || value is String) {
       return value;
     }
-    return jsonDecode(jsonEncode(value));
+    return deepCopyJson(value);
   }
 
   static bool _deepEquals(dynamic a, dynamic b) {

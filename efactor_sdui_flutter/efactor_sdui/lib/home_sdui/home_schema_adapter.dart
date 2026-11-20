@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
 
 /// Converts supported server Home-schema shapes into the single internal
 /// contract consumed by the Home SDUI state and renderer.
@@ -1556,6 +1556,6 @@ class HomeSchemaAdapter {
   }
 
   Map<String, dynamic> _deepCopy(Map<String, dynamic> source) {
-    return jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    return deepCopyJson(source) as Map<String, dynamic>;
   }
 }

@@ -16,19 +16,3 @@ String generateUuidV4() {
   }
   return buffer.toString().toLowerCase();
 }
-
-/// ISO-8601 timestamp with a numeric timezone offset, e.g.
-/// `2026-11-19T09:30:00+05:30` — matches the backend's `recorded_at` sample.
-///
-/// If the backend confirms it wants UTC instead, switch callers to
-/// `dt.toUtc().toIso8601String()`.
-String iso8601WithOffset(DateTime dt) {
-  final local = dt.toLocal();
-  final offset = local.timeZoneOffset;
-  final sign = offset.isNegative ? '-' : '+';
-  final hh = offset.inHours.abs().toString().padLeft(2, '0');
-  final mm = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
-  // Drop sub-second precision to match the sample shape.
-  final base = local.toIso8601String().split('.').first;
-  return '$base$sign$hh:$mm';
-}

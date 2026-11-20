@@ -594,7 +594,9 @@ class EfactorCloudService {
     debugPrint('[EfactorCloud] resumeAfterProvisioning()');
     try {
       await _cloud.setProvisionStarted(false);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[EfactorCloud] setProvisionStarted(false) failed: $e');
+    }
     await initialize(
       accessToken: token,
       username: _sessionUsername,

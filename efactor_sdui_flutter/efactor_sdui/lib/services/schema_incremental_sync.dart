@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
 import 'package:http/http.dart' as http;
 
 import '../auth_sdui/auth_json_patch.dart';
@@ -422,7 +423,7 @@ class SchemaIncrementalSync {
     String? updatedAt,
   }) {
     var working = Map<String, dynamic>.from(
-      jsonDecode(jsonEncode(base)) as Map,
+      deepCopyJson(base) as Map,
     );
 
     final toUpsert = <dynamic>[

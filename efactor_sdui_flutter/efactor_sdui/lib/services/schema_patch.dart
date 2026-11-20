@@ -1,4 +1,5 @@
-import 'dart:convert';
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
+
 import 'json_http.dart';
 
 /// Id-keyed merge of two SDUI schema maps.
@@ -412,7 +413,7 @@ class SchemaPatch {
     String? targetHash,
   }) {
     final cloned = Map<String, dynamic>.from(
-      jsonDecode(jsonEncode(baseSchema)) as Map,
+      deepCopyJson(baseSchema) as Map,
     );
 
     if (deltaPatch == null) return cloned;

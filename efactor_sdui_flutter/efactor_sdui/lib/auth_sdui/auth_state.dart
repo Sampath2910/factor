@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -24,7 +25,7 @@ class AuthState extends ChangeNotifier {
       throw const FormatException('auth schema state must be an object.');
     }
 
-    _state = jsonDecode(jsonEncode(rawState)) as Map<String, dynamic>;
+    _state = deepCopyJson(rawState) as Map<String, dynamic>;
 
     var initial = schema['app']?['initialPageId']?.toString().trim();
 
@@ -352,7 +353,7 @@ class AuthState extends ChangeNotifier {
     final rawState = schema['state'] is Map
         ? schema['state'] as Map<String, dynamic>
         : <String, dynamic>{};
-    _state = jsonDecode(jsonEncode(rawState)) as Map<String, dynamic>;
+    _state = deepCopyJson(rawState) as Map<String, dynamic>;
 
     for (final key in const <String>[
       'auth.accessToken',

@@ -59,7 +59,9 @@ class FieldTrackerIntegration {
     if (!enabled || !_started) return;
     try {
       FieldTracker.instance.stopDuty();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[FieldTracker] stopDuty failed on logout: $e');
+    }
     _started = false;
   }
 }

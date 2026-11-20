@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -847,7 +848,7 @@ class AuthSchemaRepository {
 
   Map<String, dynamic> _cloneMap(Map<String, dynamic> value) {
     return Map<String, dynamic>.from(
-      (jsonDecode(jsonEncode(value)) as Map).cast<dynamic, dynamic>(),
+      (deepCopyJson(value) as Map).cast<dynamic, dynamic>(),
     );
   }
 

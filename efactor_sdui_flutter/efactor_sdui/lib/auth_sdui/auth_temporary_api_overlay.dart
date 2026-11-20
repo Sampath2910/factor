@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
 
 /// Compatibility adapter for Auth SDUI state only.
 ///
@@ -19,7 +19,7 @@ class AuthTemporaryApiOverlay {
   );
 
   static Map<String, dynamic> apply(Map<String, dynamic> source) {
-    final schema = jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    final schema = deepCopyJson(source) as Map<String, dynamic>;
     if (enabled) {
       _ensureCompatibilitySessionState(schema);
     }

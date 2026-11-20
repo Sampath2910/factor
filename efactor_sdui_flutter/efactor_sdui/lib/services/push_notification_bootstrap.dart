@@ -506,7 +506,9 @@ Future<bool> handleNotificationClear(
             iOS: DarwinInitializationSettings(),
           ),
         );
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[PushBootstrap] local notifications initialize failed: $e');
+      }
     }
     final notifId = GridChatMessage.notificationIdForConversation(convId);
     final tag = (data['tag'] ?? 'conv-$convId').toString().trim();

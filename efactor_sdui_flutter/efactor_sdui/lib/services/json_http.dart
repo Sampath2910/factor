@@ -54,9 +54,18 @@ void ensureDecodableJson({
 
 /// Extracts a valid JSON string when the server prepends or appends non-JSON text
 /// (e.g. PHP warnings, SMTP debug logs, or notices).
+///
+/// shortcut: picks the first '{'/'[' to the last '}'/']'. If the leading noise
+/// itself contains a stray bracket before the real payload, the slice is wrong
+/// and decode fails into the caller's error path (fails safe, never wrong data).
+/// Upgrade to a brace-matching scan if the server starts emitting bracketed
+/// noise before clean JSON.
 String extractJsonPayload(String body) {
   final trimmed = body.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+  // Fast path only when the body is clean on BOTH ends; a body that starts with
+  // '{' but has trailing noise still needs slicing.
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
     return trimmed;
   }
   final startBrace = trimmed.indexOf('{');

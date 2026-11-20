@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:efactor_sdui/utils/deep_copy_json.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
@@ -1796,7 +1797,7 @@ class HomeSduiState extends ChangeNotifier {
 
   Map<String, dynamic> _deepMap(dynamic source) {
     if (source is! Map) return <String, dynamic>{};
-    return jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    return deepCopyJson(source) as Map<String, dynamic>;
   }
 
   dynamic _readPath(Map<String, dynamic> root, String path) {
