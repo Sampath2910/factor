@@ -158,27 +158,19 @@ class IotSduiRenderer {
               // RepaintBoundary (Fix 2) so a live-value update repaints only the
               // card that changed, not the whole scroll layer. Horizontal page
               // padding is applied once to the whole list via SliverPadding.
-              SliverPadding(
-                padding: EdgeInsets.only(
-                  left: pagePadding.left,
-                  right: pagePadding.right,
-                ),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final resolved = schemaRuntime.resolveResponsiveMap(
-                        components[index],
-                        viewportWidth,
-                        logicalHeight: viewportHeight,
-                        orientation: orientation,
-                      );
-                      return RepaintBoundary(
-                        child: _buildComponent(context, resolved),
-                      );
-                    },
-                    childCount: components.length,
-                  ),
-                ),
+              // Lazy component slivers: runs of ordinary components stay in a
+              // lazy SliverList, while each deviceGrid becomes its own lazy
+              // SliverList-of-rows so only on-screen device cards are built.
+              // Previously the whole grid built every card in one frame, which
+              // froze the page on open for device-heavy accounts.
+              ..._buildComponentSlivers(
+                context,
+                components,
+                schemaRuntime,
+                viewportWidth: viewportWidth,
+                viewportHeight: viewportHeight,
+                orientation: orientation,
+                pagePadding: pagePadding,
               ),
               if (state.lastError != null)
                 SliverPadding(
@@ -1001,6 +993,206 @@ class IotSduiRenderer {
           children: rows,
         );
       },
+    );
+  }
+
+  /// Turns the page components into a list of slivers so the scroll view builds
+  /// lazily: consecutive non-grid components are grouped into lazy SliverLists
+  /// (preserving the earlier per-component laziness + RepaintBoundary), and each
+  /// `deviceGrid` becomes its own lazy SliverList-of-rows via
+  /// [_buildDeviceGridSliver]. This replaces the previous single eager grid
+  /// build (a Column of all rows) that blocked the first frame on open.
+  List<Widget> _buildComponentSlivers(
+    BuildContext context,
+    List<Map<String, dynamic>> components,
+    SchemaRuntime schemaRuntime, {
+    required double viewportWidth,
+    required double viewportHeight,
+    required String orientation,
+    required EdgeInsets pagePadding,
+  }) {
+    final slivers = <Widget>[];
+    var runStart = 0;
+
+    void flushRun(int endExclusive) {
+      if (endExclusive <= runStart) return;
+      final start = runStart;
+      final count = endExclusive - start;
+      slivers.add(
+        SliverPadding(
+          padding: EdgeInsets.only(
+            left: pagePadding.left,
+            right: pagePadding.right,
+          ),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) {
+                final resolved = schemaRuntime.resolveResponsiveMap(
+                  components[start + i],
+                  viewportWidth,
+                  logicalHeight: viewportHeight,
+                  orientation: orientation,
+                );
+                return RepaintBoundary(
+                  child: _buildComponent(context, resolved),
+                );
+              },
+              childCount: count,
+            ),
+          ),
+        ),
+      );
+    }
+
+    for (var i = 0; i < components.length; i++) {
+      if (components[i]['type']?.toString() == 'deviceGrid') {
+        flushRun(i);
+        slivers.add(
+          _buildDeviceGridSliver(
+            context,
+            components[i],
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight,
+            orientation: orientation,
+            pagePadding: pagePadding,
+            schemaRuntime: schemaRuntime,
+          ),
+        );
+        runStart = i + 1;
+      }
+    }
+    flushRun(components.length);
+    return slivers;
+  }
+
+  /// Lazy sliver version of the device grid: a SliverList whose children are the
+  /// grid rows, so only the rows (and therefore device cards) in/near the
+  /// viewport are built and laid out. Each row keeps the same IntrinsicHeight
+  /// Row layout as [_buildDeviceGrid], so the visual result is identical — only
+  /// the build is incremental. Column/gap resolution and empty/search states
+  /// mirror [_buildDeviceGrid] exactly.
+  Widget _buildDeviceGridSliver(
+    BuildContext context,
+    Map<String, dynamic> grid, {
+    required double viewportWidth,
+    required double viewportHeight,
+    required String orientation,
+    required EdgeInsets pagePadding,
+    required SchemaRuntime schemaRuntime,
+  }) {
+    final horizontalPadding = EdgeInsets.only(
+      left: pagePadding.left,
+      right: pagePadding.right,
+    );
+
+    final canonicalGrid = _findComponentByType(state.schema, 'deviceGrid');
+    final rootLayout =
+        _findMapByKey(state.schema, 'layout') ?? const <String, dynamic>{};
+    final rootGrid = _map(rootLayout['grid']) ??
+        _findNamedGridLayout(state.schema) ??
+        const <String, dynamic>{};
+
+    final devices = List<Map<String, dynamic>>.from(state.filteredDevices);
+    final sort =
+        grid['sort']?.toString() ?? state.theme['deviceSort']?.toString();
+    if (sort == 'onlineFirst') {
+      devices.sort((a, b) {
+        final aa = a['online'] == true ? 1 : 0;
+        final bb = b['online'] == true ? 1 : 0;
+        return bb.compareTo(aa);
+      });
+    }
+
+    final responsiveGrid = schemaRuntime.resolveResponsiveMap(
+      grid,
+      viewportWidth,
+      logicalHeight: viewportHeight,
+      orientation: orientation,
+    );
+
+    int? columns = _int(responsiveGrid['columns']) ??
+        _int(grid['columns']) ??
+        _int(canonicalGrid?['columns']) ??
+        _int(rootGrid['columns']);
+    if (columns == 1 && viewportWidth >= 320.0 && viewportWidth < 600.0) {
+      final baseCols = _int(grid['columns']) ??
+          _int(canonicalGrid?['columns']) ??
+          _int(rootGrid['columns']);
+      if (baseCols != null && baseCols >= 2) columns = baseCols;
+    }
+
+    if (columns == null || columns <= 0) {
+      return SliverPadding(
+        padding: horizontalPadding,
+        sliver: SliverToBoxAdapter(
+          child: _schemaError(
+            context,
+            'deviceGrid.columns / layout.grid.columns',
+          ),
+        ),
+      );
+    }
+
+    final declaredGap = _number(responsiveGrid['gap']) ??
+        _number(grid['gap']) ??
+        _number(canonicalGrid?['gap']) ??
+        _number(rootGrid['gap']) ??
+        _number(state.theme['gridGap']);
+    final gap = declaredGap ?? 0.0;
+
+    final deviceCount = devices.length;
+    if (deviceCount == 0) {
+      final empty =
+          (state.isSearchVisible && state.searchQuery.trim().isNotEmpty)
+              ? _buildEmptySearchState(context, state.searchQuery.trim())
+              : _buildEmptyGridState(context);
+      return SliverPadding(
+        padding: horizontalPadding,
+        sliver: SliverToBoxAdapter(child: empty),
+      );
+    }
+
+    final cols = columns;
+    final rowCount = (deviceCount + cols - 1) ~/ cols;
+
+    return SliverPadding(
+      padding: horizontalPadding,
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, rowIndex) {
+            final rowCards = <Widget>[];
+            for (var j = 0; j < cols; j++) {
+              if (j > 0) rowCards.add(SizedBox(width: gap));
+              final index = rowIndex * cols + j;
+              if (index < deviceCount) {
+                rowCards.add(
+                  Expanded(
+                    child: _buildDeviceCard(
+                      context,
+                      responsiveGrid,
+                      devices[index],
+                    ),
+                  ),
+                );
+              } else {
+                rowCards.add(const Expanded(child: SizedBox.shrink()));
+              }
+            }
+            return Padding(
+              padding: EdgeInsets.only(top: rowIndex == 0 ? 0 : gap),
+              child: RepaintBoundary(
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: rowCards,
+                  ),
+                ),
+              ),
+            );
+          },
+          childCount: rowCount,
+        ),
+      ),
     );
   }
 
