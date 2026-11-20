@@ -537,6 +537,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
+  // Silent GRID_SYNC re-sync nudge: never post a notification. When the app is
+  // backgrounded/closed there is no live webview reachable from this isolate to
+  // forward into (and the next open re-syncs anyway), so just ignore it.
+  if (type == 'GRID_SYNC') {
+    return;
+  }
+
   // 1. CRITICAL: Extract conversation_id and message_id and fire delivery report
   // IMMEDIATELY on line 1 of the background isolate, in parallel with all other work.
   // This ensures the server registers message delivery and flips the sender's tick
@@ -1858,6 +1865,14 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       return;
     }
 
+    // Silent GRID_SYNC re-sync nudge: never show a notification. Forward it into
+    // the live GRID Chat webview so ticks/read/incoming apply live; if the
+    // webview is not alive there is nothing on screen to update, so ignore it.
+    if (type == 'GRID_SYNC') {
+      await GridInAppWebViewPage.forwardPushToGridChat(data);
+      return;
+    }
+
     final callId = (data['call_id'] ?? data['callId'] ?? data['id'] ?? '')
         .toString()
         .trim();
@@ -1946,6 +1961,11 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         appResumed: resumed,
         activeConversationId: _activeConversationId,
       );
+
+      // If GRID Chat is open, also forward the message into the webview so it
+      // appears live (the active-conversation banner is already suppressed by
+      // present()). No-op when the webview is not alive.
+      unawaited(GridInAppWebViewPage.forwardPushToGridChat(data));
 
       try {
         await deliveryFuture;

@@ -532,6 +532,36 @@ class GridInAppWebViewPage extends StatefulWidget {
     return state._chatUiReady;
   }
 
+  /// Forwards an FCM data push into the live GRID Chat webview so it applies the
+  /// change through the same pipeline as its WebSocket (live ticks / read / an
+  /// incoming message), per the Circle Connect "GRID_SYNC" contract.
+  ///
+  /// Returns true when there is a live GRID Chat webview and the push was
+  /// forwarded; false otherwise (the caller then ignores a silent GRID_SYNC,
+  /// since there is nothing on screen to update). The web side is idempotent
+  /// with the socket, so a forwarded push already applied by the socket is a
+  /// harmless no-op.
+  static Future<bool> forwardPushToGridChat(Map<String, dynamic> data) async {
+    if (!isActiveCircleConnect) return false;
+    final controller = _activeState?._controller ?? _lastCircleConnectController;
+    if (controller == null) return false;
+    try {
+      final json = jsonEncode(data);
+      // Prefer the direct call; fall back to a DOM event if the page only
+      // listens for `gridChatPush`. Both are idempotent on the web side.
+      await controller.runJavaScript(
+        'try{'
+        'if(typeof window.gridChatOnPush==="function"){window.gridChatOnPush($json);}'
+        'else{window.dispatchEvent(new CustomEvent("gridChatPush",{detail:$json}));}'
+        '}catch(e){console.error("gridChatPush forward error",e);}',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[GridInAppWebView] forwardPushToGridChat error: $e');
+      return false;
+    }
+  }
+
   static bool _answerInjectInFlight = false;
 
   /// Runs gridChatCallAction once. Returns false when the function is not
