@@ -325,6 +325,16 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
       );
     }
 
+    // GPS field tracking — OPT-IN, gated OFF by default (no effect unless built
+    // with --dart-define=ENABLE_FIELD_TRACKER=true). Started early and
+    // independently so it never depends on cloud-init / schema prefetch.
+    unawaited(
+      FieldTrackerIntegration.instance.maybeStart(
+        tokenProvider: () => widget.authState.accessToken ?? '',
+        userId: uid,
+      ),
+    );
+
     await EfactorCloudService.instance.initialize(
       accessToken: token,
       username: identity,
@@ -342,15 +352,6 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
         userId: uid.isNotEmpty ? uid : null,
         email: identity?.contains('@') == true ? identity : null,
         username: identity?.contains('@') == false ? identity : null,
-      ),
-    );
-
-    // GPS field tracking — OPT-IN, gated OFF by default (no effect unless built
-    // with --dart-define=ENABLE_FIELD_TRACKER=true). Does not alter any flow.
-    unawaited(
-      FieldTrackerIntegration.instance.maybeStart(
-        tokenProvider: () => widget.authState.accessToken ?? '',
-        userId: uid,
       ),
     );
   }
