@@ -892,6 +892,17 @@ class AuthState extends ChangeNotifier {
           source: 'auth',
         );
       } catch (_) {
+        // Fallback: If decodeJsonBody failed because the server prepended PHP warnings or SMTP error logs,
+        // extract the valid JSON payload between the first '{' and last '}'
+        try {
+          final firstBrace = body.indexOf('{');
+          final lastBrace = body.lastIndexOf('}');
+          if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+            final cleanJson = body.substring(firstBrace, lastBrace + 1);
+            return jsonDecode(cleanJson);
+          }
+        } catch (_) {}
+
         return <String, dynamic>{
           'description': 'Invalid JSON response.',
           '_raw': looksLikeHtml(body) ? '<html>' : body,

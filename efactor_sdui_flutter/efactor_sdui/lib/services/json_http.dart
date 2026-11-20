@@ -52,14 +52,43 @@ void ensureDecodableJson({
   }
 }
 
+/// Extracts a valid JSON string when the server prepends or appends non-JSON text
+/// (e.g. PHP warnings, SMTP debug logs, or notices).
+String extractJsonPayload(String body) {
+  final trimmed = body.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return trimmed;
+  }
+  final startBrace = trimmed.indexOf('{');
+  final startBracket = trimmed.indexOf('[');
+  int start = -1;
+  if (startBrace != -1 && startBracket != -1) {
+    start = startBrace < startBracket ? startBrace : startBracket;
+  } else if (startBrace != -1) {
+    start = startBrace;
+  } else if (startBracket != -1) {
+    start = startBracket;
+  }
+
+  if (start == -1) return trimmed;
+
+  final endBrace = trimmed.lastIndexOf('}');
+  final endBracket = trimmed.lastIndexOf(']');
+  final end = endBrace > endBracket ? endBrace : endBracket;
+  if (end == -1 || end <= start) return trimmed;
+
+  return trimmed.substring(start, end + 1);
+}
+
 dynamic decodeJsonBody({
   required String body,
   String? contentType,
   required String source,
 }) {
-  ensureDecodableJson(body: body, contentType: contentType, source: source);
+  final sanitized = extractJsonPayload(body);
+  ensureDecodableJson(body: sanitized, contentType: contentType, source: source);
   try {
-    return jsonDecode(body);
+    return jsonDecode(sanitized);
   } on FormatException catch (error) {
     throw FormatException('Invalid JSON from $source: ${error.message}');
   }
@@ -74,12 +103,13 @@ Future<dynamic> decodeJsonBodyAsync({
   String? contentType,
   required String source,
 }) async {
-  ensureDecodableJson(body: body, contentType: contentType, source: source);
+  final sanitized = extractJsonPayload(body);
+  ensureDecodableJson(body: sanitized, contentType: contentType, source: source);
   try {
-    if (body.length > 50 * 1024) {
-      return await compute(_isolateJsonDecode, body);
+    if (sanitized.length > 50 * 1024) {
+      return await compute(_isolateJsonDecode, sanitized);
     }
-    return jsonDecode(body);
+    return jsonDecode(sanitized);
   } on FormatException catch (error) {
     throw FormatException('Invalid JSON from $source: ${error.message}');
   }
