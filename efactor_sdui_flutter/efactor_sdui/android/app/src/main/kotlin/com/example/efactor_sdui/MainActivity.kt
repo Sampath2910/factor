@@ -83,7 +83,14 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createDefaultNotificationChannels()
-        wakeAndUnlock()
+        // Only show over / wake the lock screen when there is an active call.
+        // For a normal launch the app must stay behind the keyguard like any
+        // other app (Dart calls the `wakeAndUnlock` method channel for calls).
+        if (OngoingCallService.isCallActive) {
+            wakeAndUnlock()
+        } else {
+            clearShowWhenLocked()
+        }
     }
 
     private fun createDefaultNotificationChannels() {
@@ -213,6 +220,27 @@ class MainActivity : FlutterActivity() {
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    /**
+     * Reverts the show-over-lockscreen / turn-screen-on flags so the app does
+     * NOT appear on top of the keyguard. Called on normal launch/resume when no
+     * call is active, so the over-lock behaviour is scoped to active calls only.
+     */
+    private fun clearShowWhenLocked() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(false)
+                setTurnScreenOn(false)
+            } else {
+                @Suppress("DEPRECATION")
+                window.clearFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
+        } catch (_: Exception) {
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -691,6 +719,11 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         callWebViewHandler.removeCallbacks(resumeCallWebViewRunnable)
         super.onResume()
+        // When resuming outside an active call, ensure the app is not left
+        // showing over the lock screen (e.g. after a prior call enabled it).
+        if (!OngoingCallService.isCallActive) {
+            clearShowWhenLocked()
+        }
     }
 
     /**
