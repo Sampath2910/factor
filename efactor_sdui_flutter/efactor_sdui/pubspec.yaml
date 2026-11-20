@@ -15,6 +15,10 @@ dependencies:
   efactor_provisioning:
     path: packages/efactor_provisioning
 
+  # Efactor shared GPS field-tracking engine (opt-in; gated OFF by default).
+  efactor_field_tracker:
+    path: packages/efactor_field_tracker
+
   # UI and schema rendering
   google_fonts: ^8.2.1
   gauge_indicator: ^0.5.0

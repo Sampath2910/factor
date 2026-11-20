@@ -1,0 +1,27 @@
+name: efactor_field_tracker
+description: >
+  Shared, server-driven GPS field-tracking engine for eFactor apps. One Dart
+  API: pulls an effective Tracking Policy from the backend and tracks, buffers
+  (offline-first) and uploads GPS breadcrumbs + check-in/out events per policy.
+  Reusable across the current app and future HRMS / fleet apps.
+version: 0.0.1
+publish_to: "none" # local package
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
+  connectivity_plus: ^6.0.3
+  geolocator: ^12.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:

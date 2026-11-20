@@ -18,6 +18,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/app_cache_manager.dart';
 import 'services/call_permission_helper.dart';
 import 'services/efactor_cloud_service.dart';
+import 'services/field_tracker_integration.dart';
 import 'services/grid_chat_message_notification.dart';
 import 'services/incoming_call_service.dart';
 import 'services/location_startup_gate.dart';
@@ -343,6 +344,15 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
         username: identity?.contains('@') == false ? identity : null,
       ),
     );
+
+    // GPS field tracking — OPT-IN, gated OFF by default (no effect unless built
+    // with --dart-define=ENABLE_FIELD_TRACKER=true). Does not alter any flow.
+    unawaited(
+      FieldTrackerIntegration.instance.maybeStart(
+        tokenProvider: () => widget.authState.accessToken ?? '',
+        userId: uid,
+      ),
+    );
   }
 
   int? _authenticatedUserId() {
@@ -424,6 +434,8 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
           onLogout: () async {
             final currentUserId = _authenticatedUserId();
             final currentToken = widget.authState.accessToken;
+            // Stop GPS tracking if it was running (no-op when disabled).
+            FieldTrackerIntegration.instance.stop();
             await IncomingCallService.instance.unregisterDeviceTokenOnLogout(
               userId: currentUserId?.toString(),
               accessToken: currentToken,
