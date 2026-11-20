@@ -1103,12 +1103,21 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
             // back bar, no bottom nav) exactly like the old pushed-route did —
             // the warm WebView stays mounted/alive underneath.
             appBar: _professionalSpaceFullscreen ? null : appBar,
-            body: _buildShellBody(
-              context,
+            body: _TabSwipeDetector(
+              // Swipe only while the bottom bar is shown (bottomId != null),
+              // never in Grid fullscreen, and never on a non-tab surface
+              // (activeTabIndex == -1, e.g. a pushed device-detail page).
+              enabled: !_professionalSpaceFullscreen &&
+                  bottomId != null &&
+                  state.activeTabIndex != -1,
               state: state,
-              renderer: renderer,
-              rootId: rootId,
-              topSafeArea: !hasHistory,
+              child: _buildShellBody(
+                context,
+                state: state,
+                renderer: renderer,
+                rootId: rootId,
+                topSafeArea: !hasHistory,
+              ),
             ),
             bottomNavigationBar:
                 _professionalSpaceFullscreen || bottomId == null
@@ -1294,5 +1303,73 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
       return false;
     }
     return null;
+  }
+}
+
+/// Translates a horizontal fling into a bottom-nav tab change, reusing the exact
+/// tap path (`HomeSduiState.selectTab` → `dispatchAction`/`navigate`).
+///
+/// Why a gesture layer over the existing shell instead of a 4-page PageView:
+/// the four tabs are not four parallel widgets. Home and Profile share the home
+/// render surface, and IoT/Grid are lazily mounted embedded pages with
+/// TickerMode + refresh-epoch gating so off-screen live schemas pause. Hosting
+/// them side by side in a PageView would force both live surfaces to mount and
+/// run at once. Driving the same `selectTab` a tap uses keeps every bit of that
+/// machinery, and the active-tab highlight stays in sync automatically because
+/// the bottom bar reads `navigation.activeRouteId`.
+///
+/// Gesture safety: this is an ancestor horizontal-drag recognizer, so inner
+/// horizontal scrollers (carousels, device pagers) win the gesture arena and
+/// keep working; vertical scrolling is a different axis and is untouched.
+class _TabSwipeDetector extends StatefulWidget {
+  const _TabSwipeDetector({
+    required this.enabled,
+    required this.state,
+    required this.child,
+  });
+
+  final bool enabled;
+  final HomeSduiState state;
+  final Widget child;
+
+  @override
+  State<_TabSwipeDetector> createState() => _TabSwipeDetectorState();
+}
+
+class _TabSwipeDetectorState extends State<_TabSwipeDetector> {
+  // Minimum horizontal fling speed (logical px/s) that counts as a tab swipe.
+  static const double _velocityThreshold = 320;
+  bool _switching = false;
+
+  Future<void> _handleDragEnd(DragEndDetails details) async {
+    if (!widget.enabled || _switching) return;
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < _velocityThreshold) return;
+
+    final current = widget.state.activeTabIndex;
+    if (current < 0) return;
+    final tabCount = widget.state.bottomNavTabs.length;
+
+    // Swipe left (negative velocity) → next tab; swipe right → previous tab.
+    // Clamp at the ends so there is no wrap past Home / Profile.
+    final target = velocity < 0 ? current + 1 : current - 1;
+    if (target < 0 || target >= tabCount || target == current) return;
+
+    _switching = true;
+    try {
+      await widget.state.selectTab(target);
+    } finally {
+      if (mounted) _switching = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: _handleDragEnd,
+      child: widget.child,
+    );
   }
 }

@@ -382,6 +382,59 @@ class HomeSduiState extends ChangeNotifier {
     return isLiveGridHostRoute(id) && isLiveGridHostRoute(itemRoute);
   }
 
+  /// Ordered bottom-navigation tabs (home → devices → grid → profile), taken
+  /// straight from `navigation.items` so swipe uses the exact same order and
+  /// routes as the server-driven bottom bar. Only items that declare a routeId
+  /// are treated as swipeable tabs; each entry keeps its `actionId` so swipe can
+  /// fire the item's own action (preserving the IoT/Grid open-* host actions).
+  List<Map<String, String>> get bottomNavTabs {
+    final items = schema['navigation']?['items'];
+    if (items is! List) return const <Map<String, String>>[];
+    final tabs = <Map<String, String>>[];
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final routeId = raw['routeId']?.toString();
+      if (routeId == null || routeId.isEmpty) continue;
+      tabs.add(<String, String>{
+        'routeId': routeId,
+        'actionId': raw['actionId']?.toString() ?? '',
+      });
+    }
+    return tabs;
+  }
+
+  /// Index of the active route within [bottomNavTabs], or `-1` when the current
+  /// surface is not one of the tabs (e.g. a pushed device-detail page). Swipe is
+  /// disabled while this is `-1` so it never hijacks a non-tab screen.
+  int get activeTabIndex {
+    final tabs = bottomNavTabs;
+    for (var i = 0; i < tabs.length; i++) {
+      if (navigationItemMatchesRoute(<String, dynamic>{
+        'routeId': tabs[i]['routeId'],
+      })) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /// Switches to the tab at [index] exactly as tapping its bottom-nav item does:
+  /// dispatches the item's own action when present (so IoT/Grid still run their
+  /// `open-iot` / `open-grid` host actions and permission/auth checks), falling
+  /// back to a direct route navigation when the item has no action. Out-of-range
+  /// indices are ignored, which is how swipe clamps at Home and Profile.
+  Future<void> selectTab(int index) async {
+    final tabs = bottomNavTabs;
+    if (index < 0 || index >= tabs.length) return;
+    final tab = tabs[index];
+    final actionId = tab['actionId'] ?? '';
+    if (actionId.isNotEmpty) {
+      await dispatchAction(actionId);
+    } else {
+      await navigate(tab['routeId']!);
+    }
+  }
+
   dynamic resolve(
     dynamic value, {
     Map<String, dynamic>? item,
