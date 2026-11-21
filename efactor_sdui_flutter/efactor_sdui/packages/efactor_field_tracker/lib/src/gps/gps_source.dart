@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 /// A single GPS fix, transport-agnostic.
@@ -32,6 +33,11 @@ abstract interface class GpsSource {
 
   /// A single current fix, or null if unavailable.
   Future<GpsFix?> currentFix();
+
+  /// A continuous stream of fixes, roughly every [intervalSeconds]. On Android
+  /// this runs behind a foreground service so fixes keep arriving while the app
+  /// is backgrounded during duty. (iOS background is Phase 2.)
+  Stream<GpsFix> fixStream({required int intervalSeconds});
 }
 
 /// Default geolocator-backed source.
@@ -57,7 +63,37 @@ class GeolocatorGpsSource implements GpsSource {
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: accuracy,
       );
-      return GpsFix(
+      return _toFix(pos);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Stream<GpsFix> fixStream({required int intervalSeconds}) =>
+      Geolocator.getPositionStream(
+        locationSettings: _streamSettings(intervalSeconds),
+      ).map(_toFix);
+
+  LocationSettings _streamSettings(int intervalSeconds) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      // The foreground service (started while the app is visible via startDuty)
+      // keeps location flowing after the app is backgrounded.
+      return AndroidSettings(
+        accuracy: accuracy,
+        intervalDuration: Duration(seconds: intervalSeconds),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'On-duty location',
+          notificationText: 'Sharing your location while you are on duty.',
+          enableWakeLock: true,
+        ),
+      );
+    }
+    // iOS/other: plain foreground stream for now; background lands in Phase 2.
+    return LocationSettings(accuracy: accuracy);
+  }
+
+  static GpsFix _toFix(Position pos) => GpsFix(
         lat: pos.latitude,
         lng: pos.longitude,
         accuracyM: pos.accuracy,
@@ -67,8 +103,4 @@ class GeolocatorGpsSource implements GpsSource {
         provider: 'gps',
         recordedAt: pos.timestamp,
       );
-    } catch (_) {
-      return null;
-    }
-  }
 }

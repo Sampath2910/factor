@@ -15,6 +15,8 @@
     <!-- Location required for Wi-Fi scanning and SSID resolution on Android -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Background location for on-duty GPS tracking (field tracker, Android 10+) -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Camera and gallery -->
     <uses-permission android:name="android.permission.CAMERA" />

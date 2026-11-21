@@ -35,7 +35,7 @@ class FieldTracker {
   GpsSource _gps = const GeolocatorGpsSource();
   TrackerIdentity? _identity;
   TrackingPolicy? _policy;
-  Timer? _sampleTimer;
+  StreamSubscription<GpsFix>? _sampleSub;
   bool _initialized = false;
 
   bool get isInitialized => _initialized;
@@ -86,8 +86,8 @@ class FieldTracker {
   }
 
   void stopDuty() {
-    _sampleTimer?.cancel();
-    _sampleTimer = null;
+    _sampleSub?.cancel();
+    _sampleSub = null;
     _sync?.stop();
   }
 
@@ -115,7 +115,7 @@ class FieldTracker {
       if (!res.notModified && res.policy != null) {
         _policy = res.policy;
         await _saveCachedPolicy(_policy!);
-        if (_sampleTimer != null) _applyPolicy();
+        if (_sampleSub != null) _applyPolicy();
       }
     } catch (_) {
       // Offline / transient: keep the cached policy.
@@ -130,20 +130,16 @@ class FieldTracker {
       batchMaxIntervalSeconds: p.batchMaxIntervalSeconds,
       wifiOnly: p.wifiOnly,
     );
-    _sampleTimer?.cancel();
+    _sampleSub?.cancel();
+    _sampleSub = null;
     if (p.mode == 'interval') {
       final seconds = p.intervalSeconds <= 0 ? 5 : p.intervalSeconds;
-      _sampleTimer = Timer.periodic(
-        Duration(seconds: seconds),
-        (_) => _sampleOnce(),
-      );
+      _sampleSub = _gps.fixStream(intervalSeconds: seconds).listen(_enqueueFix);
     }
     // Later phases: distance / adaptive / continuous modes branch here.
   }
 
-  Future<void> _sampleOnce() async {
-    final fix = await _gps.currentFix();
-    if (fix == null) return;
+  Future<void> _enqueueFix(GpsFix fix) async {
     await _outbox!.enqueue(
       Breadcrumb(
         recordedAt: fix.recordedAt ?? DateTime.now(),
