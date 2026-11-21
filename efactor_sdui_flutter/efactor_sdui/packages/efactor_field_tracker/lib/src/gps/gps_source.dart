@@ -76,21 +76,34 @@ class GeolocatorGpsSource implements GpsSource {
       ).map(_toFix);
 
   LocationSettings _streamSettings(int intervalSeconds) {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      // The foreground service (started while the app is visible via startDuty)
-      // keeps location flowing after the app is backgrounded.
-      return AndroidSettings(
-        accuracy: accuracy,
-        intervalDuration: Duration(seconds: intervalSeconds),
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'On-duty location',
-          notificationText: 'Sharing your location while you are on duty.',
-          enableWakeLock: true,
-        ),
-      );
+    if (kIsWeb) return LocationSettings(accuracy: accuracy);
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        // The foreground service (started while the app is visible via
+        // startDuty) keeps location flowing after the app is backgrounded.
+        return AndroidSettings(
+          accuracy: accuracy,
+          intervalDuration: Duration(seconds: intervalSeconds),
+          foregroundNotificationConfig: const ForegroundNotificationConfig(
+            notificationTitle: 'On-duty location',
+            notificationText: 'Sharing your location while you are on duty.',
+            enableWakeLock: true,
+          ),
+        );
+      case TargetPlatform.iOS:
+        // Keeps the app alive in the background during an active duty session
+        // (blue status-bar indicator). iOS has no time interval; the field
+        // tracker gates by time. Requires UIBackgroundModes: location.
+        return AppleSettings(
+          accuracy: accuracy,
+          activityType: ActivityType.otherNavigation,
+          pauseLocationUpdatesAutomatically: false,
+          showBackgroundLocationIndicator: true,
+          allowBackgroundLocationUpdates: true,
+        );
+      default:
+        return LocationSettings(accuracy: accuracy);
     }
-    // iOS/other: plain foreground stream for now; background lands in Phase 2.
-    return LocationSettings(accuracy: accuracy);
   }
 
   static GpsFix _toFix(Position pos) => GpsFix(

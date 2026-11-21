@@ -71,7 +71,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Local network access is required to discover, connect to, and control your eFactor devices directly on your Wi-Fi network, as well as for initial setup.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Location is used by device workflows only when the app requires location-enabled device features.</string>
+	<string>Location is used to share your position while you are on duty (including in the background) and to identify nearby Wi-Fi networks for device provisioning.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Location is required to identify nearby Wi-Fi networks and provision eFactor devices.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -107,6 +107,7 @@
 	<array>
 		<string>audio</string>
 		<string>fetch</string>
+		<string>location</string>
 		<string>remote-notification</string>
 		<string>voip</string>
 	</array>

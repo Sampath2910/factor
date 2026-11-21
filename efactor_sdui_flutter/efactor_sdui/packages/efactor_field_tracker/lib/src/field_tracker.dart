@@ -36,6 +36,7 @@ class FieldTracker {
   TrackerIdentity? _identity;
   TrackingPolicy? _policy;
   StreamSubscription<GpsFix>? _sampleSub;
+  DateTime? _lastSampleAt;
   bool _initialized = false;
 
   bool get isInitialized => _initialized;
@@ -132,9 +133,20 @@ class FieldTracker {
     );
     _sampleSub?.cancel();
     _sampleSub = null;
+    _lastSampleAt = null;
     if (p.mode == 'interval') {
       final seconds = p.intervalSeconds <= 0 ? 5 : p.intervalSeconds;
-      _sampleSub = _gps.fixStream(intervalSeconds: seconds).listen(_enqueueFix);
+      // iOS streams continuously (no interval knob); gate to one fix per
+      // interval. 0.9x leaves margin so Android's on-time fixes still pass.
+      final minGap = Duration(milliseconds: seconds * 900);
+      _sampleSub = _gps.fixStream(intervalSeconds: seconds).listen((fix) {
+        final now = DateTime.now();
+        if (_lastSampleAt != null && now.difference(_lastSampleAt!) < minGap) {
+          return;
+        }
+        _lastSampleAt = now;
+        _enqueueFix(fix);
+      });
     }
     // Later phases: distance / adaptive / continuous modes branch here.
   }
