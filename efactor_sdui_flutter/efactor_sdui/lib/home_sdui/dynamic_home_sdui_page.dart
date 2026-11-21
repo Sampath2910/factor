@@ -1106,13 +1106,15 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
             appBar: _professionalSpaceFullscreen ? null : appBar,
             body: _TabSwipeDetector(
               // Swipe only while the bottom bar is shown (bottomId != null),
-              // never in Grid fullscreen, and never on a non-tab surface
-              // (activeTabIndex == -1, e.g. a pushed device-detail page). The
-              // Grid tab is included again: _TabSwipeDetector now uses a
-              // raised-slop horizontal recognizer, so card taps win the arena.
+              // never in Grid fullscreen, never on a non-tab surface
+              // (activeTabIndex == -1, e.g. a pushed device-detail page), and
+              // never on the Grid tab so interactive cards respond to single taps
+              // without horizontal drag gesture arena contention.
               enabled: !_professionalSpaceFullscreen &&
                   bottomId != null &&
-                  state.activeTabIndex != -1,
+                  state.activeTabIndex != -1 &&
+                  !state.shouldEmbedLiveGrid() &&
+                  state.activeTabIndex != 2,
               state: state,
               child: _buildShellBody(
                 context,

@@ -764,7 +764,10 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
               offstage: !_circleConnectRevealed,
               child: TickerMode(
                 enabled: _circleConnectRevealed,
-                child: ccShell,
+                child: IgnorePointer(
+                  ignoring: !_circleConnectRevealed,
+                  child: ccShell,
+                ),
               ),
             ),
           ),
@@ -774,7 +777,10 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
               offstage: !_professionalSpaceRevealed,
               child: TickerMode(
                 enabled: _professionalSpaceRevealed,
-                child: psShell,
+                child: IgnorePointer(
+                  ignoring: !_professionalSpaceRevealed,
+                  child: psShell,
+                ),
               ),
             ),
           ),
