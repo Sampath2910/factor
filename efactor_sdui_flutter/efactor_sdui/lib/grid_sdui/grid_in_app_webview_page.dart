@@ -894,6 +894,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   StreamSubscription<String>? _tokenRefreshSub;
   bool _isPopping = false;
+  // Bounds the first-tap SSO-handshake retry (see onNavigationRequest) so a
+  // server that keeps redirecting to Grid home can't loop forever; after this
+  // many retries the original exit-to-Grid behavior resumes.
+  int _gridHandshakeRetries = 0;
+  static const int _maxGridHandshakeRetries = 2;
+  // Device-confirmed first-tap bounce: on the FIRST Circle Connect open the web
+  // bundle navigates to ?app=exit one or more times during init (right after
+  // the WS registers) with no user action, bouncing back to Grid. A real
+  // logo-exit only happens after the user taps the logo (seconds later), so we
+  // suppress every app=exit within a short window after first load (see
+  // onNavigationRequest), keeping the already-loaded, WS-connected chat.
+  DateTime? _ccFirstLoadAt;
   bool _isConnectingCall = false;
   Timer? _connectingCallTimer;
   bool _routeIsCurrent = true;
@@ -1308,6 +1320,28 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               return NavigationDecision.prevent;
             }
 
+            // First-tap fix (Professional Space + Circle Connect): when the
+            // single-use grid_sso token is already spent, the re-inject above no
+            // longer applies and the server serves the login page. During the
+            // initial load the failed handshake has already set a session
+            // cookie, so retry the intended target (bounded) instead of showing
+            // login — the retry is cookie-authenticated and lands on the page.
+            // Gated on _loading so a genuine mid-session logout still shows login.
+            final targetPathLower = targetUri.path.toLowerCase();
+            final isLoginPage = targetPathLower.contains('/signin') ||
+                targetPathLower.contains('/login');
+            if (_loading &&
+                isLoginPage &&
+                _gridHandshakeRetries < _maxGridHandshakeRetries) {
+              _gridHandshakeRetries++;
+              debugPrint(
+                '[GridInAppWebView] Login page during initial load -> retry '
+                '$_gridHandshakeRetries on session cookie: ${request.url}',
+              );
+              unawaited(_controller.loadRequest(_effectiveUri));
+              return NavigationDecision.prevent;
+            }
+
             // Defensively intercept redirects between modules or to generic dashboard/home
             final targetPath = targetUri.path.toLowerCase();
             final initialPath = widget.uri.path.toLowerCase();
@@ -1322,6 +1356,22 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             // 1. Dedicated Circle Connect logo exit URL:
             // Host: efactor.tech / www.efactor.tech | Path: /index.php/grid_chat | Query: app=exit
             if (GridInAppWebViewPage.isCircleConnectExitUrl(targetUri)) {
+              // Suppress the web's init-race ?app=exit burst (see field docs):
+              // the first Circle Connect open fires app=exit one or more times
+              // within a couple of seconds of load, before any user interaction,
+              // bouncing to Grid. Suppress EVERY app=exit inside a short window
+              // after first load; a genuine logo-exit (user tap, after the
+              // window) still exits.
+              if (_isCircleConnect &&
+                  _ccFirstLoadAt != null &&
+                  DateTime.now().difference(_ccFirstLoadAt!) <
+                      const Duration(seconds: 2)) {
+                debugPrint(
+                  '[GridInAppWebView] Suppressing premature Circle Connect '
+                  'app=exit within init window: ${request.url}',
+                );
+                return NavigationDecision.prevent;
+              }
               debugPrint(
                 '[GridInAppWebView] Circle Connect logo exit requested: ${request.url}',
               );
@@ -1357,6 +1407,24 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               initialUri: widget.uri,
               pageFinished: !_loading,
             )) {
+              // First-tap fix: while the intended page is still loading, a
+              // redirect to Grid home is the server's SSO handshake (the
+              // single-use grid_sso token wasn't honoured yet), NOT a user exit.
+              // Retry the intended target — by now the session cookie is set, so
+              // the retry lands on the chat instead of bouncing to native Grid.
+              // Only treat Grid-home as a real exit once the page has finished
+              // loading (a genuine in-app navigation to Grid).
+              if (_loading &&
+                  _gridHandshakeRetries < _maxGridHandshakeRetries) {
+                _gridHandshakeRetries++;
+                debugPrint(
+                  '[GridInAppWebView] Grid redirect during initial load -> '
+                  'retry $_gridHandshakeRetries (SSO handshake, not exit): '
+                  '${request.url}',
+                );
+                unawaited(_controller.loadRequest(_effectiveUri));
+                return NavigationDecision.prevent;
+              }
               debugPrint(
                 '[GridInAppWebView] Redirecting to Grid SDUI page: ${request.url}',
               );
@@ -1450,6 +1518,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               _loading = false;
               _error = null;
             });
+            _gridHandshakeRetries = 0; // intended page loaded; reset handshake guard
+            if (_isCircleConnect) _ccFirstLoadAt ??= DateTime.now();
             IncomingCallService.instance.onCircleConnectReadinessChanged();
             _completeNavigation();
             if (GridInAppWebViewPage._pendingTargetUrl != null) {
@@ -5175,7 +5245,21 @@ Error: $error
               // timeout. Only shown for Professional Space; warm shells skip it.
               if (_coverVisible && _error == null)
                 const Positioned.fill(
-                  child: ColoredBox(color: Color(0xFF0F172A)),
+                  child: ColoredBox(
+                    color: Color(0xFF0F172A),
+                    child: Center(
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFF38BDF8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               // Full-screen animated loader removed: it ran a spinner +
               // progress bar that repainted every frame during load (hurting

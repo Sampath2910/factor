@@ -583,6 +583,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   /// page's back/exit path via onRequestHide.
   void _hideProfessionalSpace() {
     if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _professionalSpaceRevealed = false);
     _professionalSpaceReveal.value = false;
     widget.onFullscreenChanged?.call(false); // host restores app bar + bottom nav
@@ -613,6 +614,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   /// live call's camera/mic is never orphaned by an Offstage hide.
   void _hideCircleConnect() {
     if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _circleConnectRevealed = false);
     _circleConnectReveal.value = false;
     widget.onFullscreenChanged?.call(false); // host restores app bar + bottom nav

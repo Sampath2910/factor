@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1106,7 +1107,9 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
             body: _TabSwipeDetector(
               // Swipe only while the bottom bar is shown (bottomId != null),
               // never in Grid fullscreen, and never on a non-tab surface
-              // (activeTabIndex == -1, e.g. a pushed device-detail page).
+              // (activeTabIndex == -1, e.g. a pushed device-detail page). The
+              // Grid tab is included again: _TabSwipeDetector now uses a
+              // raised-slop horizontal recognizer, so card taps win the arena.
               enabled: !_professionalSpaceFullscreen &&
                   bottomId != null &&
                   state.activeTabIndex != -1,
@@ -1363,12 +1366,30 @@ class _TabSwipeDetectorState extends State<_TabSwipeDetector> {
     }
   }
 
+  // Horizontal travel (logical px) required before the swipe claims the gesture
+  // arena. Well above kTouchSlop (~18) so a card tap's micro-drift and vertical
+  // scrolls never get claimed — the child InkWell.onTap / scrollable wins — and
+  // only a deliberate sideways swipe switches tabs.
+  static const double _swipeTouchSlop = 40;
+
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
-    return GestureDetector(
+    return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
-      onHorizontalDragEnd: _handleDragEnd,
+      gestures: <Type, GestureRecognizerFactory>{
+        HorizontalDragGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<
+                HorizontalDragGestureRecognizer>(
+          () => HorizontalDragGestureRecognizer(),
+          (HorizontalDragGestureRecognizer instance) {
+            instance
+              ..onEnd = _handleDragEnd
+              ..gestureSettings =
+                  const DeviceGestureSettings(touchSlop: _swipeTouchSlop);
+          },
+        ),
+      },
       child: widget.child,
     );
   }
