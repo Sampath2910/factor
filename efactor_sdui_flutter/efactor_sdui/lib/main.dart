@@ -332,6 +332,7 @@ class _AuthenticatedHomeGateState extends State<AuthenticatedHomeGate> {
       FieldTrackerIntegration.instance.maybeStart(
         tokenProvider: () => widget.authState.accessToken ?? '',
         userId: uid,
+        tenantId: widget.authState.read('auth.tenant_id')?.toString(),
       ),
     );
 

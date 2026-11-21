@@ -46,6 +46,39 @@ void main() {
       expect(back!.version, '7');
       expect(back.intervalSeconds, 10);
     });
+
+    test('parses v2 background block and survives the cache round-trip', () {
+      final p = TrackingPolicy.fromResponse({
+        'v': '2',
+        'policy': {
+          'mode': 'interval',
+          'interval_seconds': 5,
+          'background': {
+            'enabled': true,
+            'interval_seconds': null,
+            'distance_meters': null,
+            'mode': 'interval',
+          },
+        },
+      });
+      expect(p.backgroundEnabled, true);
+      expect(p.backgroundIntervalSeconds, isNull); // null => use interval_seconds
+      expect(p.backgroundDistanceMeters, isNull);
+      expect(p.backgroundMode, 'interval');
+
+      final back = TrackingPolicy.tryDecode(p.encode())!;
+      expect(back.backgroundEnabled, true);
+      expect(back.backgroundMode, 'interval');
+    });
+
+    test('defaults background to disabled when absent (v1 response)', () {
+      final p = TrackingPolicy.fromResponse({
+        'v': '1',
+        'policy': {'mode': 'interval', 'interval_seconds': 5},
+      });
+      expect(p.backgroundEnabled, false);
+      expect(p.backgroundMode, 'same');
+    });
   });
 
   group('Breadcrumb', () {

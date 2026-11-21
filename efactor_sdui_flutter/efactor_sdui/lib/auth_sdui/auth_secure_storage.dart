@@ -30,6 +30,7 @@ class AuthSecureStorage {
   static const _emailKey = 'efactor.auth.email';
   static const _userTypeKey = 'efactor.auth.user_type';
   static const _userIdKey = 'efactor.auth.user_id';
+  static const _tenantIdKey = 'efactor.auth.tenant_id';
   static const _rememberMeKey = 'efactor.auth.remember_me';
   static const _rememberedIdentityKey = 'efactor.auth.remembered_identity';
   static const _rememberedPasswordKey = 'efactor.auth.remembered_password';
@@ -42,6 +43,7 @@ class AuthSecureStorage {
     String? email,
     String? userType,
     String? userId,
+    String? tenantId,
   }) async {
     try {
       await Future.wait([
@@ -53,6 +55,8 @@ class AuthSecureStorage {
         if (email != null) _storage.write(key: _emailKey, value: email),
         if (userType != null) _storage.write(key: _userTypeKey, value: userType),
         if (userId != null) _storage.write(key: _userIdKey, value: userId),
+        if (tenantId != null)
+          _storage.write(key: _tenantIdKey, value: tenantId),
       ]);
     } catch (e) {
       debugPrint('[AUTH][SECURE_STORAGE] Error saving session: $e');
@@ -68,6 +72,9 @@ class AuthSecureStorage {
         if (email != null) await _storage.write(key: _emailKey, value: email);
         if (userType != null) await _storage.write(key: _userTypeKey, value: userType);
         if (userId != null) await _storage.write(key: _userIdKey, value: userId);
+        if (tenantId != null) {
+          await _storage.write(key: _tenantIdKey, value: tenantId);
+        }
       } catch (retryError) {
         debugPrint('[AUTH][SECURE_STORAGE] Retry write session failed: $retryError');
       }
@@ -84,6 +91,7 @@ class AuthSecureStorage {
         _safeRead(_emailKey),
         _safeRead(_userTypeKey),
         _safeRead(_userIdKey),
+        _safeRead(_tenantIdKey),
       ]);
 
       return <String, String?>{
@@ -94,6 +102,7 @@ class AuthSecureStorage {
         'email': values[4],
         'userType': values[5],
         'userId': values[6],
+        'tenantId': values[7],
       };
     } catch (e) {
       debugPrint('[AUTH][SECURE_STORAGE] Error reading session: $e');
@@ -108,6 +117,7 @@ class AuthSecureStorage {
         'email': null,
         'userType': null,
         'userId': null,
+        'tenantId': null,
       };
     }
   }
@@ -135,6 +145,7 @@ class AuthSecureStorage {
         _safeDelete(_emailKey),
         _safeDelete(_userTypeKey),
         _safeDelete(_userIdKey),
+        _safeDelete(_tenantIdKey),
       ]);
     } catch (e) {
       debugPrint('[AUTH][SECURE_STORAGE] Error clearing session: $e');

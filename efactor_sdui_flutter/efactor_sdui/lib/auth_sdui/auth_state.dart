@@ -248,6 +248,9 @@ class AuthState extends ChangeNotifier {
       _write(_state, 'auth.userId', effectiveStored['userId']);
       _write(_state, 'auth.user_id', effectiveStored['userId']);
 
+      _write(_state, 'auth.tenantId', effectiveStored['tenantId']);
+      _write(_state, 'auth.tenant_id', effectiveStored['tenantId']);
+
       _write(_state, 'auth.isAuthenticated', true);
 
       notifyListeners();
@@ -308,6 +311,7 @@ class AuthState extends ChangeNotifier {
         email: stored['email'],
         userType: stored['userType'],
         userId: stored['userId'],
+        tenantId: stored['tenantId'],
       );
       debugPrint('[AuthState] refresh: new access token obtained');
       return newAccess;
@@ -1018,6 +1022,10 @@ class AuthState extends ChangeNotifier {
     );
     _write(_state, 'auth.userId', userId);
 
+    final tenantId = _nonEmpty(resolved['tenant_id'] ?? resolved['tenantId']);
+    _write(_state, 'auth.tenantId', tenantId);
+    _write(_state, 'auth.tenant_id', tenantId);
+
     // App session policy: once authentication succeeds, persist the validated
     // server-issued session until an explicit logout/session invalidation.
     // The schema's Remember Me field may still control its own UI state, but it
@@ -1032,6 +1040,7 @@ class AuthState extends ChangeNotifier {
       email: resolved['email'],
       userType: resolved['user_type'] ?? resolved['userType'],
       userId: userId,
+      tenantId: tenantId,
     );
   }
 
@@ -1083,6 +1092,10 @@ class AuthState extends ChangeNotifier {
       );
     }
 
+    final tenantId = _nonEmpty(
+      _readDynamic(_lastResponseBody, path('tenantIdPath', 'tenant_id')),
+    );
+
     // App session policy: successful authentication is persisted regardless of
     // whether the optional Remember Me checkbox was selected. The user remains
     // signed in across normal app restarts until logout or a genuine server-side
@@ -1095,6 +1108,7 @@ class AuthState extends ChangeNotifier {
       email: email,
       userType: userType,
       userId: userId,
+      tenantId: tenantId,
     );
 
     _write(_state, 'auth.accessToken', accessToken);
@@ -1110,6 +1124,9 @@ class AuthState extends ChangeNotifier {
     _write(_state, 'auth.userType', userType);
 
     _write(_state, 'auth.userId', userId);
+
+    _write(_state, 'auth.tenantId', tenantId);
+    _write(_state, 'auth.tenant_id', tenantId);
 
     debugPrint('[AUTH][SESSION] authenticated userId=$userId');
 

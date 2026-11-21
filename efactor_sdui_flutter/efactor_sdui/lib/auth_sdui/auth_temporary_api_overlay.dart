@@ -87,6 +87,7 @@ class AuthTemporaryApiOverlay {
     auth.putIfAbsent('email', () => null);
     auth.putIfAbsent('userType', () => auth['user_type']);
     auth.putIfAbsent('userId', () => auth['user_id']);
+    auth.putIfAbsent('tenantId', () => auth['tenant_id']);
     auth.putIfAbsent('notice', () => null);
 
     final defaults = _writableMap(schema['app']?['defaults']) ??

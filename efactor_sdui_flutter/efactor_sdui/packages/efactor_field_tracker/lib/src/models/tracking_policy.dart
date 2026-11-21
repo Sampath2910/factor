@@ -16,6 +16,10 @@ class TrackingPolicy {
     this.wifiOnly = false,
     this.checkInOutEnabled = true,
     this.retentionDays = 90,
+    this.backgroundEnabled = false,
+    this.backgroundIntervalSeconds,
+    this.backgroundDistanceMeters,
+    this.backgroundMode = 'same',
   });
 
   /// Opaque version string (`v`) used for cheap 304 refresh. Backend sends it
@@ -35,6 +39,20 @@ class TrackingPolicy {
   final bool checkInOutEnabled;
   final int retentionDays;
 
+  /// Server background/power policy (v2+). Config only until the native
+  /// background engine (Android foreground service / iOS background location)
+  /// ships — parsed now so no later refetch/migration is needed.
+  final bool backgroundEnabled;
+
+  /// null means "use the top-level [intervalSeconds]".
+  final int? backgroundIntervalSeconds;
+
+  /// For distance mode; null when unused.
+  final int? backgroundDistanceMeters;
+
+  /// interval | distance | same.
+  final String backgroundMode;
+
   static int _asInt(dynamic v, int fallback) =>
       v is num ? v.toInt() : (int.tryParse(v?.toString() ?? '') ?? fallback);
 
@@ -46,6 +64,8 @@ class TrackingPolicy {
     final upload = (policy['upload'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final events = (policy['events'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final background = (policy['background'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
 
     return TrackingPolicy(
@@ -60,8 +80,15 @@ class TrackingPolicy {
       wifiOnly: upload['wifi_only'] == true,
       checkInOutEnabled: events['check_in_out_enabled'] != false,
       retentionDays: _asInt(policy['retention_days'], 90),
+      backgroundEnabled: background['enabled'] == true,
+      backgroundIntervalSeconds: _asIntOrNull(background['interval_seconds']),
+      backgroundDistanceMeters: _asIntOrNull(background['distance_meters']),
+      backgroundMode: background['mode']?.toString() ?? 'same',
     );
   }
+
+  static int? _asIntOrNull(dynamic v) =>
+      v == null ? null : (v is num ? v.toInt() : int.tryParse(v.toString()));
 
   /// Serialization for the on-device policy cache (so a 304 keeps the last one).
   Map<String, dynamic> toCacheJson() => <String, dynamic>{
@@ -79,6 +106,12 @@ class TrackingPolicy {
           },
           'events': <String, dynamic>{
             'check_in_out_enabled': checkInOutEnabled,
+          },
+          'background': <String, dynamic>{
+            'enabled': backgroundEnabled,
+            'interval_seconds': backgroundIntervalSeconds,
+            'distance_meters': backgroundDistanceMeters,
+            'mode': backgroundMode,
           },
           'retention_days': retentionDays,
         },

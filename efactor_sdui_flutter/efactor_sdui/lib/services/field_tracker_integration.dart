@@ -18,8 +18,9 @@ class FieldTrackerIntegration {
   /// Master switch — OFF unless explicitly enabled at build/run time.
   static const bool enabled = bool.fromEnvironment('ENABLE_FIELD_TRACKER');
 
-  /// Phase 0 seed tenant until the backend returns `tenant_id` at login.
-  static const String tenantId = String.fromEnvironment(
+  /// Fallback tenant for old installs whose login didn't carry `tenant_id`
+  /// (overridable at build time). The real tenant now comes from login.
+  static const String fallbackTenantId = String.fromEnvironment(
     'FIELD_TRACKER_TENANT',
     defaultValue: 'tenant_demo_001',
   );
@@ -31,22 +32,25 @@ class FieldTrackerIntegration {
   Future<void> maybeStart({
     required String Function() tokenProvider,
     required String userId,
+    String? tenantId,
   }) async {
     if (!enabled || userId.isEmpty) return;
+    final tenant =
+        (tenantId != null && tenantId.isNotEmpty) ? tenantId : fallbackTenantId;
     try {
       if (!FieldTracker.instance.isInitialized) {
         await FieldTracker.instance.initialize(
           tokenProvider: tokenProvider,
-          tenantId: tenantId,
+          tenantId: tenant,
           userId: userId,
         );
       } else {
-        FieldTracker.instance.updateIdentity(userId: userId);
+        FieldTracker.instance.updateIdentity(tenantId: tenant, userId: userId);
       }
       final ok = await FieldTracker.instance.startDuty();
       _started = ok;
       debugPrint(
-        '[FieldTracker] startDuty=$ok tenant=$tenantId user=$userId '
+        '[FieldTracker] startDuty=$ok tenant=$tenant user=$userId '
         'policy=${FieldTracker.instance.currentPolicy}',
       );
     } catch (e) {
