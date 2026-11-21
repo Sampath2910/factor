@@ -123,6 +123,10 @@ void main() {
       ),
     );
     await tester.pump();
+    // At rest the cube fast-paths a single flat face (no 3D Stack); the
+    // Clip.none perspective Stack only exists mid-turn. 2 faces -> 8000ms
+    // segment, hold 0.84 -> transition starts at 6720ms; 7360ms is mid-flip.
+    await tester.pump(const Duration(milliseconds: 7360));
 
     // Front face is rendered cleanly
     expect(find.text('Face Zero'), findsOneWidget);
@@ -226,6 +230,9 @@ void main() {
       ),
     );
     await tester.pump();
+    // Perspective transforms only exist mid-rotation; at rest the cube
+    // fast-paths a flat face. 7360ms = mid-flip for a 2-face cube.
+    await tester.pump(const Duration(milliseconds: 7360));
 
     final transforms = tester.widgetList<Transform>(find.byType(Transform));
     final cubeTransforms =
@@ -597,6 +604,9 @@ void main() {
       ),
     );
     await tester.pump();
+    // Advance into the rotation transition so the 3D perspective Stack exists
+    // (at rest the cube fast-paths a flat face). 7360ms = mid-flip, 2 faces.
+    await tester.pump(const Duration(milliseconds: 7360));
 
     // The cube Stack must NOT be wrapped in a RepaintBoundary: a compositing
     // boundary makes Impeller clip the 3D cube in 2D (shrunk, gaps). The clip
@@ -627,6 +637,8 @@ void main() {
       ),
     );
     await tester.pump();
+    // Advance the freshly-rebuilt iOS tree into the rotation transition.
+    await tester.pump(const Duration(milliseconds: 7360));
 
     // iOS is fully unified with Android: the IDENTICAL perspective 3D cube,
     // clipped directly to the slot with NO compositing boundary. On iOS

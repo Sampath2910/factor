@@ -92,7 +92,11 @@ void main() {
       final dir =
           await CircleConnectFileService.instance.getDocumentsDirectory();
       expect(dir.existsSync(), isTrue);
-      expect(dir.path.endsWith('Media/Documents'), isTrue);
+      // The Media/Documents suffix is Android-only; iOS/other (incl. the host
+      // the test runs on) returns the bare app documents directory by design.
+      if (Platform.isAndroid) {
+        expect(dir.path.endsWith('Media/Documents'), isTrue);
+      }
     });
 
     test('getCachedFile returns false when file has not been downloaded',

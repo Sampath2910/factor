@@ -37,7 +37,8 @@ void main() {
         : raw;
   });
 
-  test('AuthSchemaRepository.load fetches live schema first when online', () async {
+  test('AuthSchemaRepository.load(forceRefresh) fetches live schema when online',
+      () async {
     final mockClient = MockClient((request) async {
       if (request.url.path.contains('api_auth_schema.php')) {
         return http.Response(
@@ -50,7 +51,10 @@ void main() {
     });
 
     final repo = AuthSchemaRepository(client: mockClient);
-    final schema = await repo.load();
+    // load() is cache/asset-first by design (instant startup); a live
+    // authoritative fetch is forceRefresh. Without it, the bundled asset wins
+    // and cacheHit is true regardless of network.
+    final schema = await repo.load(forceRefresh: true);
 
     expect(schema['revision'], 42);
     expect(schema['_clientAuthSchemaCacheHit'], false);
