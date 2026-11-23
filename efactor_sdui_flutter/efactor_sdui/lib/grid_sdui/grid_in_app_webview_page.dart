@@ -50,6 +50,7 @@ class GridInAppWebViewPage extends StatefulWidget {
     this.userId,
     this.onRequestHide,
     this.revealSignal,
+    this.onChromeVisibilityChanged,
   });
 
   final Uri uri;
@@ -57,6 +58,15 @@ class GridInAppWebViewPage extends StatefulWidget {
   final bool showAppBar;
   final String? accessToken;
   final int? userId;
+
+  /// Driven by the keep-alive host: the web session can time out (~5 min) and
+  /// the server then redirects this webview to the Main Hub sign-in page with
+  /// no exit signal, which would otherwise leave the host chrome (app bar +
+  /// bottom nav) hidden behind a login page. Fires `true` to restore the host
+  /// chrome while the sign-in page is shown, and `false` once the web app
+  /// navigates back into Professional Space / Circle Connect. Null for normal
+  /// route-pushed pages, which own their own chrome.
+  final ValueChanged<bool>? onChromeVisibilityChanged;
 
   /// When set, this page is hosted by a persistent keep-alive host (the Grid Hub
   /// for Professional Space) rather than pushed as its own route. Exiting then
@@ -205,6 +215,20 @@ class GridInAppWebViewPage extends StatefulWidget {
         uri.queryParameters['action'] == 'exit' ||
         path.endsWith('/exit') ||
         path.endsWith('/exit/');
+  }
+
+  /// Main Hub sign-in page the server redirects to when the web session times
+  /// out (~5 min). Matches `/signin` or `/login` (with or without the
+  /// `/index.php` prefix or a `.php` suffix). The web app emits no exit signal
+  /// on timeout, so the host uses this to restore its chrome while the sign-in
+  /// page is shown; a successful re-login redirects back to a `/grid` URL which
+  /// re-hides the chrome.
+  static bool isMainHubSignInUrl(Uri uri) {
+    final path = uri.path.toLowerCase();
+    return path.contains('/signin') ||
+        path.contains('/login') ||
+        path.endsWith('signin.php') ||
+        path.endsWith('login.php');
   }
 
   static bool isGridRedirectUrl(
@@ -1465,6 +1489,18 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
                 '[GridInAppWebView] Professional Space exit intercepted via onUrlChange: $url',
               );
               _safeExitToGrid();
+            }
+
+            // Session timeout: the server redirects us to the Main Hub sign-in
+            // page with no exit signal. Restore the host chrome so the user is
+            // not stranded on a login page with no bottom nav; re-hide it once
+            // the web app navigates back into its own surface. Only the shell
+            // that is currently revealed may touch host chrome.
+            if (widget.onChromeVisibilityChanged != null &&
+                (widget.revealSignal?.value ?? true)) {
+              widget.onChromeVisibilityChanged!(
+                GridInAppWebViewPage.isMainHubSignInUrl(targetUri),
+              );
             }
           },
           onPageStarted: (url) {

@@ -125,18 +125,13 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
         );
     final peeked = _repository.peekMemory();
     if (peeked != null) {
-      _loadingThemeState = GridSduiState(
-        peeked,
-        platformBrightness:
-            WidgetsBinding.instance.platformDispatcher.platformBrightness,
-      );
+      _applySchema(peeked, forceRebuild: false, fromInitState: true);
+      _loading = false;
     }
     _subscribeToSchemaInvalidations();
     if (widget.enableAutoRefresh) {
       _startAutoRefreshTimer();
     }
-    // Network-first on open: fetch live get_grid so layout, theme, avatar,
-    // QR, and Updates are fresh, with disk/asset used only for offline fallback.
     _load(forceRefresh: true, fromInitState: true);
   }
 
@@ -311,19 +306,11 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   }) async {
     final generationOk = mounted;
 
-    if (_state == null && _loadingThemeState == null) {
+    if (_state == null) {
       unawaited(
         _repository.readFromCache().then((cached) {
           if (!mounted || _state != null || cached == null) return;
-          final brightness =
-              WidgetsBinding.instance.platformDispatcher.platformBrightness;
-          setState(() {
-            _loadingThemeState?.dispose();
-            _loadingThemeState = GridSduiState(
-              cached,
-              platformBrightness: brightness,
-            );
-          });
+          _applySchema(cached, forceRebuild: false);
         }),
       );
     }
@@ -425,24 +412,35 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     }
   }
 
-  void _applySchema(Map<String, dynamic> schema, {bool forceRebuild = false}) {
+  void _applySchema(
+    Map<String, dynamic> schema, {
+    bool forceRebuild = false,
+    bool fromInitState = false,
+  }) {
     final fingerprint = schemaFingerprint(schema);
     final nextRev = GridSchemaRepository.extractSchemaRev(schema);
     final revChanged = nextRev != null && nextRev != _activeSchemaRev;
-    final platformBrightness = mounted
-        ? (MediaQuery.maybePlatformBrightnessOf(context) ??
-            WidgetsBinding.instance.platformDispatcher.platformBrightness)
-        : WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final platformBrightness = fromInitState
+        ? WidgetsBinding.instance.platformDispatcher.platformBrightness
+        : (mounted
+            ? (MediaQuery.maybePlatformBrightnessOf(context) ??
+                WidgetsBinding.instance.platformDispatcher.platformBrightness)
+            : WidgetsBinding.instance.platformDispatcher.platformBrightness);
 
     if (!forceRebuild &&
         !revChanged &&
         _state != null &&
         fingerprint == _activeSchemaFingerprint) {
       _state!.updatePlatformBrightness(platformBrightness, notify: false);
-      setState(() {
+      if (fromInitState) {
         _loading = false;
         _error = null;
-      });
+      } else if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = null;
+        });
+      }
       return;
     }
     _activeSchemaFingerprint = fingerprint;
@@ -457,12 +455,24 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     _state?.dispose();
     _loadingThemeState?.dispose();
     _loadingThemeState = null;
-    setState(() {
+    if (fromInitState) {
       _state = next;
       _renderer = GridSduiRenderer(next);
       _loading = false;
       _error = null;
-    });
+    } else if (mounted) {
+      setState(() {
+        _state = next;
+        _renderer = GridSduiRenderer(next);
+        _loading = false;
+        _error = null;
+      });
+    } else {
+      _state = next;
+      _renderer = GridSduiRenderer(next);
+      _loading = false;
+      _error = null;
+    }
     unawaited(SduiNetworkImageCache.prefetchSchemaImages(schema));
   }
 
@@ -573,6 +583,10 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       userId: widget.userId,
       onRequestHide: _hideProfessionalSpace,
       revealSignal: _professionalSpaceReveal,
+      // Session timeout shows the sign-in page: restore chrome (bars) while it
+      // is up, re-hide when the web app returns to its own surface.
+      onChromeVisibilityChanged: (showChrome) =>
+          widget.onFullscreenChanged?.call(!showChrome),
     );
     setState(() => _professionalSpaceRevealed = true);
     _professionalSpaceReveal.value = true;
@@ -602,6 +616,10 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       userId: widget.userId,
       onRequestHide: _hideCircleConnect,
       revealSignal: _circleConnectReveal,
+      // Session timeout shows the sign-in page: restore chrome (bars) while it
+      // is up, re-hide when the web app returns to its own surface.
+      onChromeVisibilityChanged: (showChrome) =>
+          widget.onFullscreenChanged?.call(!showChrome),
     );
     setState(() => _circleConnectRevealed = true);
     _circleConnectReveal.value = true;

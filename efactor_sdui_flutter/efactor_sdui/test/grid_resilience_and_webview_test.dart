@@ -616,6 +616,51 @@ void main() {
     });
 
     test(
+        'isMainHubSignInUrl matches session-timeout sign-in redirects, not grid pages',
+        () {
+      // Server redirect on ~5-min session timeout (carries ?redirect=<grid>).
+      expect(
+        GridInAppWebViewPage.isMainHubSignInUrl(
+          Uri.parse(
+              'https://efactor.tech/index.php/signin?redirect=%2Findex.php%2Fgrid'),
+        ),
+        isTrue,
+        reason: 'index.php/signin timeout redirect must restore chrome',
+      );
+      expect(
+        GridInAppWebViewPage.isMainHubSignInUrl(
+          Uri.parse('https://efactor.tech/signin'),
+        ),
+        isTrue,
+        reason: 'plain /signin must match',
+      );
+      expect(
+        GridInAppWebViewPage.isMainHubSignInUrl(
+          Uri.parse('https://efactor.tech/login.php'),
+        ),
+        isTrue,
+        reason: 'login.php must match',
+      );
+
+      // Normal in-surface pages must NOT be treated as sign-in (chrome stays
+      // hidden while inside Professional Space / Circle Connect).
+      expect(
+        GridInAppWebViewPage.isMainHubSignInUrl(
+          Uri.parse('https://efactor.tech/index.php/grid'),
+        ),
+        isFalse,
+        reason: 'Professional Space feed must NOT restore chrome',
+      );
+      expect(
+        GridInAppWebViewPage.isMainHubSignInUrl(
+          Uri.parse('https://efactor.tech/index.php/grid_chat'),
+        ),
+        isFalse,
+        reason: 'Circle Connect must NOT restore chrome',
+      );
+    });
+
+    test(
         'isProfessionalSpaceRootUrl accurately identifies root feed vs subpages',
         () {
       // Root paths:
