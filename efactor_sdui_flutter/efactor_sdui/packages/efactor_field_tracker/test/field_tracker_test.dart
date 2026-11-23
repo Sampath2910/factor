@@ -81,6 +81,70 @@ void main() {
     });
   });
 
+  group('resolveSampling (Phase 5 policy.background)', () {
+    TrackingPolicy policy(Map<String, dynamic> p) =>
+        TrackingPolicy.fromResponse({'v': '2', 'policy': p});
+
+    test('foreground always follows top-level interval', () {
+      final p = policy({'mode': 'interval', 'interval_seconds': 5});
+      expect(
+        resolveSampling(p, isForeground: true),
+        const SamplingConfig(intervalSeconds: 5),
+      );
+    });
+
+    test('backgrounded + background disabled => do not sample', () {
+      final p = policy({
+        'interval_seconds': 5,
+        'background': {'enabled': false},
+      });
+      expect(resolveSampling(p, isForeground: false), isNull);
+    });
+
+    test('backgrounded interval, null interval falls back to top-level', () {
+      final p = policy({
+        'interval_seconds': 5,
+        'background': {
+          'enabled': true,
+          'mode': 'interval',
+          'interval_seconds': null,
+        },
+      });
+      expect(
+        resolveSampling(p, isForeground: false),
+        const SamplingConfig(intervalSeconds: 5),
+      );
+    });
+
+    test('backgrounded distance mode uses distance_meters', () {
+      final p = policy({
+        'interval_seconds': 5,
+        'background': {
+          'enabled': true,
+          'mode': 'distance',
+          'interval_seconds': 30,
+          'distance_meters': 50,
+        },
+      });
+      expect(
+        resolveSampling(p, isForeground: false),
+        const SamplingConfig(intervalSeconds: 30, distanceMeters: 50),
+      );
+    });
+
+    test('backgrounded mode "same" reuses the top-level mode (interval)', () {
+      final p = policy({
+        'mode': 'interval',
+        'interval_seconds': 5,
+        'background': {'enabled': true, 'mode': 'same', 'interval_seconds': 20},
+      });
+      expect(
+        resolveSampling(p, isForeground: false),
+        const SamplingConfig(intervalSeconds: 20),
+      );
+    });
+  });
+
   group('Breadcrumb', () {
     test('toJson matches the wire shape and uses UTC Z', () {
       final b = Breadcrumb(

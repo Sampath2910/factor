@@ -34,10 +34,12 @@ abstract interface class GpsSource {
   /// A single current fix, or null if unavailable.
   Future<GpsFix?> currentFix();
 
-  /// A continuous stream of fixes, roughly every [intervalSeconds]. On Android
-  /// this runs behind a foreground service so fixes keep arriving while the app
-  /// is backgrounded during duty. (iOS background is Phase 2.)
-  Stream<GpsFix> fixStream({required int intervalSeconds});
+  /// A continuous stream of fixes. In interval mode ([distanceMeters] null) it
+  /// emits roughly every [intervalSeconds]; in distance mode it emits once the
+  /// device moves [distanceMeters]. On Android this runs behind a foreground
+  /// service and on iOS with background updates, so fixes keep arriving while
+  /// the app is backgrounded during duty.
+  Stream<GpsFix> fixStream({required int intervalSeconds, int? distanceMeters});
 }
 
 /// Default geolocator-backed source.
@@ -70,19 +72,23 @@ class GeolocatorGpsSource implements GpsSource {
   }
 
   @override
-  Stream<GpsFix> fixStream({required int intervalSeconds}) =>
+  Stream<GpsFix> fixStream({required int intervalSeconds, int? distanceMeters}) =>
       Geolocator.getPositionStream(
-        locationSettings: _streamSettings(intervalSeconds),
+        locationSettings: _streamSettings(intervalSeconds, distanceMeters),
       ).map(_toFix);
 
-  LocationSettings _streamSettings(int intervalSeconds) {
-    if (kIsWeb) return LocationSettings(accuracy: accuracy);
+  LocationSettings _streamSettings(int intervalSeconds, int? distanceMeters) {
+    final distance = distanceMeters ?? 0; // 0 = time/continuous (interval mode)
+    if (kIsWeb) {
+      return LocationSettings(accuracy: accuracy, distanceFilter: distance);
+    }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         // The foreground service (started while the app is visible via
         // startDuty) keeps location flowing after the app is backgrounded.
         return AndroidSettings(
           accuracy: accuracy,
+          distanceFilter: distance,
           intervalDuration: Duration(seconds: intervalSeconds),
           foregroundNotificationConfig: const ForegroundNotificationConfig(
             notificationTitle: 'On-duty location',
@@ -92,17 +98,19 @@ class GeolocatorGpsSource implements GpsSource {
         );
       case TargetPlatform.iOS:
         // Keeps the app alive in the background during an active duty session
-        // (blue status-bar indicator). iOS has no time interval; the field
-        // tracker gates by time. Requires UIBackgroundModes: location.
+        // (blue status-bar indicator). iOS has no time interval; in interval
+        // mode the field tracker gates by time. Requires UIBackgroundModes:
+        // location.
         return AppleSettings(
           accuracy: accuracy,
           activityType: ActivityType.otherNavigation,
+          distanceFilter: distance,
           pauseLocationUpdatesAutomatically: false,
           showBackgroundLocationIndicator: true,
           allowBackgroundLocationUpdates: true,
         );
       default:
-        return LocationSettings(accuracy: accuracy);
+        return LocationSettings(accuracy: accuracy, distanceFilter: distance);
     }
   }
 

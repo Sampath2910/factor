@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/track_api_client.dart';
@@ -23,7 +24,53 @@ import 'sync/sync_dispatcher.dart';
 /// );
 /// await FieldTracker.instance.startDuty();
 /// ```
-class FieldTracker {
+/// The GPS sampling the engine should run right now. `null` means "do not
+/// sample" (e.g. background tracking disabled while the app is backgrounded).
+class SamplingConfig {
+  const SamplingConfig({required this.intervalSeconds, this.distanceMeters});
+
+  final int intervalSeconds;
+
+  /// Non-null => distance mode (emit every N metres; no time gate).
+  final int? distanceMeters;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SamplingConfig &&
+      other.intervalSeconds == intervalSeconds &&
+      other.distanceMeters == distanceMeters;
+
+  @override
+  int get hashCode => Object.hash(intervalSeconds, distanceMeters);
+
+  @override
+  String toString() =>
+      'SamplingConfig(interval=${intervalSeconds}s, distance=$distanceMeters)';
+}
+
+/// Derives the effective sampling from the policy and app state. Foreground
+/// follows the top-level policy; background follows `policy.background`
+/// (Phase 5). Pure + exported so it is unit-testable.
+SamplingConfig? resolveSampling(
+  TrackingPolicy p, {
+  required bool isForeground,
+}) {
+  int clamp(int s) => s <= 0 ? 5 : s;
+  if (isForeground) {
+    // Phase 0 foreground policy is interval-only.
+    return SamplingConfig(intervalSeconds: clamp(p.intervalSeconds));
+  }
+  if (!p.backgroundEnabled) return null; // honour background on/off
+  final mode = p.backgroundMode == 'same' ? p.mode : p.backgroundMode;
+  final interval = clamp(p.backgroundIntervalSeconds ?? p.intervalSeconds);
+  final distance = p.backgroundDistanceMeters;
+  if (mode == 'distance' && distance != null && distance > 0) {
+    return SamplingConfig(intervalSeconds: interval, distanceMeters: distance);
+  }
+  return SamplingConfig(intervalSeconds: interval);
+}
+
+class FieldTracker with WidgetsBindingObserver {
   FieldTracker._();
   static final FieldTracker instance = FieldTracker._();
 
@@ -38,6 +85,8 @@ class FieldTracker {
   StreamSubscription<GpsFix>? _sampleSub;
   DateTime? _lastSampleAt;
   bool _initialized = false;
+  bool _onDuty = false;
+  bool _isForeground = true;
 
   bool get isInitialized => _initialized;
   TrackingPolicy? get currentPolicy => _policy;
@@ -80,6 +129,8 @@ class FieldTracker {
     await refreshPolicy();
     final available = await _gps.ensureAvailable();
     if (!available) return false;
+    _onDuty = true;
+    WidgetsBinding.instance.addObserver(this);
     _applyPolicy();
     _sync!.start();
     unawaited(_sync!.flush());
@@ -87,9 +138,22 @@ class FieldTracker {
   }
 
   void stopDuty() {
+    _onDuty = false;
+    WidgetsBinding.instance.removeObserver(this);
     _sampleSub?.cancel();
     _sampleSub = null;
+    _lastSampleAt = null;
     _sync?.stop();
+  }
+
+  /// Foreground/background transitions re-derive the sampling (e.g. switch to
+  /// the background cadence, or pause entirely if background is disabled).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final fg = state == AppLifecycleState.resumed;
+    if (fg == _isForeground) return;
+    _isForeground = fg;
+    if (_onDuty) _applyPolicy();
   }
 
   /// Updates the tenant/user without reinitializing. Use when the backend later
@@ -116,7 +180,7 @@ class FieldTracker {
       if (!res.notModified && res.policy != null) {
         _policy = res.policy;
         await _saveCachedPolicy(_policy!);
-        if (_sampleSub != null) _applyPolicy();
+        if (_onDuty) _applyPolicy();
       }
     } catch (_) {
       // Offline / transient: keep the cached policy.
@@ -134,21 +198,29 @@ class FieldTracker {
     _sampleSub?.cancel();
     _sampleSub = null;
     _lastSampleAt = null;
-    if (p.mode == 'interval') {
-      final seconds = p.intervalSeconds <= 0 ? 5 : p.intervalSeconds;
-      // iOS streams continuously (no interval knob); gate to one fix per
-      // interval. 0.9x leaves margin so Android's on-time fixes still pass.
-      final minGap = Duration(milliseconds: seconds * 900);
-      _sampleSub = _gps.fixStream(intervalSeconds: seconds).listen((fix) {
+
+    final cfg = resolveSampling(p, isForeground: _isForeground);
+    if (cfg == null) return; // background tracking disabled while backgrounded
+
+    // Interval mode: iOS streams continuously (no interval knob), so gate to
+    // one fix per interval (0.9x margin so Android's on-time fixes still pass).
+    // Distance mode: take every fix the OS emits (already distance-filtered).
+    final minGap = Duration(milliseconds: cfg.intervalSeconds * 900);
+    _sampleSub = _gps
+        .fixStream(
+          intervalSeconds: cfg.intervalSeconds,
+          distanceMeters: cfg.distanceMeters,
+        )
+        .listen((fix) {
+      if (cfg.distanceMeters == null) {
         final now = DateTime.now();
         if (_lastSampleAt != null && now.difference(_lastSampleAt!) < minGap) {
           return;
         }
         _lastSampleAt = now;
-        _enqueueFix(fix);
-      });
-    }
-    // Later phases: distance / adaptive / continuous modes branch here.
+      }
+      _enqueueFix(fix);
+    });
   }
 
   Future<void> _enqueueFix(GpsFix fix) async {
