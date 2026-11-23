@@ -169,6 +169,23 @@ class FieldTracker with WidgetsBindingObserver {
     );
   }
 
+  /// Resolves the real `tenant_id` from the backend (`GET /me`) and applies it,
+  /// for old installs whose restored session carried no tenant_id. No-op on
+  /// failure (keeps the current tenant). Returns the resolved id, or null.
+  Future<String?> backfillTenantId() async {
+    _assertReady();
+    try {
+      final resolved =
+          await _api!.fetchResolvedTenantId(appId: _identity!.appId);
+      if (resolved != null && resolved.isNotEmpty) {
+        updateIdentity(tenantId: resolved);
+      }
+      return resolved;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Pulls the effective policy (304 → keep cached) and applies any change.
   Future<void> refreshPolicy() async {
     _assertReady();

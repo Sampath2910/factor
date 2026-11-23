@@ -41,7 +41,11 @@ class TrackerIdentityStore {
 
   final String appId;
 
-  static const String _kDeviceId = 'efactor.field_tracker.device_id';
+  /// SharedPreferences key for the stable per-install device id. Exposed so the
+  /// push layer can read it from a background isolate (where FieldTracker is not
+  /// initialized) to apply the FCM `device_id` targeting filter.
+  static const String deviceIdPrefsKey = 'efactor.field_tracker.device_id';
+  static const String _kDeviceId = deviceIdPrefsKey;
 
   Future<String> ensureDeviceId() async {
     final prefs = await SharedPreferences.getInstance();

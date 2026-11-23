@@ -113,6 +113,25 @@ class TrackApiClient {
     return res.statusCode >= 200 && res.statusCode < 300;
   }
 
+  /// GET /me — resolves the signed-in user's real `tenant_id` from the Bearer
+  /// token. Used to backfill old installs that restored a session without a
+  /// stored tenant_id. Returns null when absent/unresolved.
+  Future<String?> fetchResolvedTenantId({required String appId}) async {
+    final uri = Uri.parse('$baseUrl/me')
+        .replace(queryParameters: <String, String>{'app_id': appId});
+    final res = await _client
+        .get(uri, headers: _headers(json: false))
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map && decoded['tenant_id'] != null) {
+        final t = decoded['tenant_id'].toString().trim();
+        return t.isEmpty ? null : t;
+      }
+    }
+    return null;
+  }
+
   /// GET /live — last-known positions. Omit [userId] for the whole tenant;
   /// pass it for a single user. Returns the decoded JSON as-is (the backend has
   /// not yet published a typed response shape — map to models once it does).

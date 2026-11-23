@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'call_lifecycle_tracker.dart';
 import 'circle_connect_device_key_store.dart';
+import 'field_tracker_integration.dart';
 import 'grid_chat_message_notification.dart';
 import 'grid_unread_counts_service.dart';
 import 'incoming_call_service.dart';
@@ -530,6 +531,14 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   final data = Map<String, dynamic>.from(message.data);
   final type = (data['type'] ?? data['event'] ?? '').toString().toUpperCase();
+
+  // Silent GPS field-tracking start/stop command. Queued to disk here (the
+  // background isolate cannot drive the main-isolate tracker); applied on next
+  // resume. Never post a notification.
+  if (type == 'FIELD_TRACKING') {
+    await FieldTrackerIntegration.instance.handlePush(data, foreground: false);
+    return;
+  }
 
   // Multi-device tray sync (spec §4): a silent NOTIFICATION_CLEAR means another
   // of the user's devices handled this conversation. Cancel our notification and
@@ -1859,6 +1868,13 @@ Data: $data
 Notification: ${message.notification?.title} | ${message.notification?.body}
 ========================================================================
 ''');
+
+    // Silent GPS field-tracking start/stop command — applied immediately in the
+    // foreground. Never show a notification.
+    if (type == 'FIELD_TRACKING') {
+      await FieldTrackerIntegration.instance.handlePush(data, foreground: true);
+      return;
+    }
 
     // Multi-device tray sync (spec §4): silent NOTIFICATION_CLEAR from the server
     // when another of the user's devices handled this chat — cancel locally, no UI.
