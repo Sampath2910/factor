@@ -492,6 +492,37 @@ class HomeSduiRenderer {
       avatarText = name[0].toUpperCase();
     }
 
+    final rawAvatar = _map(c['avatar']);
+    var avatarImageUrl = _boundText(c, 'avatarUrl');
+    if (avatarImageUrl.isEmpty) {
+      avatarImageUrl = _boundText(c, 'imageUrl');
+    }
+    if (avatarImageUrl.isEmpty) {
+      avatarImageUrl = rawAvatar?['imageUrl']?.toString().trim() ?? '';
+    }
+    if (avatarImageUrl.isEmpty) {
+      avatarImageUrl =
+          state.readState('session.user.avatarUrl')?.toString().trim() ?? '';
+    }
+
+    Widget? avatarImageWidget;
+    if (avatarImageUrl.isNotEmpty) {
+      avatarImageWidget = _networkImageFromSchema(
+        context: context,
+        source: avatarImageUrl,
+        fit: rawAvatar?['appearance']?['objectFit'] ??
+            rawAvatar?['objectFit'] ??
+            'cover',
+        alignment: rawAvatar?['appearance']?['objectPosition'] ??
+            rawAvatar?['objectPosition'] ??
+            'center',
+        errorIconToken: state.schema['rendererRequirements']?['fallbacks']
+            ?['missingImage'],
+        targetWidth: avatarSize,
+        targetHeight: avatarSize,
+      );
+    }
+
     if (background == null ||
         radius == null ||
         padding == null ||
@@ -534,20 +565,22 @@ class HomeSduiRenderer {
             width: avatarSize,
             height: avatarSize,
             alignment: Alignment.center,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(colors: <Color>[avatarStart, avatarEnd]),
             ),
-            child: Text(
-              avatarText,
-              style: TextStyle(
-                color: _color(appearance['avatarTextColor']) ??
-                    tokenColor('colors.welcomeText') ??
-                    tokenColor('colors.textPrimary'),
-                fontSize: avatarFontSize,
-                fontWeight: _fontWeight(appearance['avatarFontWeight']),
-              ),
-            ),
+            child: avatarImageWidget ??
+                Text(
+                  avatarText,
+                  style: TextStyle(
+                    color: _color(appearance['avatarTextColor']) ??
+                        tokenColor('colors.welcomeText') ??
+                        tokenColor('colors.textPrimary'),
+                    fontSize: avatarFontSize,
+                    fontWeight: _fontWeight(appearance['avatarFontWeight']),
+                  ),
+                ),
           ),
           SizedBox(height: _tokenNumber('spacing.md') ?? 0),
           Text(
@@ -794,6 +827,37 @@ class HomeSduiRenderer {
       avatarText = name[0].toUpperCase();
     }
 
+    final rawAvatar = _map(c['avatar']);
+    var avatarImageUrl = _boundText(c, 'avatarUrl');
+    if (avatarImageUrl.isEmpty) {
+      avatarImageUrl = _boundText(c, 'imageUrl');
+    }
+    if (avatarImageUrl.isEmpty) {
+      avatarImageUrl = rawAvatar?['imageUrl']?.toString().trim() ?? '';
+    }
+    if (avatarImageUrl.isEmpty) {
+      avatarImageUrl =
+          state.readState('session.user.avatarUrl')?.toString().trim() ?? '';
+    }
+
+    Widget? avatarImageWidget;
+    if (avatarImageUrl.isNotEmpty) {
+      avatarImageWidget = _networkImageFromSchema(
+        context: context,
+        source: avatarImageUrl,
+        fit: rawAvatar?['appearance']?['objectFit'] ??
+            rawAvatar?['objectFit'] ??
+            'cover',
+        alignment: rawAvatar?['appearance']?['objectPosition'] ??
+            rawAvatar?['objectPosition'] ??
+            'center',
+        errorIconToken: state.schema['rendererRequirements']?['fallbacks']
+            ?['missingImage'],
+        targetWidth: avatarSize,
+        targetHeight: avatarSize,
+      );
+    }
+
     if (name.isEmpty || email.isEmpty || avatarText.isEmpty) {
       return _error(
         'Schema value missing: components.${c['id']} '
@@ -833,6 +897,7 @@ class HomeSduiRenderer {
             width: avatarSize,
             height: avatarSize,
             alignment: Alignment.center,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(colors: <Color>[avatarStart, avatarEnd]),
@@ -841,15 +906,16 @@ class HomeSduiRenderer {
                 width: _d(avatar['borderWidth']) ?? 1,
               ),
             ),
-            child: Text(
-              avatarText,
-              style: _typography(
-                avatar['typographyToken']?.toString() ?? 'typography.pageTitle',
-                fallbackColor:
-                    tokenColor(avatar['textColorToken']?.toString()) ??
-                        tokenColor('colors.welcomeText'),
-              ),
-            ),
+            child: avatarImageWidget ??
+                Text(
+                  avatarText,
+                  style: _typography(
+                    avatar['typographyToken']?.toString() ?? 'typography.pageTitle',
+                    fallbackColor:
+                        tokenColor(avatar['textColorToken']?.toString()) ??
+                            tokenColor('colors.welcomeText'),
+                  ),
+                ),
           ),
           SizedBox(height: gap),
           Text(

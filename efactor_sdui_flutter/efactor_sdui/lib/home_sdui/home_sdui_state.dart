@@ -67,6 +67,10 @@ class HomeSduiState extends ChangeNotifier {
       copyIfEmpty('session.user.email', profileData['email']);
       copyIfEmpty('session.user.phone', profileData['phone']);
       copyIfEmpty('session.user.memberId', profileData['memberId']);
+      copyIfEmpty(
+        'session.user.avatarUrl',
+        profileData['avatarUrl'] ?? profileData['imageUrl'] ?? profileData['avatar'],
+      );
     }
 
     final initialsSource =

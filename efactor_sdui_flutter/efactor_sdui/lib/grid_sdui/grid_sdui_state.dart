@@ -5,6 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/theme_controller.dart';
 
 class GridSduiState extends ChangeNotifier {
+  static String? persistedSelectedQrMode;
+  static final Map<String, String> _persistedSelectedFilters = <String, String>{};
+
   GridSduiState(
     Map<String, dynamic> source, {
     Brightness? platformBrightness,
@@ -27,6 +30,17 @@ class GridSduiState extends ChangeNotifier {
         if (source.containsKey(metaKey) && !schema.containsKey(metaKey)) {
           schema[metaKey] = source[metaKey];
         }
+      }
+    }
+
+    if (persistedSelectedQrMode != null &&
+        persistedSelectedQrMode!.isNotEmpty) {
+      schema['_clientSelectedQrMode'] = persistedSelectedQrMode;
+    }
+    for (final entry in _persistedSelectedFilters.entries) {
+      final key = '_clientSelectedFilter_${entry.key}';
+      if (entry.value.isNotEmpty) {
+        schema[key] = entry.value;
       }
     }
 
@@ -77,6 +91,104 @@ class GridSduiState extends ChangeNotifier {
     }
 
     _synthesizeStatsRowIfMissing();
+    _synthesizeExploringItemsIfMissing();
+  }
+
+  void _synthesizeExploringItemsIfMissing() {
+    final exploring = _map(content['exploring']);
+    final items = exploring?['items'];
+    if (items is! List || items.isEmpty) return;
+
+    final compMap = Map<String, dynamic>.from(components);
+    final rowComp = compMap['grid-explore-row'];
+    if (rowComp is! Map) return;
+
+    final existingChildren = (rowComp['children'] is List)
+        ? List<dynamic>.from(rowComp['children'] as List)
+        : <dynamic>[];
+
+    final updatedChildren = List<dynamic>.from(existingChildren);
+
+    for (final rawItem in items) {
+      if (rawItem is! Map) continue;
+      final item = Map<String, dynamic>.from(rawItem.cast<dynamic, dynamic>());
+      final rawId = item['id']?.toString().trim() ?? '';
+      if (rawId.isEmpty) continue;
+
+      final compId = compMap.containsKey(rawId)
+          ? rawId
+          : (compMap.containsKey('grid-explore-$rawId')
+              ? 'grid-explore-$rawId'
+              : rawId);
+
+      final synthesized = <String, dynamic>{
+        'id': compId,
+        'type': 'featureCard',
+        'style': 'softCard',
+        'title': item['title'] ?? '',
+        'subtitle': item['subtitle'] ?? item['preview'] ?? '',
+        'label': item['initials'] ?? '',
+        'initial': item['initials'] ?? '',
+        'iconToken': item['iconToken'] ?? 'message',
+        'imageUrl': item['imageUrl'] ?? item['image'] ?? '',
+        'image': item['image'] ?? item['imageUrl'] ?? '',
+        'color': item['color'] ?? item['avatarColor'] ?? '#5b6cff',
+        'badge': item['badge'] ?? '',
+        'space': item['space'] ?? '',
+        'unread': item['unread'] ?? false,
+        'actionId': item['actionId'],
+        'url': item['url'] ?? item['route'],
+        'route': item['route'] ?? item['url'],
+        'openIn': item['openIn'] ?? 'inAppWebView',
+        'layout': <String, dynamic>{
+          'direction': 'horizontal',
+          'alignItems': 'center',
+          'crossAxisAlignment': 'center',
+          'mainAxisSize': 'max',
+          'gap': 12,
+          'height': 72,
+          'minHeight': 72,
+          'width': 'fill',
+        },
+        'appearance': <String, dynamic>{
+          'borderRadius': 16,
+          'backgroundColor': item['backgroundColor'] ?? '#eef2ff',
+          'iconPosition': 'leading',
+          'titlePosition': 'besideIcon',
+          'showIcon': true,
+          'showAvatar': true,
+          'iconSize': 42,
+          'titleFontSize': 15,
+          'subtitleFontSize': 12,
+          'padding': 12,
+        },
+      };
+
+      if (!compMap.containsKey(compId)) {
+        compMap[compId] = synthesized;
+        if (compId != rawId) compMap[rawId] = synthesized;
+      } else {
+        final existing = Map<String, dynamic>.from(
+            (compMap[compId] as Map).cast<dynamic, dynamic>());
+        if (item.containsKey('space')) existing['space'] = item['space'];
+        if (item.containsKey('unread')) existing['unread'] = item['unread'];
+        if (item.containsKey('actionId')) existing['actionId'] = item['actionId'];
+        if (item.containsKey('url')) existing['url'] = item['url'];
+        if (item.containsKey('route')) existing['route'] = item['route'];
+        compMap[compId] = existing;
+        if (compId != rawId) compMap[rawId] = existing;
+      }
+
+      if (!updatedChildren.contains(compId) &&
+          !updatedChildren.contains(rawId)) {
+        updatedChildren.add(compId);
+      }
+    }
+
+    final updatedRow = Map<String, dynamic>.from(rowComp);
+    updatedRow['children'] = updatedChildren;
+    compMap['grid-explore-row'] = updatedRow;
+    schema['components'] = compMap;
   }
 
   void _synthesizeStatsRowIfMissing() {
@@ -264,6 +376,10 @@ class GridSduiState extends ChangeNotifier {
   String get selectedQrMode {
     final fromState = schema['_clientSelectedQrMode']?.toString().trim();
     if (fromState != null && fromState.isNotEmpty) return fromState;
+    if (persistedSelectedQrMode != null &&
+        persistedSelectedQrMode!.isNotEmpty) {
+      return persistedSelectedQrMode!;
+    }
     final share = _map(content['shareQr']) ?? _map(components['grid-share-qr']);
     return share?['selectedMode']?.toString().trim() ?? 'professional';
   }
@@ -272,6 +388,8 @@ class GridSduiState extends ChangeNotifier {
     final key = '_clientSelectedFilter_$sectionId';
     final fromState = schema[key]?.toString().trim();
     if (fromState != null && fromState.isNotEmpty) return fromState;
+    final persisted = _persistedSelectedFilters[sectionId]?.trim();
+    if (persisted != null && persisted.isNotEmpty) return persisted;
     final sec = component(sectionId);
     final filters = sec?['filters'] ?? sec?['modes'];
     if (filters is List) {
@@ -286,6 +404,7 @@ class GridSduiState extends ChangeNotifier {
 
   void setSelectedFilter(String sectionId, String filterId) {
     final key = '_clientSelectedFilter_$sectionId';
+    _persistedSelectedFilters[sectionId] = filterId;
     schema[key] = filterId;
     notifyListeners();
   }
@@ -488,6 +607,7 @@ class GridSduiState extends ChangeNotifier {
             extra?['id']?.toString().trim() ??
             '';
         if (mode.isEmpty) return;
+        persistedSelectedQrMode = mode;
         schema['_clientSelectedQrMode'] = mode;
         notifyListeners();
         return;
@@ -536,8 +656,19 @@ class GridSduiState extends ChangeNotifier {
     }
   }
 
-  String qrPayloadForMode(String mode) {
-    final share = _map(content['shareQr']) ?? _map(components['grid-share-qr']);
+  String qrPayloadForMode(String mode, {Map<String, dynamic>? component}) {
+    final share = component ??
+        _map(components['grid-share-qr']) ??
+        _map(content['shareQr']);
+    final byMode = _map(share?['qrImageUrlsByMode']) ??
+        _map(_map(components['grid-share-qr'])?['qrImageUrlsByMode']) ??
+        _map(_map(content['shareQr'])?['qrImageUrlsByMode']);
+    final modeUrl = byMode?[mode]?.toString().trim() ?? '';
+    if (modeUrl.isNotEmpty) {
+      final uri = Uri.tryParse(modeUrl);
+      final dataParam = uri?.queryParameters['data']?.trim() ?? '';
+      if (dataParam.isNotEmpty) return dataParam;
+    }
     final payload = share?['qrPayload']?.toString().trim() ?? '';
     if (payload.isEmpty) return '';
     final uri = Uri.tryParse(payload);
@@ -547,33 +678,36 @@ class GridSduiState extends ChangeNotifier {
     return uri.replace(queryParameters: query).toString();
   }
 
-  String qrImageUrlForMode(String mode) {
-    final share =
-        _map(content['shareQr']) ?? _map(components['grid-share-qr']);
+  String qrImageUrlForMode(String mode, {Map<String, dynamic>? component}) {
+    final share = component ??
+        _map(components['grid-share-qr']) ??
+        _map(content['shareQr']);
     if (share == null) return '';
 
     // Prefer schema-declared images only (no client-invented QR CDN host).
-    final byMode = _map(share['qrImageUrlsByMode']);
+    final byMode = _map(share['qrImageUrlsByMode']) ??
+        _map(_map(components['grid-share-qr'])?['qrImageUrlsByMode']) ??
+        _map(_map(content['shareQr'])?['qrImageUrlsByMode']);
     final modeUrl = byMode?[mode]?.toString().trim() ?? '';
     if (modeUrl.isNotEmpty) return modeUrl;
 
-    final staticUrl = _firstNonEmpty(<dynamic>[
+    final staticUrl = _firstNonEmpty([
       share['qrImageUrl'],
       share['image'],
       share['imageUrl'],
     ]);
-    if (staticUrl.isNotEmpty) return staticUrl;
+    if (staticUrl.isNotEmpty && mode == selectedQrMode) return staticUrl;
 
     final template = share['qrImageUrlTemplate']?.toString().trim() ?? '';
-    final payload = qrPayloadForMode(mode);
+    final payload = qrPayloadForMode(mode, component: component);
     if (template.isNotEmpty && payload.isNotEmpty) {
       return template
           .replaceAll('{data}', Uri.encodeComponent(payload))
-          .replaceAll('{payload}', Uri.encodeComponent(payload))
+          .replaceAll('{size}', '200')
           .replaceAll('{mode}', Uri.encodeComponent(mode));
     }
 
-    return '';
+    return staticUrl;
   }
 
   Color? tokenColor(String? token) {

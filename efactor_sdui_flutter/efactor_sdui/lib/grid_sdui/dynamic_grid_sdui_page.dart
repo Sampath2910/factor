@@ -449,6 +449,18 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       schema,
       platformBrightness: platformBrightness,
     );
+    final preservedQrMode =
+        _state?.selectedQrMode ?? GridSduiState.persistedSelectedQrMode;
+    if (preservedQrMode != null && preservedQrMode.isNotEmpty) {
+      next.schema['_clientSelectedQrMode'] = preservedQrMode;
+    }
+    if (_state != null) {
+      for (final key in _state!.schema.keys) {
+        if (key.startsWith('_clientSelectedFilter_')) {
+          next.schema[key] = _state!.schema[key];
+        }
+      }
+    }
     next.inAppWebViewOpener = _openInAppWebView;
     next.nativeScannerOpener = _openNativeScanner;
     next.refreshHandler = () => _load(forceRefresh: true);

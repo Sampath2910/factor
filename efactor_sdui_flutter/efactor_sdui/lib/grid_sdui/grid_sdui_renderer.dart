@@ -643,26 +643,36 @@ class GridSduiRenderer {
       ids.removeWhere((id) {
         final comp = state.component(id);
         if (comp == null) return false;
-        final space = (comp['space'] ?? '').toString().toLowerCase();
+        final rawSpace = (comp['space'] ?? '').toString().trim().toLowerCase();
+        if (rawSpace.isNotEmpty) {
+          if (selectedFilter == 'circle' || selectedFilter == 'chat') {
+            return rawSpace != 'circle' && rawSpace != 'chat';
+          }
+          if (selectedFilter == 'professional') {
+            return rawSpace != 'professional' && !rawSpace.startsWith('prof');
+          }
+          return rawSpace != selectedFilter.toLowerCase();
+        }
+
         final badge = (comp['badge'] ?? '').toString().toLowerCase();
         final title = (comp['title'] ?? '').toString().toLowerCase();
         final subtitle = (comp['subtitle'] ?? '').toString().toLowerCase();
         final idLower = id.toLowerCase();
 
         if (selectedFilter == 'professional') {
-          final isProf = space.contains('prof') ||
-              badge.contains('prof') ||
+          final isProf = badge.contains('prof') ||
               idLower.contains('prof') ||
               title.contains('prof') ||
               subtitle.contains('prof') ||
               idLower.contains('message');
           return !isProf;
-        } else if (selectedFilter == 'circle') {
-          final isCircle = space.contains('circle') ||
-              badge.contains('circle') ||
+        } else if (selectedFilter == 'circle' || selectedFilter == 'chat') {
+          final isCircle = badge.contains('circle') ||
               idLower.contains('circle') ||
               title.contains('circle') ||
-              subtitle.contains('circle');
+              subtitle.contains('circle') ||
+              badge.contains('chat') ||
+              idLower.contains('chat');
           return !isCircle;
         }
         return false;
@@ -1345,7 +1355,7 @@ class GridSduiRenderer {
         state.tokenColor('colors.surface');
     final qrBorderColor = state.parseColor(appearance['qrBorderColor']);
     final mode = state.selectedQrMode;
-    final qrUrl = state.qrImageUrlForMode(mode);
+    final qrUrl = state.qrImageUrlForMode(mode, component: c);
     final modes = c['modes'];
     final gap = _d(responsive['gap'] ?? layout['gap']);
     final accent = state.tokenColor('colors.accent');
