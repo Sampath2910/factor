@@ -102,6 +102,81 @@ void main() {
       expect(result.numericValue, 1.0);
     });
 
+    test('DeviceFrameBuilder skips a zero-width named payload field (no_of_bytes:0)', () {
+      // A non-trigger, non-empty field that declares zero payload bytes. The
+      // old filters (empty-slot / trigger-slot) do NOT catch this, so the build
+      // used to ABORT on it ("must declare positive no_of_bytes"). It must now
+      // be skipped and the three real slots pack to A1E70A.
+      final zeroWidthDataControl = <String, dynamic>{
+        'id': 'get-status-zero-width-data',
+        'parameter': 'Command Get Status',
+        'valueType': 'trigger',
+        'deviceFrame': {
+          'name': 'Command Get Status',
+          'commands': [
+            {
+              'default_name': 'CommandId',
+              'value': 'A1',
+              'byte_start_position': 1,
+              'no_of_bytes': 1,
+            },
+            {
+              'default_name': 'Function Code',
+              'value': 'E7',
+              'byte_start_position': 2,
+              'no_of_bytes': 1,
+            },
+            {
+              'default_name': 'Data',
+              'value': '',
+              'byte_start_position': 3,
+              'no_of_bytes': 0, // zero-width payload -> skipped
+            },
+            {
+              'default_name': 'Terminator',
+              'value': '0A',
+              'byte_start_position': 3,
+              'no_of_bytes': 1,
+            },
+          ],
+        },
+      };
+
+      final result = DeviceFrameBuilder.build(
+        control: zeroWidthDataControl,
+        runtimeValue: 'ON',
+      );
+
+      expect(result.ok, isTrue, reason: result.error);
+      expect(result.frameHex, 'A1E70A');
+    });
+
+    test('Working toggle with no zero-width field is unaffected (Child Lock)', () {
+      final childLock = <String, dynamic>{
+        'id': 'child-lock',
+        'parameter': 'Child Lock',
+        'deviceFrame': {
+          'name': 'Child Lock',
+          'commands': [
+            {'default_name': 'CommandId', 'value': 'A1', 'byte_start_position': 1, 'no_of_bytes': 1},
+            {'default_name': 'Function Code', 'value': 'EA', 'byte_start_position': 2, 'no_of_bytes': 1},
+            {
+              'default_name': 'Child Lock',
+              'byte_start_position': 3,
+              'no_of_bytes': 1,
+              'asperui': '[disable][enable]',
+              'asperui_values': '[00][01]',
+            },
+            {'default_name': 'Terminator', 'value': '0A', 'byte_start_position': 4, 'no_of_bytes': 1},
+          ],
+        },
+      };
+
+      final result = DeviceFrameBuilder.build(control: childLock, runtimeValue: 'disable');
+      expect(result.ok, isTrue, reason: result.error);
+      expect(result.frameHex, 'A1EA000A');
+    });
+
     test('Response row labels display their respective default_name', () {
       final appState = AppState(<String, dynamic>{
         'controls': allControls,

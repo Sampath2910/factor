@@ -62,7 +62,10 @@ class DeviceFrameBuilder {
       (frame['commands'] as List? ?? const <dynamic>[])
           .whereType<Map>()
           .map(Map<String, dynamic>.from)
-          .where((field) => !_isEmptyCommandSlot(field) && !_isNonPayloadTriggerSlot(field)),
+          .where((field) =>
+              !_isEmptyCommandSlot(field) &&
+              !_isNonPayloadTriggerSlot(field) &&
+              !_isZeroWidthPayloadSlot(field)),
     );
     if (commands.isEmpty) {
       return DeviceFrameBuildResult.failure(
@@ -517,6 +520,22 @@ class DeviceFrameBuilder {
     final start = _positiveInt(field['byte_start_position']);
     final count = _positiveInt(field['no_of_bytes']);
     return name.isEmpty && value.isEmpty && start == null && count == null;
+  }
+
+  /// A field that explicitly declares zero payload bytes (`no_of_bytes == 0`)
+  /// contributes nothing to the wire, so it is dropped before layout. The
+  /// backend's V2 Get Status frame carries such a trigger/placeholder; skipping
+  /// it is the contract both sides agreed on. A blank/absent byte count is
+  /// "unknown", not zero, and is left for the layout loop to reject.
+  static bool _isZeroWidthPayloadSlot(Map<String, dynamic> field) {
+    final raw = field['no_of_bytes'] ??
+        field['number_of_bytes'] ??
+        field['bytes_count'] ??
+        field['byte_count'] ??
+        field['length'];
+    if (raw == null || (raw is String && raw.trim().isEmpty)) return false;
+    final count = raw is num ? raw.toInt() : int.tryParse(raw.toString());
+    return count == 0;
   }
 
   static bool _isNonPayloadTriggerSlot(Map<String, dynamic> field) {
