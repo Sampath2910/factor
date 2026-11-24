@@ -410,10 +410,28 @@ class HomeSchemaAdapter {
           _nonEmpty(raw['greeting']);
       final initials = _initials(sourceText);
       if (size != null && size > 0 && initials.isNotEmpty) {
+        final avatarActionId = _nonEmpty(avatar['actionId']) ??
+            _nonEmpty(_map(_map(avatar['events'])?['tap'])?['actionId']) ??
+            _nonEmpty(raw['avatarActionId']) ??
+            (actions.containsKey('profile-photo-options')
+                ? 'profile-photo-options'
+                : null);
         result['avatar'] = <String, dynamic>{
+          ...avatar,
           'initials': initials,
           if (avatar['imageUrl'] != null) 'imageUrl': avatar['imageUrl'],
+          if (avatarActionId != null) 'actionId': avatarActionId,
+          if (avatarActionId != null)
+            'events': <String, dynamic>{
+              'tap': <String, dynamic>{'actionId': avatarActionId},
+            }
+          else if (avatar['events'] != null)
+            'events': avatar['events'],
+          if (avatar['accessibilityLabel'] != null)
+            'accessibilityLabel': avatar['accessibilityLabel'],
           'appearance': <String, dynamic>{
+            if (avatar['appearance'] is Map)
+              ...Map<String, dynamic>.from(avatar['appearance'] as Map),
             'width': size,
             'height': size,
             'borderRadius': _number(avatar['borderRadius']) ?? size / 2,

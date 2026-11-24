@@ -67,10 +67,18 @@ class HomeSduiState extends ChangeNotifier {
       copyIfEmpty('session.user.email', profileData['email']);
       copyIfEmpty('session.user.phone', profileData['phone']);
       copyIfEmpty('session.user.memberId', profileData['memberId']);
-      copyIfEmpty(
-        'session.user.avatarUrl',
-        profileData['avatarUrl'] ?? profileData['imageUrl'] ?? profileData['avatar'],
-      );
+      final profileAvatar = profileData['avatarUrl'] ??
+          profileData['imageUrl'] ??
+          profileData['avatar'];
+      if (profileAvatar != null && profileAvatar.toString().trim().isNotEmpty) {
+        writeState(
+          'session.user.avatarUrl',
+          profileAvatar.toString().trim(),
+          notify: false,
+        );
+      } else {
+        copyIfEmpty('session.user.avatarUrl', profileAvatar);
+      }
     }
 
     final initialsSource =
@@ -1245,6 +1253,20 @@ class HomeSduiState extends ChangeNotifier {
 
     final raw = schema['actionRegistry']?[actionId];
     if (raw is! Map) {
+      if (actionId.startsWith('profile-photo') ||
+          actionId == 'profile-photo-options') {
+        final handler = hostActionHandler;
+        if (handler != null) {
+          await handler('open-url', <String, dynamic>{
+            'actionId': actionId,
+            'type': 'open-url',
+            'openIn': 'inAppWebView',
+            'url': 'https://efactor.tech/app-home-page/profile-photo',
+            'title': 'Profile Photo',
+          });
+          return;
+        }
+      }
       throw FormatException('Unknown action "$actionId".');
     }
 
@@ -1458,6 +1480,7 @@ class HomeSduiState extends ChangeNotifier {
 
         await handler('open-url', <String, dynamic>{
           ...action,
+          'actionId': actionId,
           'url': url.trim(),
           if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
         });

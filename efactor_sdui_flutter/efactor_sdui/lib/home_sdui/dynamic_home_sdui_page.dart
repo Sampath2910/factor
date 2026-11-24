@@ -657,6 +657,16 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
               ),
             ),
           );
+          if (mounted) {
+            final aId = (action['actionId'] ?? actionId).toString().toLowerCase();
+            final path = uri.path.toLowerCase();
+            if (aId.contains('profile-photo') ||
+                aId.contains('avatar') ||
+                path.contains('profile-photo') ||
+                path.contains('avatar')) {
+              await _load(forceRefresh: true);
+            }
+          }
           return;
         }
 
@@ -666,6 +676,16 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
         );
         if (!opened) {
           throw StateError('Unable to open the external URL: "$rawUrl".');
+        }
+        if (mounted) {
+          final aId = (action['actionId'] ?? actionId).toString().toLowerCase();
+          final path = uri.path.toLowerCase();
+          if (aId.contains('profile-photo') ||
+              aId.contains('avatar') ||
+              path.contains('profile-photo') ||
+              path.contains('avatar')) {
+            await _load(forceRefresh: true);
+          }
         }
         return;
 

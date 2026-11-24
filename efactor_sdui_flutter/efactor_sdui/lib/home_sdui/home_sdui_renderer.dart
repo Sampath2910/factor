@@ -375,7 +375,17 @@ class HomeSduiRenderer {
           tokenColor('colors.welcomeText');
       final rawFontSize = _d(avatarAppearance['fontSize']);
 
-      final imageUrl = avatar['imageUrl']?.toString().trim() ?? '';
+      var imageUrl = avatar['imageUrl']?.toString().trim() ?? '';
+      if (imageUrl.isEmpty) {
+        imageUrl = _boundText(c, 'avatarUrl');
+      }
+      if (imageUrl.isEmpty) {
+        imageUrl = _boundText(c, 'imageUrl');
+      }
+      if (imageUrl.isEmpty) {
+        imageUrl =
+            state.readState('session.user.avatarUrl')?.toString().trim() ?? '';
+      }
       final hasImage = imageUrl.isNotEmpty;
       if ((!hasImage && initials.isEmpty) ||
           rawWidth == null ||
@@ -443,11 +453,16 @@ class HomeSduiRenderer {
       );
 
       final tap = _map(_map(avatar['events'])?['tap']);
-      final actionId = tap?['actionId']?.toString().trim();
+      final actionId = avatar['actionId']?.toString().trim() ??
+          tap?['actionId']?.toString().trim() ??
+          c['avatarActionId']?.toString().trim() ??
+          (state.schema['actionRegistry']?['profile-photo-options'] != null
+              ? 'profile-photo-options'
+              : null);
       if (actionId != null && actionId.isNotEmpty) {
         avatarWidget = Semantics(
           button: true,
-          label: avatar['accessibilityLabel']?.toString(),
+          label: avatar['accessibilityLabel']?.toString() ?? 'Profile photo',
           child: InkWell(
             borderRadius: BorderRadius.circular(avatarRadius),
             onTap: () => state.dispatchAction(actionId),
@@ -550,6 +565,49 @@ class HomeSduiRenderer {
       );
     }
 
+    final avatarTap = _map(_map(rawAvatar?['events'])?['tap']) ??
+        _map(_map(c['events'])?['tap']);
+    final avatarActionId = rawAvatar?['actionId']?.toString().trim() ??
+        avatarTap?['actionId']?.toString().trim() ??
+        c['avatarActionId']?.toString().trim() ??
+        (state.schema['actionRegistry']?['profile-photo-options'] != null
+            ? 'profile-photo-options'
+            : null);
+
+    Widget avatarWidget = Container(
+      width: avatarSize,
+      height: avatarSize,
+      alignment: Alignment.center,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(colors: <Color>[avatarStart, avatarEnd]),
+      ),
+      child: avatarImageWidget ??
+          Text(
+            avatarText,
+            style: TextStyle(
+              color: _color(appearance['avatarTextColor']) ??
+                  tokenColor('colors.welcomeText') ??
+                  tokenColor('colors.textPrimary'),
+              fontSize: avatarFontSize,
+              fontWeight: _fontWeight(appearance['avatarFontWeight']),
+            ),
+          ),
+    );
+
+    if (avatarActionId != null && avatarActionId.isNotEmpty) {
+      avatarWidget = Semantics(
+        button: true,
+        label: rawAvatar?['accessibilityLabel']?.toString() ?? 'Profile photo',
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => state.dispatchAction(avatarActionId),
+          child: avatarWidget,
+        ),
+      );
+    }
+
     return Container(
       padding: EdgeInsets.all(padding),
       decoration: BoxDecoration(
@@ -561,27 +619,7 @@ class HomeSduiRenderer {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Container(
-            width: avatarSize,
-            height: avatarSize,
-            alignment: Alignment.center,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(colors: <Color>[avatarStart, avatarEnd]),
-            ),
-            child: avatarImageWidget ??
-                Text(
-                  avatarText,
-                  style: TextStyle(
-                    color: _color(appearance['avatarTextColor']) ??
-                        tokenColor('colors.welcomeText') ??
-                        tokenColor('colors.textPrimary'),
-                    fontSize: avatarFontSize,
-                    fontWeight: _fontWeight(appearance['avatarFontWeight']),
-                  ),
-                ),
-          ),
+          avatarWidget,
           SizedBox(height: _tokenNumber('spacing.md') ?? 0),
           Text(
             name,
@@ -881,6 +919,52 @@ class HomeSduiRenderer {
           ),
         );
 
+    final avatarTap = _map(_map(rawAvatar?['events'])?['tap']) ??
+        _map(_map(c['events'])?['tap']);
+    final avatarActionId = rawAvatar?['actionId']?.toString().trim() ??
+        avatarTap?['actionId']?.toString().trim() ??
+        c['avatarActionId']?.toString().trim() ??
+        (state.schema['actionRegistry']?['profile-photo-options'] != null
+            ? 'profile-photo-options'
+            : null);
+
+    Widget avatarWidget = Container(
+      width: avatarSize,
+      height: avatarSize,
+      alignment: Alignment.center,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(colors: <Color>[avatarStart, avatarEnd]),
+        border: Border.all(
+          color: avatarBorder,
+          width: _d(avatar['borderWidth']) ?? 1,
+        ),
+      ),
+      child: avatarImageWidget ??
+          Text(
+            avatarText,
+            style: _typography(
+              avatar['typographyToken']?.toString() ?? 'typography.pageTitle',
+              fallbackColor:
+                  tokenColor(avatar['textColorToken']?.toString()) ??
+                      tokenColor('colors.welcomeText'),
+            ),
+          ),
+    );
+
+    if (avatarActionId != null && avatarActionId.isNotEmpty) {
+      avatarWidget = Semantics(
+        button: true,
+        label: rawAvatar?['accessibilityLabel']?.toString() ?? 'Profile photo',
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => state.dispatchAction(avatarActionId),
+          child: avatarWidget,
+        ),
+      );
+    }
+
     return Container(
       padding: padding,
       decoration: BoxDecoration(
@@ -893,30 +977,7 @@ class HomeSduiRenderer {
       ),
       child: Column(
         children: [
-          Container(
-            width: avatarSize,
-            height: avatarSize,
-            alignment: Alignment.center,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(colors: <Color>[avatarStart, avatarEnd]),
-              border: Border.all(
-                color: avatarBorder,
-                width: _d(avatar['borderWidth']) ?? 1,
-              ),
-            ),
-            child: avatarImageWidget ??
-                Text(
-                  avatarText,
-                  style: _typography(
-                    avatar['typographyToken']?.toString() ?? 'typography.pageTitle',
-                    fallbackColor:
-                        tokenColor(avatar['textColorToken']?.toString()) ??
-                            tokenColor('colors.welcomeText'),
-                  ),
-                ),
-          ),
+          avatarWidget,
           SizedBox(height: gap),
           Text(
             name,
@@ -1668,19 +1729,26 @@ class HomeSduiRenderer {
       final borderColor = _color(avatarAppearance['borderColor']);
       final borderWidth = _d(avatarAppearance['borderWidth']) ?? 0;
 
+      final resolvedAvatarUrl = (avatar['imageUrl']?.toString().trim().isNotEmpty ?? false)
+          ? avatar['imageUrl']!.toString().trim()
+          : (_boundText(c, 'avatarUrl').isNotEmpty
+              ? _boundText(c, 'avatarUrl')
+              : (_boundText(c, 'imageUrl').isNotEmpty
+                  ? _boundText(c, 'imageUrl')
+                  : (state.readState('session.user.avatarUrl')?.toString().trim() ?? '')));
+
       if (width == null ||
           height == null ||
           avatarRadius == null ||
           fontSize == null ||
-          (initials.isEmpty &&
-              (avatar['imageUrl']?.toString().trim().isEmpty ?? true))) {
+          (initials.isEmpty && resolvedAvatarUrl.isEmpty)) {
         return _error(
           'Schema visual/value contract missing for components.${c['id']}.avatar.',
         );
       }
 
       Widget avatarChild;
-      final imageUrl = avatar['imageUrl']?.toString().trim() ?? '';
+      var imageUrl = resolvedAvatarUrl;
       if (imageUrl.isNotEmpty) {
         avatarChild = _networkImageFromSchema(
               context: context,
@@ -1732,11 +1800,16 @@ class HomeSduiRenderer {
       );
 
       final tap = _map(_map(avatar['events'])?['tap']);
-      final actionId = tap?['actionId']?.toString().trim();
+      final actionId = avatar['actionId']?.toString().trim() ??
+          tap?['actionId']?.toString().trim() ??
+          c['avatarActionId']?.toString().trim() ??
+          (state.schema['actionRegistry']?['profile-photo-options'] != null
+              ? 'profile-photo-options'
+              : null);
       if (actionId != null && actionId.isNotEmpty) {
         avatarWidget = Semantics(
           button: true,
-          label: avatar['accessibilityLabel']?.toString(),
+          label: avatar['accessibilityLabel']?.toString() ?? 'Profile photo',
           child: InkWell(
             borderRadius: BorderRadius.circular(avatarRadius),
             onTap: () => state.dispatchAction(actionId),

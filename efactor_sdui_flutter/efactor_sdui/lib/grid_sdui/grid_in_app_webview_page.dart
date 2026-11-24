@@ -1199,6 +1199,16 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     _controller = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(webViewBackground)
+      ..setOnJavaScriptConfirmDialog(
+        (JavaScriptConfirmDialogRequest request) async {
+          return _showCustomJsConfirmDialog(request);
+        },
+      )
+      ..setOnJavaScriptAlertDialog(
+        (JavaScriptAlertDialogRequest request) async {
+          return _showCustomJsAlertDialog(request);
+        },
+      )
       ..addJavaScriptChannel(
         'CircleConnectPushBridge',
         onMessageReceived: (JavaScriptMessage msg) {
@@ -1424,6 +1434,21 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               return NavigationDecision.prevent;
             }
 
+            // If user opened Circle Connect (/grid-chat), do not allow server or Service Worker to redirect or navigate to Professional Space (/grid)
+            if (_isCircleConnect &&
+                !targetPath.contains('grid-chat') &&
+                !targetPath.contains('grid_chat') &&
+                !targetPath.contains('/chat') &&
+                (targetPath == '/grid' ||
+                    targetPath == '/grid/' ||
+                    targetPath == '/index.php/grid' ||
+                    targetPath == '/index.php/grid/')) {
+              debugPrint(
+                '[GridInAppWebView] Intercepting unwanted redirect from chat to Professional Space: $targetUri',
+              );
+              return NavigationDecision.prevent;
+            }
+
             // If user clicks or navigates to Grid (/grid) while in Circle Connect or Professional Space,
             // redirect directly back to the native Grid SDUI page (Image 2).
             if (GridInAppWebViewPage.isGridRedirectUrl(
@@ -1582,9 +1607,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             if (!_showingSnapshot) {
               unawaited(_persistSnapshot());
               unawaited(_checkAndRecoverOfflineChannels());
-              // iOS: refresh the cached self-contained offline shell so Circle
-              // Connect can render offline (no Service Worker on WKWebView).
-              unawaited(_syncOfflineShellIfIOS());
+              // Refresh the cached self-contained offline shell so Circle Connect
+              // can render offline reliably across platforms.
+              unawaited(_syncOfflineShellIfEligible());
               // Schedule delayed snapshot capture after dynamic React/SPA rendering completes
               Future.delayed(const Duration(milliseconds: 2500), () {
                 if (mounted && !_showingSnapshot && _error == null) {
@@ -4564,46 +4589,40 @@ Error: $error
       _showingSnapshot = false;
 
       // Circle Connect offline:
-      //
-      // - Android's WebView runs the web Service Worker, so loading the real URL
-      //   lets it serve its cached shell + CircleConnectDB (WhatsApp-style).
-      //
-      // - iOS WKWebView does NOT run Service Workers, so the live URL would blank
-      //   offline. Instead we load the web team's self-contained offline shell
-      //   (cached while online) via loadHtmlString with the efactor.tech base URL,
-      //   so the origin stays correct and React reads the same CircleConnectDB.
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
-        final shell =
-            await GridOfflineShellService.instance.getStoredShell(userId: widget.userId);
-        if (shell != null) {
-          debugPrint(
-            '[GridInAppWebView] Offline (iOS) -> loading cached self-contained '
-            'Circle Connect shell with origin $_origin',
-          );
-          await _controller.loadHtmlString(shell, baseUrl: _offlineShellBaseUrl);
-          return;
-        }
-        // No shell cached yet (never opened online since install/update) ->
-        // clean offline state rather than a blank page.
+      // Load the cached self-contained offline shell or chat snapshot with origin https://efactor.tech
+      // so React reads CircleConnectDB. If neither is available yet (never opened online), show the clean offline state.
+      final shell =
+          await GridOfflineShellService.instance.getStoredShell(userId: widget.userId);
+      if (shell != null) {
         debugPrint(
-          '[GridInAppWebView] Offline (iOS) -> no cached Circle Connect shell; '
-          'showing offline state',
+          '[GridInAppWebView] Offline -> loading cached self-contained '
+          'Circle Connect shell with origin $_origin',
         );
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _error = 'offline';
-        });
+        await _controller.loadHtmlString(shell, baseUrl: _offlineShellBaseUrl);
         return;
       }
 
-      // Android: load the real origin document so the web Service Worker serves
-      // its cached shell and React reads its own IndexedDB (CircleConnectDB).
+      // Check if a chat snapshot was saved
+      final chatSnapshot = await GridWebSnapshot.readChatSnapshot(userId: widget.userId);
+      if (chatSnapshot != null && chatSnapshot.trim().length >= 64) {
+        debugPrint(
+          '[GridInAppWebView] Offline -> loading cached chat snapshot with origin $_origin',
+        );
+        await _controller.loadHtmlString(chatSnapshot, baseUrl: _offlineShellBaseUrl);
+        return;
+      }
+
+      // No shell or snapshot cached yet -> clean offline state rather than letting
+      // a shared domain Service Worker hijack the route to Professional Space.
       debugPrint(
-        '[GridInAppWebView] Offline detected (Android) -> loading live URL so the '
-        'web Service Worker/IndexedDB can serve offline: $_effectiveUri',
+        '[GridInAppWebView] Offline -> no cached Circle Connect shell or snapshot; '
+        'showing offline state',
       );
-      await _controller.loadRequest(_effectiveUri, headers: headers);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'offline';
+      });
       return;
     }
     _showingSnapshot = false;
@@ -4611,11 +4630,9 @@ Error: $error
     await _controller.loadRequest(_effectiveUri, headers: headers);
   }
 
-  /// iOS only: while online, fetch/verify/cache the Circle Connect self-contained
-  /// offline shell so it can be loaded when offline (WKWebView has no Service
-  /// Worker). No-op on Android (its Service Worker path is unchanged).
-  Future<void> _syncOfflineShellIfIOS() async {
-    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+  /// While online, fetch/verify/cache the Circle Connect self-contained offline
+  /// shell so it can be loaded reliably when offline on any platform.
+  Future<void> _syncOfflineShellIfEligible() async {
     if (!_isCircleConnect) return;
     try {
       if (!await _isOnline()) return;
@@ -5048,6 +5065,275 @@ Error: $error
     );
   }
 
+Future<bool> _showCustomJsConfirmDialog(
+    JavaScriptConfirmDialogRequest request,
+  ) async {
+    if (!mounted) return false;
+
+    final isDark = ThemeController.instance.isDark(context);
+    final message = request.message.trim();
+    final lower = message.toLowerCase();
+    final isDestructive = lower.contains('remove') ||
+        lower.contains('delete') ||
+        lower.contains('clear');
+
+    final String title;
+    if (lower.contains('profile photo') || lower.contains('profile picture')) {
+      title = 'Remove Profile Photo';
+    } else if (isDestructive) {
+      title = 'Confirm';
+    } else {
+      title = 'Confirmation';
+    }
+
+    final String confirmButtonText;
+    if (lower.contains('remove')) {
+      confirmButtonText = 'Remove';
+    } else if (lower.contains('delete')) {
+      confirmButtonText = 'Delete';
+    } else {
+      confirmButtonText = 'OK';
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: isDark
+                ? const BorderSide(color: Color(0xFF334155), width: 1)
+                : const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          ),
+          elevation: 8,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: isDestructive
+                        ? (isDark
+                            ? const Color(0x33EF4444)
+                            : const Color(0xFFFEE2E2))
+                        : (isDark
+                            ? const Color(0x336366F1)
+                            : const Color(0xFFEEF2FF)),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isDestructive
+                        ? Icons.delete_outline_rounded
+                        : Icons.help_outline_rounded,
+                    size: 28,
+                    color: isDestructive
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFF6366F1),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    height: 1.45,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: SizedBox(
+                        height: 44,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark
+                                ? const Color(0xFFCBD5E1)
+                                : const Color(0xFF475569),
+                            backgroundColor: isDark
+                                ? const Color(0xFF0F172A)
+                                : const Color(0xFFF8FAFC),
+                            side: BorderSide(
+                              color: isDark
+                                  ? const Color(0xFF334155)
+                                  : const Color(0xFFCBD5E1),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 44,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: isDestructive
+                                ? const Color(0xFFEF4444)
+                                : const Color(0xFF6366F1),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(true),
+                          child: Text(
+                            confirmButtonText,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
+  Future<void> _showCustomJsAlertDialog(
+    JavaScriptAlertDialogRequest request,
+  ) async {
+    if (!mounted) return;
+
+    final isDark = ThemeController.instance.isDark(context);
+    final message = request.message.trim();
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: isDark
+                ? const BorderSide(color: Color(0xFF334155), width: 1)
+                : const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          ),
+          elevation: 8,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0x336366F1)
+                        : const Color(0xFFEEF2FF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.info_outline_rounded,
+                    size: 28,
+                    color: Color(0xFF6366F1),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Notice',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    height: 1.45,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF6366F1),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  
   Future<void> _retry() async {
     setState(() {
       _error = null;
@@ -5061,9 +5347,11 @@ Error: $error
   Widget _buildOfflineState(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final spaceName = widget.title?.trim().isNotEmpty == true
-        ? widget.title!.trim()
-        : (_isCircleConnect ? 'Circle Connect' : 'GRID');
+    final spaceName = _isCircleConnect
+        ? 'Circle Connect'
+        : (widget.title?.trim().isNotEmpty == true
+            ? widget.title!.trim()
+            : 'GRID');
 
     final isOffline = _error == null ||
         _error == 'offline' ||
