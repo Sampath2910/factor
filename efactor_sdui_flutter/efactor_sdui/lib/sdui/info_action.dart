@@ -2011,19 +2011,30 @@ Future<dynamic> _tryLoadSchemaDeclaredInfoData({
   }
 
   final token = state.accessToken.trim();
+  // Only ever attach the user's auth token to trusted efactor hosts. A
+  // server-driven schema controls this URL, so without this check a tampered
+  // schema could harvest the token by pointing the data source at any host.
+  final tokenAllowed = _isTrustedEfactorHost(uri.host);
+  if (token.isNotEmpty && !tokenAllowed) {
+    logDebug(
+      '[SDUI][SECURITY] auth token NOT attached — untrusted host "${uri.host}"',
+    );
+  }
   final auth = _asMap(dataSource?['auth']) ??
       _asMap(_asMap(dataSource?['nativeApi'])?['auth']);
   final tokenHeader = _firstText(<dynamic>[
     auth?['header'],
     auth?['headerName'],
   ]);
-  if (tokenHeader != null && token.isNotEmpty) {
+  if (tokenAllowed && tokenHeader != null && token.isNotEmpty) {
     headers[tokenHeader] = _normalizeInfoAuthorizationHeader(
       state,
       tokenHeader,
       token,
     );
-  } else if (token.isNotEmpty && !headers.containsKey('Authorization')) {
+  } else if (tokenAllowed &&
+      token.isNotEmpty &&
+      !headers.containsKey('Authorization')) {
     headers['Authorization'] = 'Bearer $token';
   }
 
@@ -2233,6 +2244,11 @@ String _displayValue(dynamic value) {
 bool _isLoopbackUri(Uri uri) {
   final host = uri.host.toLowerCase();
   return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+}
+
+bool _isTrustedEfactorHost(String host) {
+  final h = host.trim().toLowerCase();
+  return h == 'efactor.tech' || h.endsWith('.efactor.tech');
 }
 
 Uri? _validLaunchUri(dynamic value) {

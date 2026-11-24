@@ -1117,7 +1117,17 @@ class IotSduiState extends ChangeNotifier {
         schemaAuth?['queryParam']?.toString();
 
     final token = accessToken.trim();
-    if (token.isNotEmpty) {
+    // Never hand the user's token to a non-efactor host, even when the
+    // server-driven schema declares header/query auth — a tampered schema
+    // could otherwise exfiltrate it to an arbitrary URL.
+    final tokenAllowed = _isTrustedEfactorHost(uri.host);
+    if (token.isNotEmpty && !tokenAllowed) {
+      logDebug(
+        '[IOT_SDUI][SECURITY] auth token NOT attached — '
+        'untrusted host "${uri.host}"',
+      );
+    }
+    if (token.isNotEmpty && tokenAllowed) {
       if ((authType == 'header' || headerName != null) &&
           headerName != null &&
           headerName.trim().isNotEmpty) {

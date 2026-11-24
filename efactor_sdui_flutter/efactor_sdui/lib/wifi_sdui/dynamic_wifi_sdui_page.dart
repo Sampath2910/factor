@@ -7,6 +7,7 @@ import 'package:efactor_provisioning/efactor_provisioning.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -113,7 +114,18 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedSsid = prefs.getString('efactor_saved_wifi_ssid')?.trim() ?? '';
-      final savedPass = prefs.getString('efactor_saved_wifi_pass') ?? '';
+      const secure = FlutterSecureStorage();
+      var savedPass = await secure.read(key: 'efactor_saved_wifi_pass') ?? '';
+      // Migrate a password saved by an older build in plaintext SharedPreferences,
+      // then remove the cleartext copy for good.
+      final legacyPass = prefs.getString('efactor_saved_wifi_pass') ?? '';
+      if (savedPass.isEmpty && legacyPass.isNotEmpty) {
+        savedPass = legacyPass;
+        await secure.write(key: 'efactor_saved_wifi_pass', value: legacyPass);
+      }
+      if (legacyPass.isNotEmpty) {
+        await prefs.remove('efactor_saved_wifi_pass');
+      }
 
       if (savedPass.isNotEmpty && _passwordController.text.isEmpty) {
         _passwordController.text = savedPass;
@@ -150,7 +162,10 @@ class _DynamicWifiSduiPageState extends State<DynamicWifiSduiPage> {
         await prefs.setString('efactor_saved_wifi_ssid', ssid.trim());
       }
       if (password != null && password.isNotEmpty) {
-        await prefs.setString('efactor_saved_wifi_pass', password);
+        // Router password is sensitive — keep it in encrypted secure storage,
+        // never in plaintext SharedPreferences.
+        await const FlutterSecureStorage()
+            .write(key: 'efactor_saved_wifi_pass', value: password);
       }
     } catch (e) {
       debugPrint('[SDUI][WiFi] persist wifi error: $e');

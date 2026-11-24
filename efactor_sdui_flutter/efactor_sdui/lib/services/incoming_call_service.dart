@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+
+import 'json_http.dart' show logDebug;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -295,7 +297,7 @@ class IncomingCallService {
     final id = callId.trim();
     final t = DateTime.now().millisecondsSinceEpoch;
     // ignore: avoid_print
-    print('[CALL] $event call_id=$id t=$t');
+    logDebug('[CALL] $event call_id=$id t=$t');
   }
 
   /// Direct GRID Chat URL for a cold-start or background Answer.
@@ -325,7 +327,7 @@ class IncomingCallService {
     if (id.isEmpty) return true;
     if (!_answeredCallIds.add(id)) {
       // ignore: avoid_print
-      print('[CALL] blocked duplicate answer call_id=$id');
+      logDebug('[CALL] blocked duplicate answer call_id=$id');
       return false;
     }
     _clearedNotificationCallIds.add(id);
@@ -361,7 +363,7 @@ class IncomingCallService {
       );
     } catch (e) {
       // ignore: avoid_print
-      print(
+      logDebug(
         '[CALL] pending Answer persist failed call_id=${pending.callId} error=$e',
       );
     }
@@ -384,7 +386,7 @@ class IncomingCallService {
       callTrace('pending Answer stored', pending.callId);
     } catch (e) {
       // ignore: avoid_print
-      print('[CALL] pending Answer restore failed error=$e');
+      logDebug('[CALL] pending Answer restore failed error=$e');
     }
   }
 
@@ -405,7 +407,7 @@ class IncomingCallService {
       await prefs.remove(PendingCallAnswer.prefsKey);
     } catch (_) {}
     // ignore: avoid_print
-    print(
+    logDebug(
       '[CALL] pending Answer cleared call_id=${current.callId} reason=$reason',
     );
   }
@@ -888,7 +890,7 @@ class IncomingCallService {
     if (isAnswerInProgress(call.callId) ||
         shouldIgnoreNotificationBodyTap(call.callId)) {
       // ignore: avoid_print
-      print(
+      logDebug(
         '[CALL] blocked show call_id=${call.callId} reason=answer_or_notification_clear',
       );
       return;
@@ -960,7 +962,7 @@ class IncomingCallService {
     }
     if (isAnswerInProgress(call.callId)) {
       // ignore: avoid_print
-      print(
+      logDebug(
         '[CALL] blocked decline call_id=${call.callId} reason=already_answered',
       );
       dismissCall();
@@ -1301,7 +1303,7 @@ class IncomingCallService {
       final payload = jsonEncode(payloadMap);
 
       // ignore: avoid_print
-      print('[IncomingCallService] Registering push token to backend for user $userId (endpoint: $uri)...');
+      logDebug('[IncomingCallService] Registering push token to backend for user $userId (endpoint: $uri)...');
 
       var registered = false;
       try {
@@ -1312,7 +1314,7 @@ class IncomingCallService {
         );
 
         // ignore: avoid_print
-        print(
+        logDebug(
           '[IncomingCallService] registerDeviceToken POST $uri -> status=${response.statusCode} body=${response.body}',
         );
 
@@ -1326,7 +1328,7 @@ class IncomingCallService {
         }
       } catch (e) {
         // ignore: avoid_print
-        print('[IncomingCallService] primary registerDeviceToken error: $e');
+        logDebug('[IncomingCallService] primary registerDeviceToken error: $e');
       }
 
       // Also register with Circle Connect / GRID Chat native push token endpoint
@@ -1343,7 +1345,7 @@ class IncomingCallService {
               body: payload,
             );
             // ignore: avoid_print
-            print(
+            logDebug(
               '[IncomingCallService] registerDeviceToken grid-chat POST $gridChatUri -> status=${gcResp.statusCode} body=${gcResp.body}',
             );
             if (gcResp.statusCode >= 200 && gcResp.statusCode < 300) {
@@ -1351,14 +1353,14 @@ class IncomingCallService {
             }
           } catch (e) {
             // ignore: avoid_print
-            print('[IncomingCallService] grid-chat native-token register error: $e');
+            logDebug('[IncomingCallService] grid-chat native-token register error: $e');
           }
         }
       }
 
       if (registered) {
         // ignore: avoid_print
-        print('[IncomingCallService] Push token successfully registered on backend for user $userId');
+        logDebug('[IncomingCallService] Push token successfully registered on backend for user $userId');
         if (client == null) httpClient.close();
         return true;
       }
@@ -1447,7 +1449,7 @@ class IncomingCallService {
     }
     if (token.isEmpty) {
       // ignore: avoid_print
-      print('[IncomingCallService] No FCM/APNs token available yet to register.');
+      logDebug('[IncomingCallService] No FCM/APNs token available yet to register.');
       return false;
     }
 
@@ -1459,7 +1461,7 @@ class IncomingCallService {
       client: client,
     );
     // ignore: avoid_print
-    print('''
+    logDebug('''
 ------------------------------------------------------------------------
 [IncomingCallService] Device token registered for user $userId (success=$success)
 Token snippet: ${token.length > 25 ? token.substring(0, 25) : token}...

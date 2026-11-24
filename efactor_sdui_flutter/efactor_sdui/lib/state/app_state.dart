@@ -4215,7 +4215,7 @@ class AppState extends ChangeNotifier {
         uri.host == '127.0.0.1' ||
         uri.host.isEmpty) {
       return uri
-          .replace(scheme: 'http', host: 'efactor.tech', port: null)
+          .replace(scheme: 'https', host: 'efactor.tech', port: null)
           .toString();
     }
     return trimmed;
