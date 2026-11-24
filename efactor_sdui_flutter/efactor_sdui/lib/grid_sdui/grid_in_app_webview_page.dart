@@ -933,6 +933,53 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   bool _isConnectingCall = false;
   Timer? _connectingCallTimer;
   bool _routeIsCurrent = true;
+  bool _isWebViewEventVisible = false;
+
+  bool get _isEffectiveVisible {
+    if (widget.revealSignal != null) {
+      return (widget.revealSignal!.value) && _routeIsCurrent;
+    }
+    return _routeIsCurrent && !_isPopping;
+  }
+
+  void _dispatchWebViewVisibility(bool visible, {bool force = false}) {
+    if (!_isProfessionalSpace) return;
+    if (!force && _isWebViewEventVisible == visible) return;
+    _isWebViewEventVisible = visible;
+
+    final eventName =
+        visible ? 'efactor-webview-visible' : 'efactor-webview-hidden';
+    const String customEventTemplate = r'''
+(function() {
+  try {
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+      try {
+        window.dispatchEvent(new CustomEvent('__EVENT_NAME__'));
+      } catch (e1) {
+        try {
+          var evt = document.createEvent('CustomEvent');
+          evt.initCustomEvent('__EVENT_NAME__', false, false, null);
+          window.dispatchEvent(evt);
+        } catch (e2) {
+          window.dispatchEvent(new Event('__EVENT_NAME__'));
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error dispatching visibility event:', err);
+  }
+})();
+''';
+    final js = customEventTemplate.replaceAll('__EVENT_NAME__', eventName);
+    try {
+      unawaited(_controller.runJavaScript(js));
+      debugPrint(
+        '[GridInAppWebView] Dispatched $eventName for Professional Space (visible=$visible)',
+      );
+    } catch (e) {
+      debugPrint('[GridInAppWebView] Failed to dispatch $eventName: $e');
+    }
+  }
   bool _webCallUiReady = false;
   bool _chatUiReady = false;
   bool _showChatTutorial = false;
@@ -1130,6 +1177,11 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     if (current == _routeIsCurrent) return;
     _routeIsCurrent = current;
     IncomingCallService.instance.onCircleConnectReadinessChanged();
+    if (_isEffectiveVisible) {
+      _dispatchWebViewVisibility(true);
+    } else {
+      _dispatchWebViewVisibility(false);
+    }
   }
 
   @override
@@ -1141,11 +1193,19 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
       if (token != null && token.isNotEmpty) {
         unawaited(GridInAppWebViewPage.updatePushTokenInWeb(token));
       }
+      if (_isEffectiveVisible) {
+        _dispatchWebViewVisibility(true);
+      }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      _dispatchWebViewVisibility(false);
     }
   }
 
   @override
   void dispose() {
+    _dispatchWebViewVisibility(false);
     WidgetsBinding.instance.removeObserver(this);
     ThemeController.instance.removeListener(_onAppThemeChanged);
     _connectingCallTimer?.cancel();
@@ -1527,6 +1587,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
                 GridInAppWebViewPage.isMainHubSignInUrl(targetUri),
               );
             }
+            if (_isProfessionalSpace && _isEffectiveVisible) {
+              _dispatchWebViewVisibility(true, force: true);
+            }
           },
           onPageStarted: (url) {
             debugPrint('[GridInAppWebView] onPageStarted: $url');
@@ -1574,6 +1637,9 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
             if (_isProfessionalSpace) {
               unawaited(_controller.runJavaScript(_gridReadyListenerJs));
               _liftCover('onPageFinished');
+              if (_isEffectiveVisible) {
+                _dispatchWebViewVisibility(true, force: true);
+              }
             }
             setState(() {
               _loading = false;
@@ -3973,6 +4039,7 @@ Error: $error
 
   void _safeExitToGrid() {
     if (!mounted || _isPopping) return;
+    _dispatchWebViewVisibility(false);
     // Keep-alive host (Professional Space): HIDE instead of popping, so the
     // mounted WebView stays alive for an instant re-open. Clear the foreground
     // marker first so incoming-call behavior matches a closed page (same as the
@@ -4888,7 +4955,12 @@ Error: $error
       '[GridInAppWebView] GridLifecycle action="$action" surface="$surface" '
       '-> ready=$isReady',
     );
-    if (isReady) _liftCover('gridReady');
+    if (isReady) {
+      _liftCover('gridReady');
+      if (_isEffectiveVisible) {
+        _dispatchWebViewVisibility(true, force: true);
+      }
+    }
   }
 
   /// Lifts the cover (idempotent). [reason] is for logs.
@@ -4915,12 +4987,13 @@ Error: $error
     } else {
       _hostRevealed = revealed;
     }
-    if (!revealed) return;
+    if (!revealed) {
+      _dispatchWebViewVisibility(false);
+      return;
+    }
     GridInAppWebViewPage._activeState = this;
     IncomingCallService.instance.onCircleConnectReadinessChanged();
-    unawaited(_controller.runJavaScript(
-      "window.dispatchEvent(new Event('efactor-webview-visible'));",
-    ));
+    _dispatchWebViewVisibility(true);
     debugPrint('[GridInAppWebView] Professional Space revealed -> silent refresh');
   }
 
@@ -6341,8 +6414,12 @@ Future<bool> _showCustomJsConfirmDialog(
     final title = (widget.title ?? '').toLowerCase();
     final fullUrl = widget.uri.toString().toLowerCase();
     return path.contains('/grid') ||
+        path.contains('/team') ||
         title.contains('professional') ||
-        fullUrl.contains('/index.php/grid');
+        title.contains('team') ||
+        fullUrl.contains('/index.php/grid') ||
+        fullUrl.contains('/grid/team') ||
+        fullUrl.contains('/team');
   }
 
   void _onChatConversationOpened() {
