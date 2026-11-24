@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme_controller.dart';
+import '../services/grid_notifications_service.dart';
 
 class GridSduiState extends ChangeNotifier {
   static String? persistedSelectedQrMode;
@@ -92,6 +95,211 @@ class GridSduiState extends ChangeNotifier {
 
     _synthesizeStatsRowIfMissing();
     _synthesizeExploringItemsIfMissing();
+    _synthesizeNotificationsIfAvailable();
+  }
+
+  void _synthesizeNotificationsIfAvailable() {
+    final cached = GridNotificationsService.instance.notifications.value;
+    if (cached.isNotEmpty) {
+      applyNotifications(cached, notify: false);
+    }
+  }
+
+  /// Ingests notification rows fetched from [GridNotificationsService]
+  /// and synthesizes or updates them in `grid-explore-row`.
+  void applyNotifications(
+    List<Map<String, dynamic>> notificationRows, {
+    int? unreadCount,
+    bool notify = true,
+  }) {
+    if (notificationRows.isEmpty) return;
+
+    final compMap = Map<String, dynamic>.from(components);
+    final rowComp = compMap['grid-explore-row'];
+    if (rowComp is! Map) return;
+
+    final existingChildren = (rowComp['children'] is List)
+        ? List<dynamic>.from(rowComp['children'] as List)
+        : <dynamic>[];
+
+    final updatedChildren = <dynamic>[];
+
+    for (final rawItem in notificationRows) {
+      final notifId = rawItem['id'];
+      final rawType = (rawItem['type'] ?? '').toString().toLowerCase();
+      final title = (rawItem['title'] ?? '').toString();
+      final body = (rawItem['body'] ?? '').toString();
+      final link = (rawItem['link'] ?? '').toString();
+      final isReadRaw = rawItem['is_read'];
+      final isUnread =
+          isReadRaw == 0 || isReadRaw == false || isReadRaw == '0';
+      final createdAt = rawItem['created_at'];
+      final relativeTime =
+          GridNotificationsService.formatRelativeTime(createdAt);
+      final actorName = rawItem['actor_name']?.toString();
+      final actorAvatar = rawItem['actor_avatar']?.toString();
+      final initials = GridNotificationsService.getInitials(actorName);
+
+      // Determine space: Circle Connect vs Professional
+      final isCircle = rawType.contains('circle') ||
+          rawType.contains('chat') ||
+          link.contains('grid-chat') ||
+          link.contains('/chat');
+      final space = isCircle ? 'circle' : 'professional';
+      final badgeText = isCircle ? 'Chat' : 'Professional';
+
+      // Deep link navigation: origin + '/index.php' + row['link']
+      String fullUrl = link;
+      if (!link.startsWith('http')) {
+        final cleanLink = link.startsWith('/') ? link : '/$link';
+        fullUrl = cleanLink.startsWith('/index.php')
+            ? 'https://efactor.tech$cleanLink'
+            : 'https://efactor.tech/index.php$cleanLink';
+      }
+
+      final compId = 'grid-notif-$notifId';
+      final cardComponent = <String, dynamic>{
+        'id': compId,
+        'type': 'featureCard',
+        'style': 'softCard',
+        'title': title,
+        'subtitle': body.isNotEmpty ? body : title,
+        'time': relativeTime,
+        'label': initials,
+        'initial': initials,
+        'initials': initials,
+        'iconToken': isCircle ? 'message' : 'bell',
+        'imageUrl': actorAvatar ?? '',
+        'image': actorAvatar ?? '',
+        'color': isCircle ? '#f97316' : '#7c3aed',
+        'badge': badgeText,
+        'space': space,
+        'unread': isUnread,
+        'is_read': isUnread ? 0 : 1,
+        'notificationId': notifId,
+        'actionId': 'grid-open-notification-item',
+        'url': fullUrl,
+        'route': fullUrl,
+        'openIn': 'inAppWebView',
+        'layout': <String, dynamic>{
+          'direction': 'horizontal',
+          'alignItems': 'center',
+          'crossAxisAlignment': 'center',
+          'mainAxisSize': 'max',
+          'gap': 12,
+          'height': 74,
+          'minHeight': 74,
+          'width': 'fill',
+        },
+        'appearance': <String, dynamic>{
+          'borderRadius': 16,
+          'backgroundColor': isUnread ? '#f0fdf4' : '#eef2ff',
+          'iconPosition': 'leading',
+          'titlePosition': 'besideIcon',
+          'showIcon': true,
+          'showAvatar': true,
+          'iconSize': 42,
+          'titleFontSize': 14.5,
+          'subtitleFontSize': 12,
+          'padding': 12,
+        },
+        'appearanceDark': <String, dynamic>{
+          'borderRadius': 16,
+          'backgroundColor': isUnread ? '#14231b' : '#141824',
+          'titleColor': '#f8fafc',
+          'subtitleColor': '#94a3b8',
+        },
+      };
+
+      compMap[compId] = cardComponent;
+      updatedChildren.add(compId);
+    }
+
+    // Preserve any existing non-notification items
+    for (final child in existingChildren) {
+      if (!child.toString().startsWith('grid-notif-') &&
+          !updatedChildren.contains(child)) {
+        updatedChildren.add(child);
+      }
+    }
+
+    final updatedRow = Map<String, dynamic>.from(rowComp);
+    updatedRow['children'] = updatedChildren;
+    compMap['grid-explore-row'] = updatedRow;
+
+    // Update section badge if count is supplied
+    final sectionComp = compMap['grid-explore-section'];
+    if (sectionComp is Map) {
+      final updatedSection = Map<String, dynamic>.from(sectionComp);
+      final count = unreadCount ??
+          notificationRows.where((r) {
+            final isRead = r['is_read'];
+            return isRead == 0 || isRead == false || isRead == '0';
+          }).length;
+      if (count > 0) {
+        updatedSection['badge'] = '$count new';
+        updatedSection['headerBadge'] = <String, dynamic>{
+          'label': '$count new',
+          'backgroundColor': '#dcfce7',
+          'color': '#16a34a',
+        };
+      } else {
+        updatedSection['badge'] = '';
+        updatedSection['headerBadge'] = null;
+      }
+      compMap['grid-explore-section'] = updatedSection;
+    }
+
+    schema['components'] = compMap;
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  void _markNotificationItemLocallyRead(dynamic notifId) {
+    final compId = 'grid-notif-$notifId';
+    final compMap = Map<String, dynamic>.from(components);
+    final comp = compMap[compId];
+    if (comp is Map) {
+      final updated = Map<String, dynamic>.from(comp);
+      updated['unread'] = false;
+      updated['is_read'] = 1;
+      final appearance = Map<String, dynamic>.from(
+          _map(updated['appearance']) ?? const <String, dynamic>{});
+      appearance['backgroundColor'] = '#eef2ff';
+      updated['appearance'] = appearance;
+      final appearanceDark = Map<String, dynamic>.from(
+          _map(updated['appearanceDark']) ?? const <String, dynamic>{});
+      appearanceDark['backgroundColor'] = '#141824';
+      updated['appearanceDark'] = appearanceDark;
+      compMap[compId] = updated;
+
+      // Update badge count in grid-explore-section
+      final sectionComp = compMap['grid-explore-section'];
+      if (sectionComp is Map) {
+        final updatedSection = Map<String, dynamic>.from(sectionComp);
+        final currentBadge = (updatedSection['badge'] ?? '').toString();
+        final match = RegExp(r'\d+').firstMatch(currentBadge);
+        if (match != null) {
+          final count = (int.tryParse(match.group(0) ?? '') ?? 1) - 1;
+          if (count > 0) {
+            updatedSection['badge'] = '$count new';
+            updatedSection['headerBadge'] = <String, dynamic>{
+              'label': '$count new',
+              'backgroundColor': '#dcfce7',
+              'color': '#16a34a',
+            };
+          } else {
+            updatedSection['badge'] = '';
+            updatedSection['headerBadge'] = null;
+          }
+          compMap['grid-explore-section'] = updatedSection;
+        }
+      }
+
+      schema['components'] = compMap;
+      notifyListeners();
+    }
   }
 
   void _synthesizeExploringItemsIfMissing() {
@@ -424,6 +632,36 @@ class GridSduiState extends ChangeNotifier {
   Future<void> dispatch(String? actionId, {Map<String, dynamic>? extra}) async {
     final id = actionId?.trim() ?? '';
     if (id.isEmpty) return;
+
+    if (id == 'grid-see-all-exploring' ||
+        id == 'open-grid-exploring-all' ||
+        id == 'open-grid-notifications') {
+      await _openUrl(<String, dynamic>{
+        'type': 'open-url',
+        'url': 'https://efactor.tech/index.php/grid/notifications',
+        'openIn': 'inAppWebView',
+      }, extra: extra);
+      return;
+    }
+
+    if (id == 'grid-open-notification-item') {
+      final notifId = extra?['notificationId'];
+      if (notifId != null) {
+        final parsedId = int.tryParse(notifId.toString());
+        unawaited(GridNotificationsService.instance.markRead(id: parsedId));
+        _markNotificationItemLocallyRead(notifId);
+      }
+      final targetUrl = extra?['url'] ?? extra?['route'] ?? '';
+      if (targetUrl.isNotEmpty) {
+        await _openUrl(<String, dynamic>{
+          'type': 'open-url',
+          'url': targetUrl,
+          'openIn': extra?['openIn'] ?? 'inAppWebView',
+        }, extra: extra);
+        return;
+      }
+    }
+
     final action = this.action(id);
     if (action == null) {
       lastError = 'Unknown Grid action "$id".';
@@ -439,6 +677,28 @@ class GridSduiState extends ChangeNotifier {
     Map<String, dynamic>? extra,
   }) async {
     lastError = null;
+
+    if (actionId == 'grid-see-all-exploring' ||
+        actionId == 'open-grid-exploring-all' ||
+        actionId == 'open-grid-notifications') {
+      final notifAction = Map<String, dynamic>.from(action);
+      notifAction['url'] = 'https://efactor.tech/index.php/grid/notifications';
+      notifAction['route'] =
+          'https://efactor.tech/index.php/grid/notifications';
+      await _openUrl(notifAction, extra: extra);
+      return;
+    }
+
+    if (actionId == 'grid-open-notification-item') {
+      final notifId = extra?['notificationId'] ?? action['notificationId'];
+      if (notifId != null) {
+        final parsedId = int.tryParse(notifId.toString());
+        unawaited(GridNotificationsService.instance.markRead(id: parsedId));
+        _markNotificationItemLocallyRead(notifId);
+      }
+      await _openUrl(action, extra: extra);
+      return;
+    }
     final type = action['type']?.toString();
     final actionIdLower = actionId.toLowerCase();
     if (actionIdLower == 'grid-open-scanner' ||
@@ -645,10 +905,17 @@ class GridSduiState extends ChangeNotifier {
       case 'open-grid-search':
       case 'open-grid-find-talent':
       case 'open-grid-join-circles':
-      case 'open-grid-exploring-all':
         lastError =
             'Grid host action "$hostId" has no destination in the schema yet.';
         notifyListeners();
+        return;
+      case 'open-grid-exploring-all':
+      case 'open-grid-notifications':
+        await _openUrl(<String, dynamic>{
+          'type': 'open-url',
+          'url': 'https://efactor.tech/index.php/grid/notifications',
+          'openIn': 'inAppWebView',
+        }, extra: extra);
         return;
       default:
         lastError = 'Unsupported Grid host action "$hostId".';

@@ -8,6 +8,7 @@ import '../sdui/schema_guard.dart';
 import '../sdui/schema_pull_to_refresh.dart';
 import '../sdui/sdui_network_image_cache.dart';
 import '../services/efactor_cloud_service.dart';
+import '../services/grid_notifications_service.dart';
 import '../services/json_http.dart';
 import '../services/schema_incremental_sync.dart';
 import '../services/schema_invalidation_event.dart';
@@ -118,6 +119,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     // Rebuild when the app-wide Appearance switch (Profile → Appearance)
     // changes so Grid follows light/dark/system like every other screen.
     ThemeController.instance.addListener(_onAppearanceChanged);
+    GridNotificationsService.instance.notifications.addListener(_onNotificationsChanged);
     _repository = widget.repository ??
         GridSchemaRepository(
           accessToken: widget.accessToken,
@@ -274,6 +276,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       if (widget.isActive) {
         if (widget.enableAutoRefresh) _startAutoRefreshTimer();
         _revalidateInBackground(forceFull: false);
+        unawaited(_fetchAndApplyNotifications());
       } else {
         _autoRefreshTimer?.cancel();
         _autoRefreshTimer = null;
@@ -285,6 +288,8 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     ThemeController.instance.removeListener(_onAppearanceChanged);
+    GridNotificationsService.instance.notifications
+        .removeListener(_onNotificationsChanged);
     _schemaInvalidationSubscription?.cancel();
     _cloudConnectionSubscription?.cancel();
     _schemaEventDebounceTimer?.cancel();
@@ -297,6 +302,25 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       _repository.dispose();
     }
     super.dispose();
+  }
+
+  void _onNotificationsChanged() {
+    if (!mounted || _state == null) return;
+    final notifs = GridNotificationsService.instance.notifications.value;
+    if (notifs.isNotEmpty) {
+      _state!.applyNotifications(notifs);
+    }
+  }
+
+  Future<void> _fetchAndApplyNotifications() async {
+    try {
+      final notifs =
+          await GridNotificationsService.instance.fetchNotifications();
+      if (!mounted || _state == null || notifs.isEmpty) return;
+      _state!.applyNotifications(notifs);
+    } catch (e) {
+      logDebug('[DynamicGridSduiPage] _fetchAndApplyNotifications error: $e');
+    }
   }
 
   Future<void> _load({
@@ -345,6 +369,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
           newFingerprint != previousFingerprint;
 
       _applySchema(schema, forceRebuild: forceRefresh);
+      unawaited(_fetchAndApplyNotifications());
 
       if (showFeedback && mounted) {
         final String message;
@@ -400,6 +425,7 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       _lastSchemaLoadAt = DateTime.now();
       if (!result.changed) return;
       _applySchema(result.schema);
+      unawaited(_fetchAndApplyNotifications());
       logDebug(
         '[GRID_SDUI][AUTO_REFRESH] applied '
         'delta=${result.usedDelta} source=${result.source}',
@@ -600,6 +626,8 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       onChromeVisibilityChanged: (showChrome) =>
           widget.onFullscreenChanged?.call(!showChrome),
     );
+    _circleConnectRevealed = false;
+    _circleConnectReveal.value = false;
     setState(() => _professionalSpaceRevealed = true);
     _professionalSpaceReveal.value = true;
     widget.onFullscreenChanged?.call(true); // host hides app bar + bottom nav
@@ -633,6 +661,8 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       onChromeVisibilityChanged: (showChrome) =>
           widget.onFullscreenChanged?.call(!showChrome),
     );
+    _professionalSpaceRevealed = false;
+    _professionalSpaceReveal.value = false;
     setState(() => _circleConnectRevealed = true);
     _circleConnectReveal.value = true;
     widget.onFullscreenChanged?.call(true); // host hides app bar + bottom nav
@@ -785,11 +815,9 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
     if (!psActive && !ccActive) {
       return hub;
     }
-    return Stack(
-      children: <Widget>[
-        Positioned.fill(child: hub),
-        if (ccActive)
-          Positioned.fill(
+
+    final ccWidget = ccActive
+        ? Positioned.fill(
             child: Offstage(
               offstage: !_circleConnectRevealed,
               child: TickerMode(
@@ -800,9 +828,11 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
                 ),
               ),
             ),
-          ),
-        if (psActive)
-          Positioned.fill(
+          )
+        : null;
+
+    final psWidget = psActive
+        ? Positioned.fill(
             child: Offstage(
               offstage: !_professionalSpaceRevealed,
               child: TickerMode(
@@ -813,7 +843,22 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
                 ),
               ),
             ),
-          ),
+          )
+        : null;
+
+    final overlays = <Widget>[];
+    if (_circleConnectRevealed) {
+      if (psWidget != null) overlays.add(psWidget);
+      if (ccWidget != null) overlays.add(ccWidget);
+    } else {
+      if (ccWidget != null) overlays.add(ccWidget);
+      if (psWidget != null) overlays.add(psWidget);
+    }
+
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(child: hub),
+        ...overlays,
       ],
     );
   }

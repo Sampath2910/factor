@@ -923,6 +923,10 @@ class GridSduiRenderer {
           (c['badge'] ?? _map(c['chip'])?['label'])?.toString().trim() ?? '';
       final showBadge =
           appearance['showBadge'] != false && badgeText.isNotEmpty;
+      final relativeTime =
+          (c['time'] ?? c['createdAt'] ?? c['created_at'])?.toString().trim() ?? '';
+      final isUnread =
+          c['unread'] == true || c['is_read'] == 0 || c['is_read'] == '0';
 
       cardBody = Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -966,25 +970,66 @@ class GridSduiRenderer {
               ],
             ),
           ),
-          if (showBadge) ...<Widget>[
+          if (relativeTime.isNotEmpty || isUnread || showBadge) ...<Widget>[
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                badgeText,
-                style: _font(
-                  TextStyle(
-                    color: ctaColor ?? accent,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  component: c,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (isUnread) ...<Widget>[
+                      Container(
+                        width: 7.5,
+                        height: 7.5,
+                        margin: const EdgeInsets.only(right: 5),
+                        decoration: BoxDecoration(
+                          color: state.parseColor(appearance['unreadDotColor']) ??
+                              const Color(0xFF3B82F6),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                    if (relativeTime.isNotEmpty) ...<Widget>[
+                      Text(
+                        relativeTime,
+                        style: _font(
+                          TextStyle(
+                            color: subtitleColor ??
+                                textColor.withValues(alpha: 0.65),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          component: c,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
+                if (showBadge) ...<Widget>[
+                  const SizedBox(height: 3.5),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      badgeText,
+                      style: _font(
+                        TextStyle(
+                          color: ctaColor ?? accent,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        component: c,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
           if (appearance['showActionArrow'] == true) ...<Widget>[
@@ -1187,6 +1232,7 @@ class GridSduiRenderer {
             'url': c['url'],
             'route': c['route'],
             'title': c['title'],
+            'notificationId': c['notificationId'],
             'openIn': c['openIn'] ?? _map(c['destination'])?['openIn'],
           },
         ),
