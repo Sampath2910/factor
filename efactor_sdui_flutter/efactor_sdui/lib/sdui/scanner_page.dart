@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -32,6 +34,11 @@ class _ScannerPageState extends State<ScannerPage> {
   String? _hintMessage;
   Color _hintColor = const Color(0xFFE31E24);
 
+  /// A corrupt / unreadable QR never reaches [_onDetect] (the decoder emits
+  /// nothing), so the only way to tell the user is a no-read timeout.
+  Timer? _noReadTimer;
+  static const Color _warnColor = Color(0xFFF59E0B);
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +72,23 @@ class _ScannerPageState extends State<ScannerPage> {
     if (!mounted) return;
     if (!status.isGranted) {
       setState(() => _permissionDenied = true);
+      return;
     }
+    _startNoReadTimer();
+  }
+
+  /// Nudges the user after a stretch of no successful read — the usual cause,
+  /// once the frame is lined up, is a damaged or invalid QR.
+  void _startNoReadTimer() {
+    _noReadTimer?.cancel();
+    _noReadTimer = Timer(const Duration(seconds: 9), () {
+      if (!mounted || _handled) return;
+      _showHint(
+        "Can't read this QR. It may be damaged or not a valid device QR — "
+        'try a clearer code or ask for a fresh QR.',
+        color: _warnColor,
+      );
+    });
   }
 
   List<BarcodeFormat> _mapFormats(List<String> formats) {
@@ -128,6 +151,9 @@ class _ScannerPageState extends State<ScannerPage> {
     final barcodes = capture.barcodes;
     if (barcodes.isEmpty) return;
 
+    // A code is being read — not a no-read situation; restart the nudge timer.
+    _startNoReadTimer();
+
     final barcode = barcodes.first;
     final value = barcode.rawValue?.trim();
     if (value == null || value.isEmpty) {
@@ -161,6 +187,7 @@ class _ScannerPageState extends State<ScannerPage> {
     }
 
     _handled = true;
+    _noReadTimer?.cancel();
     _showHint('QR code scanned successfully!', color: const Color(0xFF10B981));
 
     Future<void>.delayed(const Duration(milliseconds: 450), () {
@@ -220,6 +247,7 @@ class _ScannerPageState extends State<ScannerPage> {
 
   @override
   void dispose() {
+    _noReadTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -340,7 +368,9 @@ class _ScannerPageState extends State<ScannerPage> {
                                 Icon(
                                   _hintColor == const Color(0xFF10B981)
                                       ? Icons.check_circle
-                                      : Icons.qr_code_2,
+                                      : _hintColor == _warnColor
+                                          ? Icons.error_outline
+                                          : Icons.qr_code_2,
                                   color: Colors.white,
                                 ),
                                 const SizedBox(width: 12),

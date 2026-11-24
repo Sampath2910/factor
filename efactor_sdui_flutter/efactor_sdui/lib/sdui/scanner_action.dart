@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
@@ -106,6 +107,18 @@ Future<void> handleOpenScanner(
       icon: Icons.error_outline,
     );
     return;
+  }
+
+  // Debug-only: let a tester see exactly what the QR decoded to and the body
+  // that will be posted, so a wrong/garbled scan is obvious on-device.
+  if (kDebugMode) {
+    await _showScanDebugDialog(
+      context,
+      rawValue: value,
+      format: format,
+      payload: buildResult.payload,
+    );
+    if (!context.mounted) return;
   }
 
   _showSnack(
@@ -278,6 +291,48 @@ String _firstNonEmpty(List<dynamic> values) {
     }
   }
   return '';
+}
+
+/// Debug-only inspector: shows the raw decoded QR value and the exact POST body
+/// so a tester can see on-device whether the scan read the right data.
+Future<void> _showScanDebugDialog(
+  BuildContext context, {
+  required String rawValue,
+  required String format,
+  required Map<String, dynamic> payload,
+}) async {
+  Widget row(String k, String v) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text('$k: $v', style: const TextStyle(fontSize: 13)),
+      );
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      icon: const Icon(Icons.bug_report_outlined),
+      title: const Text('Scan debug'),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            row('format', format),
+            row('raw value', rawValue.isEmpty ? '(empty)' : rawValue),
+            const Divider(),
+            row('model_no', payload['model_no']?.toString() ?? ''),
+            row('node_id', payload['node_id']?.toString() ?? ''),
+            row('device_id', payload['device_id']?.toString() ?? ''),
+            row('qr_value', payload['qr_value']?.toString() ?? ''),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Send'),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Shows a SnackBar using theme colors — no hardcoded hex values.

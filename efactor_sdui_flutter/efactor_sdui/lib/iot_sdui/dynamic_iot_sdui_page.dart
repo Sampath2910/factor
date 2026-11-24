@@ -979,9 +979,11 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
 
     if (expectedId.isEmpty) return null;
 
+    final candidates = <String>[];
     for (final device in state.devices) {
       final candidate =
           _readMapPath(device, controlField)?.toString().trim() ?? '';
+      candidates.add(candidate);
       if (candidate == expectedId) {
         logDebug(
           '[IOT_SDUI][ADD_DEVICE][VERIFY] '
@@ -994,11 +996,16 @@ class _DynamicIotSduiPageState extends State<DynamicIotSduiPage>
       }
     }
 
+    // Exact match failed though the add may have succeeded. Log the id we
+    // looked for and the ids the refreshed list returned, so a format mismatch
+    // (e.g. wrapped "EF/.../<id>/..." vs the bare id) is visible on-device.
     logDebug(
       '[IOT_SDUI][ADD_DEVICE][VERIFY_DETAIL] '
       'controlField=$controlField '
       'deviceCount=${state.devices.length} '
-      'expectedSource=${expectedId == scannedNodeId.trim() ? 'scan' : 'mutationResponse'}',
+      'expectedSource=${expectedId == scannedNodeId.trim() ? 'scan' : 'mutationResponse'} '
+      'expectedId="$expectedId" '
+      'listIds=${candidates.take(20).toList()}',
     );
     return false;
   }
