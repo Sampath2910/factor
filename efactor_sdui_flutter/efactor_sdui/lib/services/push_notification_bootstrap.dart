@@ -259,6 +259,32 @@ bool isSafeEfactorUrl(String url) {
   return host == 'efactor.tech' || host.endsWith('.efactor.tech');
 }
 
+/// Rewrites relative `/...` notification URLs to absolute efactor.tech URLs,
+/// in place. A relative URL has an empty host, so [isSafeEfactorUrl] would
+/// otherwise reject it and the tap would be dropped.
+void normalizeRelativeNotificationUrls(Map<String, dynamic> data) {
+  for (final key in const <String>['url', 'target_url', 'targetUrl']) {
+    final value = data[key]?.toString().trim();
+    if (value != null && value.startsWith('/')) {
+      data[key] = 'https://efactor.tech$value';
+    }
+  }
+}
+
+/// Stable key used to suppress a notification tap delivered by both the iOS
+/// native bridge and FirebaseMessaging. Empty when nothing identifying is
+/// present (then the caller does not dedup).
+String notificationTapDedupKey(Map<String, dynamic> data) {
+  final fcm =
+      (data['_fcm_message_id'] ?? data['gcm.message_id'] ?? '').toString().trim();
+  final conv =
+      (data['conversation_id'] ?? data['conversationId'] ?? '').toString().trim();
+  final msg =
+      (data['message_id'] ?? data['messageId'] ?? '').toString().trim();
+  final action = (data['actionId'] ?? '').toString().trim();
+  return [fcm, conv, msg, action].where((s) => s.isNotEmpty).join('|');
+}
+
 /// Checks whether an FCM push payload represents a Professional Space (GRID) event.
 bool isProfessionalSpacePush(Map<String, dynamic> data) {
   if (GridChatMessage.isGridChatMessage(data)) return false;
@@ -1605,14 +1631,9 @@ class PushNotificationBootstrap {
     await requestNotificationPermission();
 
     final messaging = FirebaseMessaging.instance;
-    await _captureToken(messaging);
 
-    _tokenSub = messaging.onTokenRefresh.listen((refreshed) {
-      IncomingCallService.instance.setDeviceToken(refreshed);
-      unawaited(_syncTokenIfLoggedIn(refreshed));
-      unawaited(GridInAppWebViewPage.updatePushTokenInWeb(refreshed));
-    });
-
+    // Wire tap handling BEFORE the (iOS: up to 6s APNs) token capture, so no
+    // tap event is dropped during startup. _captureToken is now non-blocking.
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpened);
 
@@ -1624,6 +1645,9 @@ class PushNotificationBootstrap {
         if (isSafeEfactorUrl(url)) {
           unawaited(GridInAppWebViewPage.loadTargetUrl(url));
         }
+      } else if (call.method == 'openNotificationPayload') {
+        final data = _coerceStringMap(call.arguments);
+        if (data != null && data.isNotEmpty) _handleRemoteTapData(data);
       }
       return null;
     });
@@ -1637,6 +1661,18 @@ class PushNotificationBootstrap {
     } catch (e) {
       logDebug('[PushBootstrap] getInitialMessage error: $e');
     }
+
+    // iOS: drain any tap the native bridge buffered before Dart was ready.
+    await _drainPendingIosTap();
+
+    _tokenSub = messaging.onTokenRefresh.listen((refreshed) {
+      IncomingCallService.instance.setDeviceToken(refreshed);
+      unawaited(_syncTokenIfLoggedIn(refreshed));
+      unawaited(GridInAppWebViewPage.updatePushTokenInWeb(refreshed));
+    });
+
+    // Non-blocking: the iOS APNs token loop must not delay tap handling.
+    unawaited(_captureToken(messaging));
 
     try {
       final launchDetails = await _local.getNotificationAppLaunchDetails();
@@ -2017,7 +2053,59 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
   }
 
   void _onMessageOpened(RemoteMessage message) {
-    _handlePayloadMap(Map<String, dynamic>.from(message.data));
+    final data = Map<String, dynamic>.from(message.data);
+    final msgId = message.messageId;
+    if (msgId != null && msgId.isNotEmpty) {
+      data.putIfAbsent('_fcm_message_id', () => msgId);
+    }
+    _handleRemoteTapData(data);
+  }
+
+  final Map<String, int> _recentTapTimestamps = <String, int>{};
+
+  /// Unified entry for notification taps from BOTH the iOS native bridge
+  /// (openNotificationPayload / getPendingNotificationTap) and FirebaseMessaging
+  /// (onMessageOpenedApp / getInitialMessage). Deduplicates within 4s, rewrites
+  /// relative URLs to absolute efactor.tech URLs, then routes via the existing
+  /// [_handlePayloadMap].
+  void _handleRemoteTapData(Map<String, dynamic> data) {
+    final key = notificationTapDedupKey(data);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _recentTapTimestamps.removeWhere((_, t) => now - t > 10000);
+    if (key.isNotEmpty) {
+      final last = _recentTapTimestamps[key];
+      if (last != null && now - last < 4000) {
+        logDebug('[PushBootstrap] duplicate tap suppressed key=$key');
+        return;
+      }
+      _recentTapTimestamps[key] = now;
+    }
+    normalizeRelativeNotificationUrls(data);
+    _handlePayloadMap(data);
+  }
+
+  Map<String, dynamic>? _coerceStringMap(dynamic args) {
+    if (args is Map) {
+      return args.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return null;
+  }
+
+  Future<void> _drainPendingIosTap() async {
+    if (kIsWeb || !Platform.isIOS) return;
+    try {
+      const channel = MethodChannel('tech.efactor/circle_connect');
+      final pending =
+          await channel.invokeMethod<dynamic>('getPendingNotificationTap');
+      final data = _coerceStringMap(pending);
+      if (data != null && data.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _handleRemoteTapData(data);
+        });
+      }
+    } catch (e) {
+      logDebug('[PushBootstrap] getPendingNotificationTap error: $e');
+    }
   }
 
   Future<void> _handleNotificationResponse(
@@ -2241,12 +2329,23 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
       }
     }
 
+    // Circle Connect chat pushes carry a conversation_id (and may also carry a
+    // generic /grid-chat target_url). They must route to the chat, not be
+    // swallowed by the Professional Space / target_url branch below.
+    final isChatPush =
+        (data['conversation_id'] ?? data['conversationId'] ?? '')
+                .toString()
+                .trim()
+                .isNotEmpty ||
+            GridChatMessage.isGridChatMessage(data);
+
     // Professional Space event or target_url tap
     final targetUrl =
         (data['target_url'] ?? data['targetUrl'] ?? '').toString().trim();
-    if (type == 'PROFESSIONAL_SPACE_EVENT' ||
-        isProfessionalSpacePush(data) ||
-        targetUrl.isNotEmpty) {
+    if (!isChatPush &&
+        (type == 'PROFESSIONAL_SPACE_EVENT' ||
+            isProfessionalSpacePush(data) ||
+            targetUrl.isNotEmpty)) {
       final effectiveUrl = targetUrl.isNotEmpty
           ? targetUrl
           : (data['url'] ?? '').toString().trim();

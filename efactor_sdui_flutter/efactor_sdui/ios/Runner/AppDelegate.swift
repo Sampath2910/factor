@@ -17,6 +17,15 @@ import WebKit
   private var documentInteractionController: UIDocumentInteractionController?
   private var previewAudioPlayer: AVAudioPlayer?
 
+  // Notification-tap bridging. Because this app uses UIScene +
+  // FlutterImplicitEngineDelegate, FLTFirebaseMessagingPlugin misses the tap
+  // callbacks, so we capture taps natively and forward them to Dart over the
+  // existing tech.efactor/circle_connect channel.
+  private var pendingNotificationTapData: [String: Any]?
+  private var isDartNotificationReady = false
+  private var lastHandledTapKey: String?
+  private var lastHandledTapAt: Date?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -26,6 +35,12 @@ import WebKit
       UNUserNotificationCenter.current().delegate = self
     }
     application.registerForRemoteNotifications()
+
+    // Cold-start tap delivered via the classic launch-options key (non-scene
+    // path / fallback). Buffered until Dart signals ready.
+    if let remote = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+      captureRemoteTap(remote, actionId: nil, input: nil)
+    }
 
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     if !isBridgeRegistered, let controller = (window?.rootViewController as? FlutterViewController) ?? (topViewController() as? FlutterViewController) {
@@ -246,6 +261,13 @@ import WebKit
         } else {
           result(false)
         }
+      case "getPendingNotificationTap":
+        // Dart is now ready to receive taps live. Hand back and clear any tap
+        // buffered during cold start (atomic), and mark ready for live delivery.
+        self.isDartNotificationReady = true
+        let pending = self.pendingNotificationTapData
+        self.pendingNotificationTapData = nil
+        result(pending)
       case "getDeviceManufacturer":
         result("apple")
       case "wakeAndUnlock":
@@ -548,6 +570,109 @@ import WebKit
       let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: controller.binaryMessenger)
       channel.invokeMethod("openSettingsUrl", arguments: ["url": "https://efactor.tech/index.php/grid-chat/settings"])
     }
+  }
+
+  // MARK: - Notification tap capture & bridge
+
+  /// Tap on a delivered notification (background / foreground). FlutterAppDelegate
+  /// does NOT forward this to firebase_messaging under UIScene, so we capture it.
+  @available(iOS 10.0, *)
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    let userInfo = response.notification.request.content.userInfo
+    if !isLocalNotification(userInfo) {
+      captureRemoteTap(
+        userInfo,
+        actionId: response.actionIdentifier,
+        input: (response as? UNTextInputNotificationResponse)?.userText
+      )
+    }
+    // Keep flutter_local_notifications and other plugins working (call/chat
+    // action buttons are owned there).
+    super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
+  }
+
+  /// Cold-start tap forwarded from SceneDelegate (UIScene path).
+  func handleLaunchNotificationResponse(_ response: UNNotificationResponse) {
+    let userInfo = response.notification.request.content.userInfo
+    guard !isLocalNotification(userInfo) else { return }
+    captureRemoteTap(
+      userInfo,
+      actionId: response.actionIdentifier,
+      input: (response as? UNTextInputNotificationResponse)?.userText
+    )
+  }
+
+  /// Local notifications (calls / chat action buttons) are owned by
+  /// flutter_local_notifications; never double-handle them here.
+  private func isLocalNotification(_ userInfo: [AnyHashable: Any]) -> Bool {
+    return userInfo["NotificationId"] != nil && userInfo["payload"] != nil
+  }
+
+  private func captureRemoteTap(_ userInfo: [AnyHashable: Any], actionId: String?, input: String?) {
+    var payload = flattenUserInfo(userInfo)
+    if let actionId = actionId, actionId != UNNotificationDefaultActionIdentifier {
+      payload["actionId"] = actionId
+    }
+    if let input = input { payload["input"] = input }
+
+    // Deduplicate rapid duplicate callbacks within ~3s (keyed by message id,
+    // conversation and action). A second dedup window exists on the Dart side.
+    let key = [
+      payload["_fcm_message_id"] as? String ?? "",
+      payload["conversation_id"] as? String ?? payload["conversationId"] as? String ?? "",
+      payload["actionId"] as? String ?? ""
+    ].joined(separator: "|")
+    let now = Date()
+    if key == lastHandledTapKey, let last = lastHandledTapAt, now.timeIntervalSince(last) < 3.0 {
+      return
+    }
+    lastHandledTapKey = key
+    lastHandledTapAt = now
+
+    if isDartNotificationReady, let messenger = currentBinaryMessenger() {
+      let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: messenger)
+      channel.invokeMethod("openNotificationPayload", arguments: payload)
+    } else {
+      // Dart not ready yet (cold start): buffer for getPendingNotificationTap.
+      pendingNotificationTapData = payload
+    }
+  }
+
+  /// Flattens the APNs userInfo into a JSON-safe [String: Any] for the channel:
+  /// preserves gcm.message_id as _fcm_message_id, drops the aps envelope, and
+  /// lifts a nested `data` object to the top level.
+  private func flattenUserInfo(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+    var out: [String: Any] = [:]
+    for (rawKey, value) in userInfo {
+      guard let key = rawKey as? String else { continue }
+      if key == "gcm.message_id" || key == "google.message_id" {
+        out["_fcm_message_id"] = value
+        continue
+      }
+      if key == "aps" { continue }
+      if let nested = value as? [String: Any] {
+        for (nk, nv) in nested { out[nk] = jsonSafeValue(nv) }
+      } else {
+        out[key] = jsonSafeValue(value)
+      }
+    }
+    return out
+  }
+
+  private func jsonSafeValue(_ value: Any) -> Any {
+    if value is String || value is NSNumber || value is Bool { return value }
+    return String(describing: value)
+  }
+
+  private func currentBinaryMessenger() -> FlutterBinaryMessenger? {
+    let controller = (topViewController() as? FlutterViewController)
+      ?? (window?.rootViewController as? FlutterViewController)
+      ?? (activeWindow()?.rootViewController as? FlutterViewController)
+    return controller?.binaryMessenger
   }
 }
 
