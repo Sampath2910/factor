@@ -253,6 +253,8 @@ class _DynamicGridSduiPageState extends State<DynamicGridSduiPage>
       if (_schemaIsStaleForResume) {
         _revalidateInBackground(forceFull: true);
       }
+      unawaited(_fetchAndApplyNotifications());
+      unawaited(GridNotificationsService.instance.fetchActiveCall());
     }
   }
 

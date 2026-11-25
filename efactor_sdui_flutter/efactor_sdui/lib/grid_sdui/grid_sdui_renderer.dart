@@ -1233,6 +1233,8 @@ class GridSduiRenderer {
             'route': c['route'],
             'title': c['title'],
             'notificationId': c['notificationId'],
+            'space': c['space'],
+            'componentId': c['id'],
             'openIn': c['openIn'] ?? _map(c['destination'])?['openIn'],
           },
         ),

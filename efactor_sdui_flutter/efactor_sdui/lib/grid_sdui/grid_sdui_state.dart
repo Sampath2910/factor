@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -98,210 +97,6 @@ class GridSduiState extends ChangeNotifier {
     _synthesizeNotificationsIfAvailable();
   }
 
-  void _synthesizeNotificationsIfAvailable() {
-    final cached = GridNotificationsService.instance.notifications.value;
-    if (cached.isNotEmpty) {
-      applyNotifications(cached, notify: false);
-    }
-  }
-
-  /// Ingests notification rows fetched from [GridNotificationsService]
-  /// and synthesizes or updates them in `grid-explore-row`.
-  void applyNotifications(
-    List<Map<String, dynamic>> notificationRows, {
-    int? unreadCount,
-    bool notify = true,
-  }) {
-    if (notificationRows.isEmpty) return;
-
-    final compMap = Map<String, dynamic>.from(components);
-    final rowComp = compMap['grid-explore-row'];
-    if (rowComp is! Map) return;
-
-    final existingChildren = (rowComp['children'] is List)
-        ? List<dynamic>.from(rowComp['children'] as List)
-        : <dynamic>[];
-
-    final updatedChildren = <dynamic>[];
-
-    for (final rawItem in notificationRows) {
-      final notifId = rawItem['id'];
-      final rawType = (rawItem['type'] ?? '').toString().toLowerCase();
-      final title = (rawItem['title'] ?? '').toString();
-      final body = (rawItem['body'] ?? '').toString();
-      final link = (rawItem['link'] ?? '').toString();
-      final isReadRaw = rawItem['is_read'];
-      final isUnread =
-          isReadRaw == 0 || isReadRaw == false || isReadRaw == '0';
-      final createdAt = rawItem['created_at'];
-      final relativeTime =
-          GridNotificationsService.formatRelativeTime(createdAt);
-      final actorName = rawItem['actor_name']?.toString();
-      final actorAvatar = rawItem['actor_avatar']?.toString();
-      final initials = GridNotificationsService.getInitials(actorName);
-
-      // Determine space: Circle Connect vs Professional
-      final isCircle = rawType.contains('circle') ||
-          rawType.contains('chat') ||
-          link.contains('grid-chat') ||
-          link.contains('/chat');
-      final space = isCircle ? 'circle' : 'professional';
-      final badgeText = isCircle ? 'Chat' : 'Professional';
-
-      // Deep link navigation: origin + '/index.php' + row['link']
-      String fullUrl = link;
-      if (!link.startsWith('http')) {
-        final cleanLink = link.startsWith('/') ? link : '/$link';
-        fullUrl = cleanLink.startsWith('/index.php')
-            ? 'https://efactor.tech$cleanLink'
-            : 'https://efactor.tech/index.php$cleanLink';
-      }
-
-      final compId = 'grid-notif-$notifId';
-      final cardComponent = <String, dynamic>{
-        'id': compId,
-        'type': 'featureCard',
-        'style': 'softCard',
-        'title': title,
-        'subtitle': body.isNotEmpty ? body : title,
-        'time': relativeTime,
-        'label': initials,
-        'initial': initials,
-        'initials': initials,
-        'iconToken': isCircle ? 'message' : 'bell',
-        'imageUrl': actorAvatar ?? '',
-        'image': actorAvatar ?? '',
-        'color': isCircle ? '#f97316' : '#7c3aed',
-        'badge': badgeText,
-        'space': space,
-        'unread': isUnread,
-        'is_read': isUnread ? 0 : 1,
-        'notificationId': notifId,
-        'actionId': 'grid-open-notification-item',
-        'url': fullUrl,
-        'route': fullUrl,
-        'openIn': 'inAppWebView',
-        'layout': <String, dynamic>{
-          'direction': 'horizontal',
-          'alignItems': 'center',
-          'crossAxisAlignment': 'center',
-          'mainAxisSize': 'max',
-          'gap': 12,
-          'height': 74,
-          'minHeight': 74,
-          'width': 'fill',
-        },
-        'appearance': <String, dynamic>{
-          'borderRadius': 16,
-          'backgroundColor': isUnread ? '#f0fdf4' : '#eef2ff',
-          'iconPosition': 'leading',
-          'titlePosition': 'besideIcon',
-          'showIcon': true,
-          'showAvatar': true,
-          'iconSize': 42,
-          'titleFontSize': 14.5,
-          'subtitleFontSize': 12,
-          'padding': 12,
-        },
-        'appearanceDark': <String, dynamic>{
-          'borderRadius': 16,
-          'backgroundColor': isUnread ? '#14231b' : '#141824',
-          'titleColor': '#f8fafc',
-          'subtitleColor': '#94a3b8',
-        },
-      };
-
-      compMap[compId] = cardComponent;
-      updatedChildren.add(compId);
-    }
-
-    // Preserve any existing non-notification items
-    for (final child in existingChildren) {
-      if (!child.toString().startsWith('grid-notif-') &&
-          !updatedChildren.contains(child)) {
-        updatedChildren.add(child);
-      }
-    }
-
-    final updatedRow = Map<String, dynamic>.from(rowComp);
-    updatedRow['children'] = updatedChildren;
-    compMap['grid-explore-row'] = updatedRow;
-
-    // Update section badge if count is supplied
-    final sectionComp = compMap['grid-explore-section'];
-    if (sectionComp is Map) {
-      final updatedSection = Map<String, dynamic>.from(sectionComp);
-      final count = unreadCount ??
-          notificationRows.where((r) {
-            final isRead = r['is_read'];
-            return isRead == 0 || isRead == false || isRead == '0';
-          }).length;
-      if (count > 0) {
-        updatedSection['badge'] = '$count new';
-        updatedSection['headerBadge'] = <String, dynamic>{
-          'label': '$count new',
-          'backgroundColor': '#dcfce7',
-          'color': '#16a34a',
-        };
-      } else {
-        updatedSection['badge'] = '';
-        updatedSection['headerBadge'] = null;
-      }
-      compMap['grid-explore-section'] = updatedSection;
-    }
-
-    schema['components'] = compMap;
-    if (notify) {
-      notifyListeners();
-    }
-  }
-
-  void _markNotificationItemLocallyRead(dynamic notifId) {
-    final compId = 'grid-notif-$notifId';
-    final compMap = Map<String, dynamic>.from(components);
-    final comp = compMap[compId];
-    if (comp is Map) {
-      final updated = Map<String, dynamic>.from(comp);
-      updated['unread'] = false;
-      updated['is_read'] = 1;
-      final appearance = Map<String, dynamic>.from(
-          _map(updated['appearance']) ?? const <String, dynamic>{});
-      appearance['backgroundColor'] = '#eef2ff';
-      updated['appearance'] = appearance;
-      final appearanceDark = Map<String, dynamic>.from(
-          _map(updated['appearanceDark']) ?? const <String, dynamic>{});
-      appearanceDark['backgroundColor'] = '#141824';
-      updated['appearanceDark'] = appearanceDark;
-      compMap[compId] = updated;
-
-      // Update badge count in grid-explore-section
-      final sectionComp = compMap['grid-explore-section'];
-      if (sectionComp is Map) {
-        final updatedSection = Map<String, dynamic>.from(sectionComp);
-        final currentBadge = (updatedSection['badge'] ?? '').toString();
-        final match = RegExp(r'\d+').firstMatch(currentBadge);
-        if (match != null) {
-          final count = (int.tryParse(match.group(0) ?? '') ?? 1) - 1;
-          if (count > 0) {
-            updatedSection['badge'] = '$count new';
-            updatedSection['headerBadge'] = <String, dynamic>{
-              'label': '$count new',
-              'backgroundColor': '#dcfce7',
-              'color': '#16a34a',
-            };
-          } else {
-            updatedSection['badge'] = '';
-            updatedSection['headerBadge'] = null;
-          }
-          compMap['grid-explore-section'] = updatedSection;
-        }
-      }
-
-      schema['components'] = compMap;
-      notifyListeners();
-    }
-  }
-
   void _synthesizeExploringItemsIfMissing() {
     final exploring = _map(content['exploring']);
     final items = exploring?['items'];
@@ -397,6 +192,252 @@ class GridSduiState extends ChangeNotifier {
     updatedRow['children'] = updatedChildren;
     compMap['grid-explore-row'] = updatedRow;
     schema['components'] = compMap;
+  }
+
+  void _synthesizeNotificationsIfAvailable() {
+    final cached = GridNotificationsService.instance.notifications.value;
+    if (cached.isNotEmpty) {
+      applyNotifications(cached, notify: false);
+    }
+  }
+
+  /// Ingests notification rows fetched from [GridNotificationsService]
+  /// and synthesizes or updates them in `grid-explore-row`.
+  void applyNotifications(
+    List<Map<String, dynamic>> notificationRows, {
+    int? unreadCount,
+    bool notify = true,
+  }) {
+    if (notificationRows.isEmpty) return;
+
+    final compMap = Map<String, dynamic>.from(components);
+    final rowComp = compMap['grid-explore-row'];
+    if (rowComp is! Map) return;
+
+    final existingChildren = (rowComp['children'] is List)
+        ? List<dynamic>.from(rowComp['children'] as List)
+        : <dynamic>[];
+
+    final updatedChildren = <dynamic>[];
+    var professionalCount = 0;
+    var circleCount = 0;
+
+    for (final rawItem in notificationRows) {
+      final notifId = rawItem['id'];
+      final rawType = (rawItem['type'] ?? '').toString().toLowerCase();
+      final title = (rawItem['title'] ?? '').toString();
+      final body = (rawItem['body'] ?? '').toString();
+      final link = (rawItem['link'] ?? '').toString();
+      final isReadRaw = rawItem['is_read'];
+      final isUnread =
+          isReadRaw == 0 || isReadRaw == false || isReadRaw == '0';
+      final createdAt = rawItem['created_at'];
+      final relativeTime =
+          GridNotificationsService.formatRelativeTime(createdAt);
+      final actorName = rawItem['actor_name']?.toString();
+      final actorAvatar = rawItem['actor_avatar']?.toString();
+      final initials = GridNotificationsService.getInitials(actorName);
+
+      // Determine space: Circle Connect vs Professional
+      final explicitSource =
+          rawItem['_notificationSpace']?.toString().trim().toLowerCase();
+      final isCircle = explicitSource == 'circle' ||
+          explicitSource == 'chat' ||
+          (explicitSource != 'professional' &&
+              (rawType.contains('circle') ||
+                  rawType.contains('chat') ||
+                  link.contains('grid-chat') ||
+                  link.contains('/chat')));
+      final space = isCircle ? 'circle' : 'professional';
+      final badgeText = isCircle ? 'Chat' : 'Professional';
+      if (isCircle) {
+        circleCount++;
+      } else {
+        professionalCount++;
+      }
+
+      // Deep link navigation: origin + '/index.php' + row['link']
+      String fullUrl = link;
+      if (link.isNotEmpty && !link.startsWith('http')) {
+        final cleanLink = link.startsWith('/') ? link : '/$link';
+        fullUrl = cleanLink.startsWith('/index.php')
+            ? 'https://efactor.tech$cleanLink'
+            : 'https://efactor.tech/index.php$cleanLink';
+      }
+
+      var compId = 'grid-notif-$notifId';
+      if (updatedChildren.contains(compId)) {
+        compId = 'grid-notif-$space-$notifId';
+      }
+      final cardComponent = <String, dynamic>{
+        'id': compId,
+        'type': 'featureCard',
+        'style': 'softCard',
+        'title': title,
+        'subtitle': body.isNotEmpty ? body : title,
+        'time': relativeTime,
+        'label': initials,
+        'initial': initials,
+        'initials': initials,
+        'iconToken': isCircle ? 'message' : 'bell',
+        'imageUrl': actorAvatar ?? '',
+        'image': actorAvatar ?? '',
+        'color': isCircle ? '#f97316' : '#7c3aed',
+        'badge': badgeText,
+        'space': space,
+        'unread': isUnread,
+        'is_read': isUnread ? 0 : 1,
+        'notificationId': notifId,
+        'actionId': 'grid-open-notification-item',
+        'url': fullUrl,
+        'route': fullUrl,
+        'openIn': 'inAppWebView',
+        'layout': <String, dynamic>{
+          'direction': 'horizontal',
+          'alignItems': 'center',
+          'crossAxisAlignment': 'center',
+          'mainAxisSize': 'max',
+          'gap': 12,
+          'height': 74,
+          'minHeight': 74,
+          'width': 'fill',
+        },
+        'appearance': <String, dynamic>{
+          'borderRadius': 16,
+          'backgroundColor': isUnread ? '#f0fdf4' : '#eef2ff',
+          'iconPosition': 'leading',
+          'titlePosition': 'besideIcon',
+          'showIcon': true,
+          'showAvatar': true,
+          'iconSize': 42,
+          'titleFontSize': 14.5,
+          'subtitleFontSize': 12,
+          'padding': 12,
+        },
+        'appearanceDark': <String, dynamic>{
+          'borderRadius': 16,
+          'backgroundColor': isUnread ? '#14231b' : '#141824',
+          'titleColor': '#f8fafc',
+          'subtitleColor': '#94a3b8',
+        },
+      };
+
+      compMap[compId] = cardComponent;
+      updatedChildren.add(compId);
+    }
+
+    // Preserve any existing non-notification items
+    for (final child in existingChildren) {
+      if (!child.toString().startsWith('grid-notif-') &&
+          !updatedChildren.contains(child)) {
+        updatedChildren.add(child);
+      }
+    }
+
+    final updatedRow = Map<String, dynamic>.from(rowComp);
+    updatedRow['children'] = updatedChildren;
+    compMap['grid-explore-row'] = updatedRow;
+
+    // Update section badge if count is supplied
+    final sectionComp = compMap['grid-explore-section'];
+    if (sectionComp is Map) {
+      final updatedSection = Map<String, dynamic>.from(sectionComp);
+      final count = unreadCount ??
+          notificationRows.where((r) {
+            final isRead = r['is_read'];
+            return isRead == 0 || isRead == false || isRead == '0';
+          }).length;
+      if (count > 0) {
+        updatedSection['badge'] = '$count new';
+        updatedSection['headerBadge'] = <String, dynamic>{
+          'label': '$count new',
+          'backgroundColor': '#dcfce7',
+          'color': '#16a34a',
+        };
+      } else {
+        updatedSection['badge'] = '';
+        updatedSection['headerBadge'] = null;
+      }
+
+      final rawFilters = updatedSection['filters'] ?? updatedSection['modes'];
+      if (rawFilters is List) {
+        final updatedFilters = rawFilters.map((entry) {
+          if (entry is! Map) return entry;
+          final f = Map<String, dynamic>.from(entry.cast<dynamic, dynamic>());
+          final fid = (f['id'] ?? '').toString().trim().toLowerCase();
+          if (fid == 'circle' || fid == 'chat') {
+            f['count'] = circleCount;
+          } else if (fid == 'professional') {
+            f['count'] = professionalCount;
+          } else if (fid == 'all') {
+            f['count'] = professionalCount + circleCount;
+          }
+          return f;
+        }).toList();
+        if (updatedSection['filters'] is List) {
+          updatedSection['filters'] = updatedFilters;
+        } else {
+          updatedSection['modes'] = updatedFilters;
+        }
+      }
+      compMap['grid-explore-section'] = updatedSection;
+    }
+
+    schema['components'] = compMap;
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  void _markNotificationItemLocallyRead(
+    dynamic notifId, {
+    String? componentId,
+  }) {
+    final compId = (componentId != null && componentId.trim().isNotEmpty)
+        ? componentId.trim()
+        : 'grid-notif-$notifId';
+    final compMap = Map<String, dynamic>.from(components);
+    final comp = compMap[compId];
+    if (comp is Map) {
+      final updated = Map<String, dynamic>.from(comp);
+      updated['unread'] = false;
+      updated['is_read'] = 1;
+      final appearance = Map<String, dynamic>.from(
+          _map(updated['appearance']) ?? const <String, dynamic>{});
+      appearance['backgroundColor'] = '#eef2ff';
+      updated['appearance'] = appearance;
+      final appearanceDark = Map<String, dynamic>.from(
+          _map(updated['appearanceDark']) ?? const <String, dynamic>{});
+      appearanceDark['backgroundColor'] = '#141824';
+      updated['appearanceDark'] = appearanceDark;
+      compMap[compId] = updated;
+
+      // Update badge count in grid-explore-section
+      final sectionComp = compMap['grid-explore-section'];
+      if (sectionComp is Map) {
+        final updatedSection = Map<String, dynamic>.from(sectionComp);
+        final currentBadge = (updatedSection['badge'] ?? '').toString();
+        final match = RegExp(r'\d+').firstMatch(currentBadge);
+        if (match != null) {
+          final count = (int.tryParse(match.group(0) ?? '') ?? 1) - 1;
+          if (count > 0) {
+            updatedSection['badge'] = '$count new';
+            updatedSection['headerBadge'] = <String, dynamic>{
+              'label': '$count new',
+              'backgroundColor': '#dcfce7',
+              'color': '#16a34a',
+            };
+          } else {
+            updatedSection['badge'] = '';
+            updatedSection['headerBadge'] = null;
+          }
+          compMap['grid-explore-section'] = updatedSection;
+        }
+      }
+
+      schema['components'] = compMap;
+      notifyListeners();
+    }
   }
 
   void _synthesizeStatsRowIfMissing() {
@@ -646,10 +687,17 @@ class GridSduiState extends ChangeNotifier {
 
     if (id == 'grid-open-notification-item') {
       final notifId = extra?['notificationId'];
+      final space = extra?['space']?.toString();
+      final componentId = extra?['componentId']?.toString();
       if (notifId != null) {
         final parsedId = int.tryParse(notifId.toString());
-        unawaited(GridNotificationsService.instance.markRead(id: parsedId));
-        _markNotificationItemLocallyRead(notifId);
+        unawaited(
+          GridNotificationsService.instance.markRead(
+            id: parsedId,
+            space: space,
+          ),
+        );
+        _markNotificationItemLocallyRead(notifId, componentId: componentId);
       }
       final targetUrl = extra?['url'] ?? extra?['route'] ?? '';
       if (targetUrl.isNotEmpty) {
@@ -691,10 +739,17 @@ class GridSduiState extends ChangeNotifier {
 
     if (actionId == 'grid-open-notification-item') {
       final notifId = extra?['notificationId'] ?? action['notificationId'];
+      final space = extra?['space']?.toString() ?? action['space']?.toString();
+      final componentId = extra?['componentId']?.toString();
       if (notifId != null) {
         final parsedId = int.tryParse(notifId.toString());
-        unawaited(GridNotificationsService.instance.markRead(id: parsedId));
-        _markNotificationItemLocallyRead(notifId);
+        unawaited(
+          GridNotificationsService.instance.markRead(
+            id: parsedId,
+            space: space,
+          ),
+        );
+        _markNotificationItemLocallyRead(notifId, componentId: componentId);
       }
       await _openUrl(action, extra: extra);
       return;
@@ -958,7 +1013,7 @@ class GridSduiState extends ChangeNotifier {
     final modeUrl = byMode?[mode]?.toString().trim() ?? '';
     if (modeUrl.isNotEmpty) return modeUrl;
 
-    final staticUrl = _firstNonEmpty([
+    final staticUrl = _firstNonEmpty(<dynamic>[
       share['qrImageUrl'],
       share['image'],
       share['imageUrl'],
@@ -970,7 +1025,7 @@ class GridSduiState extends ChangeNotifier {
     if (template.isNotEmpty && payload.isNotEmpty) {
       return template
           .replaceAll('{data}', Uri.encodeComponent(payload))
-          .replaceAll('{size}', '200')
+          .replaceAll('{payload}', Uri.encodeComponent(payload))
           .replaceAll('{mode}', Uri.encodeComponent(mode));
     }
 
