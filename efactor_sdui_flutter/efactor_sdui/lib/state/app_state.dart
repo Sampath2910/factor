@@ -2462,6 +2462,28 @@ class AppState extends ChangeNotifier {
     return false;
   }
 
+  /// Returns true when [value] is a raw hardware/protocol bracket string
+  /// (e.g. `[00][01]`, `[00][01][02]...`, `[RICE][BROWNRICE]...`, or hex payload tables
+  /// `[000000003C6E000...][...]`).
+  ///
+  /// These machine protocol arrays leak when the backend schema generator dumps
+  /// `sno_asperui`, `item_values`, or `items` into display fields (`label`, `value`, etc.)
+  /// and must never be rendered as user-facing captions or readings on any device.
+  static bool isRawProtocolBracketString(dynamic value) {
+    if (value == null) return false;
+    final text = value.toString().trim();
+    if (text.isEmpty) return false;
+    // Multi-bracket arrays: [00][01], [00][01][02]..., [RICE][FRY]..., or [hex][hex]...
+    if (RegExp(r'^(\[[^\]]*\])+$').hasMatch(text)) {
+      return true;
+    }
+    // Single long hex protocol payload: [000000003C6E00007D...]
+    if (RegExp(r'^\[[0-9a-fA-F]{6,}\]$').hasMatch(text)) {
+      return true;
+    }
+    return false;
+  }
+
   /// True when [value] is still a protocol field name or placeholder in the frame
   /// rather than an actual reading or user setting.
   ///
@@ -2482,7 +2504,7 @@ class AppState extends ChangeNotifier {
         valText == '[]' ||
         valText == '[""]' ||
         valText == '--' ||
-        RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(valText)) {
+        isRawProtocolBracketString(valText)) {
       return true;
     }
 

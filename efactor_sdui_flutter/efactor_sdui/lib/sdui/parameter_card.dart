@@ -721,7 +721,9 @@ class ParameterCard extends StatelessWidget {
         var caption = label;
         if (caption.isEmpty && (textFieldShowsValue || isDropdown)) {
           final treeLabel = _cardProps['label']?.toString().trim() ?? '';
-          if (treeLabel.isNotEmpty && !_isUiComponentTypeName(treeLabel)) {
+          if (treeLabel.isNotEmpty &&
+              !_isUiComponentTypeName(treeLabel) &&
+              !AppState.isRawProtocolBracketString(treeLabel)) {
             caption = treeLabel;
           }
         }
@@ -1145,7 +1147,9 @@ class ParameterCard extends StatelessWidget {
     String? nonEmpty(dynamic value) {
       if (value is Map || value is List) return null;
       final text = value?.toString().trim();
-      return text == null || text.isEmpty ? null : text;
+      if (text == null || text.isEmpty) return null;
+      if (AppState.isRawProtocolBracketString(text)) return null;
+      return text;
     }
 
     // The outer group already shows the parameter name. Inner captions must
@@ -1920,9 +1924,18 @@ class ParameterCard extends StatelessWidget {
         control['component']?['props']?['text'] ??
         control['props']?['value'] ??
         control['props']?['text'];
+    if (AppState.isRawProtocolBracketString(resolved)) {
+      final mappedOpt = AppState.resolveEnumOption(control, resolved);
+      final optLabel = mappedOpt?['label']?.toString().trim() ?? '';
+      if (optLabel.isNotEmpty && !AppState.isRawProtocolBracketString(optLabel)) {
+        return optLabel;
+      }
+      return '';
+    }
     if (AppState.isFrameFieldNameOrPlaceholder(control, resolved)) {
       if (framed != null &&
-          !AppState.isFrameFieldNameOrPlaceholder(control, framed)) {
+          !AppState.isFrameFieldNameOrPlaceholder(control, framed) &&
+          !AppState.isRawProtocolBracketString(framed)) {
         return _formatLiveDisplay(framed);
       }
       return '';
@@ -1939,7 +1952,12 @@ class ParameterCard extends StatelessWidget {
       return '';
     }
     final liveStr = liveValue.toString().trim();
-    if (RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(liveStr)) {
+    if (AppState.isRawProtocolBracketString(liveStr)) {
+      final mappedOpt = AppState.resolveEnumOption(control, liveValue);
+      final optLabel = mappedOpt?['label']?.toString().trim() ?? '';
+      if (optLabel.isNotEmpty && !AppState.isRawProtocolBracketString(optLabel)) {
+        return optLabel;
+      }
       return '';
     }
 
@@ -2007,7 +2025,7 @@ class ParameterCard extends StatelessWidget {
           : number.toString();
     }
     final text = resolved.toString().trim();
-    if (RegExp(r'^\[.+\]\s*(\[.+\])+$').hasMatch(text)) {
+    if (AppState.isRawProtocolBracketString(text)) {
       return '';
     }
     // Strip leading bracketed hex/bytes prefix e.g. `[00][01] ON` -> `ON`

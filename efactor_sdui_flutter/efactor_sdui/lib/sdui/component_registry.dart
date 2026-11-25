@@ -867,7 +867,7 @@ class ComponentRegistry {
         }
       }
 
-      final staticLabel = firstNonEmpty([
+      final rawStaticLabel = firstNonEmpty([
         props['label'],
         props['actionText'],
         props['text'],
@@ -878,6 +878,10 @@ class ComponentRegistry {
             ? (triggerControl!['rightAccessory'] as Map)['label']
             : null,
       ]);
+      final staticLabel = (rawStaticLabel != null &&
+              !AppState.isRawProtocolBracketString(rawStaticLabel))
+          ? rawStaticLabel
+          : null;
 
       // labelBinding often points at the same parameter binding. Until a real
       // protocol value arrives the binding may still hold the schema field
@@ -888,6 +892,7 @@ class ComponentRegistry {
             state.resolveBinding(props['labelBinding'].toString());
         final rawText = raw?.toString().trim() ?? '';
         final isPlaceholder = rawText.isEmpty ||
+            AppState.isRawProtocolBracketString(rawText) ||
             (triggerControl != null &&
                 AppState.isFrameFieldNameOrPlaceholder(
                   triggerControl,
@@ -921,6 +926,7 @@ class ComponentRegistry {
           liveLabel ??
           firstNonEmpty([
             if (value != null &&
+                !AppState.isRawProtocolBracketString(value) &&
                 (triggerControl == null ||
                     !AppState.isFrameFieldNameOrPlaceholder(
                       triggerControl,
