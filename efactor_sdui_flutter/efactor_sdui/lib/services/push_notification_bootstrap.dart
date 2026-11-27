@@ -1349,10 +1349,12 @@ Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
         'https://efactor.tech/${targetUrl.replaceAll(RegExp(r'^/+'), '')}';
   }
 
-  // 1. Immediately cancel all notifications for this conversation
+  // 1. Immediately cancel all notifications for this conversation and clear
+  // the in-page unread badge in the open Circle Connect WebView (if any).
   if (convId.isNotEmpty) {
     unawaited(
         PushNotificationBootstrap.instance.clearChatNotifications(convId));
+    unawaited(GridInAppWebViewPage.notifyGridChatMarkAsRead(convId));
   }
 
   // 2. Perform authenticated background Mark as Read via CircleConnectDeviceKeyStore
@@ -2018,6 +2020,10 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         // While foreground, show the app-owned banner (guaranteed dwell,
         // tappable) instead of the OEM-controlled system heads-up. Falls back
         // to the heads-up if no overlay is mounted yet.
+        // Action callbacks reuse the same device-key services as the system
+        // notification's Reply/Mark/Mute buttons (encrypted, offline-queued,
+        // 403-aware). Reply/mark/mute never navigate the WebView; only a body
+        // tap opens the chat.
         foregroundBanner: (message) => MessageBanner.instance.show(
           title: GridChatMessageNotifications.notificationTitle(message),
           body: GridChatMessageNotifications.formatNotificationBody(message),
@@ -2026,6 +2032,35 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
               conversationId: message.conversationId,
               url: targetUrl ?? '',
             ),
+          ),
+          onReply: message.messageId.isEmpty
+              ? null
+              : (text) async {
+                  final result =
+                      await CircleConnectDeviceKeyStore.instance.sendReply(
+                    conversationId: message.conversationId,
+                    messageId: message.messageId,
+                    text: text,
+                    targetUrl: targetUrl,
+                  );
+                  if (result.statusCode == 403) {
+                    await showReplyErrorNotification(
+                      _local,
+                      conversationId: message.conversationId,
+                      errorMessage: result.errorMessage ??
+                          'Action not allowed or contact blocked.',
+                    );
+                  }
+                },
+          onMarkRead: () =>
+              handleMarkAsReadFromNotification(<String, dynamic>{
+            'conversation_id': message.conversationId,
+            'message_id': message.messageId,
+            'url': targetUrl ?? '',
+          }),
+          onMute: () => CircleConnectDeviceKeyStore.instance.muteChat(
+            conversationId: message.conversationId,
+            targetUrl: targetUrl,
           ),
         ),
       );

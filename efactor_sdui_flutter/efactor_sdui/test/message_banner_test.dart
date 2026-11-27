@@ -77,4 +77,75 @@ void main() {
         MessageBanner.instance.show(title: 'X', body: 'y', onTap: () {});
     expect(shown, isFalse);
   });
+
+  testWidgets('Reply opens inline input and stops auto-dismiss', (tester) async {
+    await pumpHost(tester);
+    MessageBanner.instance.show(
+      title: 'Alice',
+      body: 'Hi',
+      onTap: () {},
+      onReply: (_) async {},
+      onMarkRead: () async {},
+      onMute: () async {},
+    );
+    await tester.pump();
+
+    expect(find.text('Reply'), findsOneWidget);
+    await tester.tap(find.text('Reply'));
+    await tester.pump();
+    expect(find.byType(TextField), findsOneWidget);
+
+    // Past the full dwell, still visible because the reply box is open.
+    await tester.pump(const Duration(milliseconds: 3000));
+    expect(find.byType(TextField), findsOneWidget);
+
+    // Cleanup: close reply, let the resumed dwell dismiss it.
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2600));
+    expect(find.text('Alice'), findsNothing);
+  });
+
+  testWidgets('Send forwards the typed text and dismisses', (tester) async {
+    await pumpHost(tester);
+    String? sent;
+    MessageBanner.instance.show(
+      title: 'Alice',
+      body: 'Hi',
+      onTap: () {},
+      onReply: (text) async => sent = text,
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Reply'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'on my way');
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pump();
+    await tester.pump();
+
+    expect(sent, 'on my way');
+    expect(find.text('Alice'), findsNothing);
+  });
+
+  testWidgets('Mark as read and Mute invoke their action and dismiss',
+      (tester) async {
+    await pumpHost(tester);
+    var marked = false;
+    MessageBanner.instance.show(
+      title: 'Alice',
+      body: 'Hi',
+      onTap: () {},
+      onMarkRead: () async => marked = true,
+      onMute: () async {},
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Mark as read'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(marked, isTrue);
+    expect(find.text('Alice'), findsNothing);
+  });
 }

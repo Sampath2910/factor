@@ -9,6 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -587,6 +588,26 @@ class GridInAppWebViewPage extends StatefulWidget {
       return true;
     } catch (e) {
       debugPrint('[GridInAppWebView] forwardPushToGridChat error: $e');
+      return false;
+    }
+  }
+
+  /// Clears the in-page unread badge for [conversationId] after a Mark-as-read
+  /// without reloading the WebView (Circle Connect notification banner spec §4).
+  static Future<bool> notifyGridChatMarkAsRead(String conversationId) async {
+    final id = conversationId.trim();
+    if (id.isEmpty) return false;
+    final controller = _activeState?._controller ?? _lastCircleConnectController;
+    if (controller == null) return false;
+    try {
+      await controller.runJavaScript(
+        'try{window.dispatchEvent(new CustomEvent("gridChatMarkAsRead",'
+        '{detail:{conversation_id:${jsonEncode(id)}}}));}'
+        'catch(e){console.error("gridChatMarkAsRead error",e);}',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[GridInAppWebView] notifyGridChatMarkAsRead error: $e');
       return false;
     }
   }
@@ -4057,14 +4078,33 @@ Error: $error
     FileSelectorParams params,
   ) async {
     try {
-      final picker = ImagePicker();
       final accept = params.acceptTypes.map((e) => e.toLowerCase()).toList();
+      final multiple = params.mode == FileSelectorMode.openMultiple;
 
-      final allowsVideo = accept.any((t) => t.contains('video') || t == '*/*');
-      final allowsImage = accept.isEmpty ||
-          accept.any((t) => t.contains('image') || t == '*/*');
+      final wantsAudio = accept.any((t) => t.contains('audio'));
+      final wantsImage = accept.any((t) => t.contains('image'));
+      final wantsVideo = accept.any((t) => t.contains('video'));
+      final wantsAny = accept.isEmpty || accept.any((t) => t == '*/*');
 
-      if (params.mode == FileSelectorMode.openMultiple) {
+      // Audio-only input -> native audio file picker (not the photo gallery,
+      // which is where an audio input used to fall through to).
+      if (wantsAudio && !wantsImage && !wantsVideo) {
+        return _pickWithFilePicker(FileType.audio, multiple);
+      }
+
+      // Explicit non-media types (documents, application/*, text/*, ...) ->
+      // generic file picker. */* and empty stay on the media path below.
+      if (!wantsImage && !wantsVideo && !wantsAny && accept.isNotEmpty) {
+        return _pickWithFilePicker(FileType.any, multiple);
+      }
+
+      // Image / video (or unspecified) -> ImagePicker, which now uses the
+      // Android system Photo Picker (see useAndroidPhotoPicker in main.dart).
+      final picker = ImagePicker();
+      final allowsImage = wantsImage || wantsAny;
+      final allowsVideo = wantsVideo || wantsAny;
+
+      if (multiple) {
         final picked = await picker.pickMultipleMedia();
         return picked.map((f) => Uri.file(f.path).toString()).toList();
       }
@@ -4093,6 +4133,21 @@ Error: $error
       debugPrint('[GridInAppWebView] File selection failed: $e');
     }
     return <String>[];
+  }
+
+  Future<List<String>> _pickWithFilePicker(
+    FileType type,
+    bool multiple,
+  ) async {
+    final result = await FilePicker.pickFiles(
+      type: type,
+      allowMultiple: multiple,
+    );
+    if (result == null) return <String>[];
+    return result.files
+        .where((f) => f.path != null)
+        .map((f) => Uri.file(f.path!).toString())
+        .toList();
   }
 
   void _safeExitToGrid() {
