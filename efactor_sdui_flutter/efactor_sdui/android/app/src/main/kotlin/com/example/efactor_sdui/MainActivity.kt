@@ -249,8 +249,43 @@ class MainActivity : FlutterActivity() {
         wifiNativeBridge = WifiNativeBridge(this)
         wifiNativeBridge.register(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "tech.efactor/circle_connect").setMethodCallHandler { call, result ->
+        val circleConnectChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "tech.efactor/circle_connect",
+        )
+        val callAudio = CallAudioController(applicationContext, circleConnectChannel)
+        circleConnectChannel.setMethodCallHandler { call, result ->
             when (call.method) {
+                "startCallAudio" -> {
+                    callAudio.startCallAudio(
+                        call.argument<String>("callId"),
+                        call.argument<Boolean>("video") ?: false,
+                        call.argument<String>("preferredRoute"),
+                    )
+                    result.success(true)
+                }
+                "getCallAudioRoutes" -> {
+                    callAudio.getCallAudioRoutes()
+                    result.success(true)
+                }
+                "setCallAudioRoute" -> {
+                    callAudio.setCallAudioRoute(
+                        call.argument<String>("routeId"),
+                        call.argument<String>("routeType"),
+                    )
+                    result.success(true)
+                }
+                "callMediaTypeChanged" -> {
+                    callAudio.callMediaTypeChanged(
+                        call.argument<String>("callId"),
+                        call.argument<Boolean>("video") ?: false,
+                    )
+                    result.success(true)
+                }
+                "endCallAudio" -> {
+                    callAudio.endCallAudio(call.argument<String>("callId"))
+                    result.success(true)
+                }
                 "wakeAndUnlock" -> {
                     wakeAndUnlock()
                     result.success(true)

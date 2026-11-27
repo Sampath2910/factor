@@ -35,6 +35,11 @@ import 'grid_offline_outbox_service.dart';
 import 'grid_shell_pool.dart';
 import 'grid_web_snapshot.dart';
 
+/// Enables WebView contents debugging (Android DevTools socket / iOS
+/// `isInspectable`) for non-public builds. Off by default; turn on with
+/// `--dart-define=WEBVIEW_DEBUG=true` in a staging/test build.
+const bool kWebViewInspectable = bool.fromEnvironment('WEBVIEW_DEBUG');
+
 /// Full-screen in-app WebView for Grid schema `openIn: inAppWebView`.
 ///
 /// Online visits save a script-stripped DOM snapshot. Offline opens restore
@@ -917,6 +922,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   StreamSubscription<OfflineOutboxAction>? _outboxSyncedSub;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<Map<String, dynamic>>? _audioRoutesSub;
   bool _isPopping = false;
   // Bounds the first-tap SSO-handshake retry (see onNavigationRequest) so a
   // server that keeps redirecting to Grid home can't loop forever; after this
@@ -1061,6 +1067,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     _initController();
     if (_isCircleConnect) {
       GridInAppWebViewPage._lastCircleConnectController = _controller;
+      // Native owns OS audio focus + physical routing; forward each published
+      // route snapshot to the web client so its call-audio UI stays in sync.
+      _audioRoutesSub =
+          OngoingCallService.instance.routesChanged.listen(_dispatchAudioRoutes);
     }
     // Professional Space cold open: show the lightweight cover from the first
     // frame; lifted on gridReady / onPageFinished / safety timeout. Set the
@@ -1224,6 +1234,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     _outboxSyncedSub?.cancel();
     _connectivitySub?.cancel();
     _tokenRefreshSub?.cancel();
+    _audioRoutesSub?.cancel();
     if (!_showingSnapshot && _error == null) {
       unawaited(_persistSnapshot());
     }
@@ -1232,6 +1243,25 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     }
     IncomingCallService.instance.onCircleConnectReadinessChanged();
     super.dispose();
+  }
+
+  /// Dispatches a native audio-route snapshot to the web client as
+  /// `circleConnectAudioRoutesChanged`. [snapshot] is {selectedRouteId, routes}.
+  void _dispatchAudioRoutes(Map<String, dynamic> snapshot) {
+    if (!mounted) return;
+    final detail = jsonEncode(snapshot);
+    final js = '''
+(function() {
+  try {
+    window.dispatchEvent(new CustomEvent('circleConnectAudioRoutesChanged', {
+      detail: $detail
+    }));
+  } catch (e) {}
+})()
+''';
+    unawaited(_controller.runJavaScript(js).catchError((Object e) {
+      debugPrint('[GridInAppWebView] audio routes dispatch failed: $e');
+    }));
   }
 
   void _initController() {
@@ -1717,12 +1747,15 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     if (_controller.platform is WebKitWebViewController) {
       final webKitController = _controller.platform as WebKitWebViewController;
       webKitController.setAllowsBackForwardNavigationGestures(false);
+      if (kWebViewInspectable) webKitController.setInspectable(true);
     }
 
     // Configure Android-specific WebRTC and hardware media permissions
     if (_controller.platform is AndroidWebViewController) {
       final androidController =
           _controller.platform as AndroidWebViewController;
+
+      if (kWebViewInspectable) AndroidWebViewController.enableDebugging(true);
 
       // Allow autoplay/inline media playback without requiring a user tap gesture
       androidController.setMediaPlaybackRequiresUserGesture(false);
@@ -2786,17 +2819,19 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         if (pending != null && pending.needsJs) {
           final conversationId = pending.conversationId;
           final compose = pending.compose;
-          unawaited(() async {
-            final delivered = await GridInAppWebViewPage.openChat(
-              conversationId: conversationId,
-              compose: compose,
-            );
-            if (delivered) {
-              await GridChatMessageNotifications.instance.clearPendingOpen(
-                reason: 'delivered',
-              );
-            }
-          }());
+          // Consume the pending open once, before dispatching. chatUiReady
+          // fires again on every page reload (resume/focus); clearing only on
+          // delivered==true left a stale pending that replayed as the
+          // list->chat->list bounce. The cold-start path already navigates to
+          // the conversation URL, so a rare lost JS dispatch costs nothing.
+          unawaited(
+            GridChatMessageNotifications.instance
+                .clearPendingOpen(reason: 'consumed'),
+          );
+          unawaited(GridInAppWebViewPage.openChat(
+            conversationId: conversationId,
+            compose: compose,
+          ));
         }
       } else if (action == 'callUiReady') {
         _webCallUiReady = true;
@@ -2840,6 +2875,29 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           setState(() => _isConnectingCall = false);
         }
         unawaited(OngoingCallService.instance.stopCall(callId));
+      } else if (action == 'startCallAudio') {
+        unawaited(OngoingCallService.instance.startCallAudio(
+          callId: data['callId']?.toString() ?? '',
+          video: data['video'] == true,
+          preferredRoute: data['preferredRoute']?.toString(),
+          focus: data['focus']?.toString(),
+        ));
+      } else if (action == 'getCallAudioRoutes') {
+        unawaited(OngoingCallService.instance.getCallAudioRoutes());
+      } else if (action == 'setCallAudioRoute') {
+        unawaited(OngoingCallService.instance.setCallAudioRoute(
+          routeId: data['routeId']?.toString() ?? '',
+          routeType: data['routeType']?.toString(),
+          deviceName: data['deviceName']?.toString(),
+        ));
+      } else if (action == 'callMediaTypeChanged') {
+        unawaited(OngoingCallService.instance.callMediaTypeChanged(
+          callId: data['callId']?.toString() ?? '',
+          video: data['video'] == true,
+        ));
+      } else if (action == 'endCallAudio') {
+        unawaited(OngoingCallService.instance
+            .endCallAudio(data['callId']?.toString() ?? ''));
       } else if (action == 'stopRinging' ||
           action == 'callConnected' ||
           action == 'callActive') {

@@ -17,6 +17,13 @@ import WebKit
   private var documentInteractionController: UIDocumentInteractionController?
   private var previewAudioPlayer: AVAudioPlayer?
 
+  // Call-audio contract: native owns OS audio session + physical output route;
+  // publishes route snapshots to Dart via `onAudioRoutesChanged`.
+  private var circleConnectChannel: FlutterMethodChannel?
+  private var callAudioIsVideo = false
+  private var callAudioActiveId: String?
+  private var callAudioRouteObserver: NSObjectProtocol?
+
   // Notification-tap bridging. Because this app uses UIScene +
   // FlutterImplicitEngineDelegate, FLTFirebaseMessagingPlugin misses the tap
   // callbacks, so we capture taps natively and forward them to Dart over the
@@ -104,12 +111,34 @@ import WebKit
 
   private func registerCircleConnectBridge(with messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "tech.efactor/circle_connect", binaryMessenger: messenger)
+    self.circleConnectChannel = channel
     channel.setMethodCallHandler { [weak self] (call, result) in
       guard let self = self else {
         result(FlutterMethodNotImplemented)
         return
       }
+      let args = call.arguments as? [String: Any]
       switch call.method {
+      case "startCallAudio":
+        self.startCallAudioSession(callId: args?["callId"] as? String,
+                                   video: (args?["video"] as? Bool) ?? false,
+                                   preferredRoute: args?["preferredRoute"] as? String)
+        result(true)
+      case "getCallAudioRoutes":
+        self.publishAudioRoutes()
+        result(true)
+      case "setCallAudioRoute":
+        self.applyAudioRoute(routeType: args?["routeType"] as? String,
+                             routeId: args?["routeId"] as? String)
+        self.publishAudioRoutes()
+        result(true)
+      case "callMediaTypeChanged":
+        self.callAudioIsVideo = (args?["video"] as? Bool) ?? false
+        self.publishAudioRoutes()
+        result(true)
+      case "endCallAudio":
+        self.endCallAudioSession(callId: args?["callId"] as? String)
+        result(true)
       case "getCookies":
         let urlStr = (call.arguments as? [String: Any])?["url"] as? String ?? "https://efactor.tech"
         let targetUrl = URL(string: urlStr)
@@ -246,11 +275,10 @@ import WebKit
       case "stopIncomingRing":
         self.stopIncomingRing()
         result(true)
-      case "startOngoingCallService":
-        self.startOngoingCallAudioSession()
-        result(true)
-      case "stopOngoingCallService":
-        self.stopOngoingCallAudioSession()
+      case "startOngoingCallService", "stopOngoingCallService":
+        // Audio focus/session/routing are owned solely by startCallAudio/
+        // endCallAudio. callStarted/callEnded no longer touch audio (iOS has no
+        // foreground-service concept, so these are no-ops here).
         result(true)
       case "isOngoingCallActive":
         result(self.isOngoingCallAudioActive)
@@ -287,10 +315,133 @@ import WebKit
     stopIncomingRing()
     do {
       let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP, .duckOthers])
+      // No .duckOthers: other media must pause (not duck) while the call runs.
+      try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
       try session.setActive(true)
     } catch {
       NSLog("[AppDelegate] Failed to activate AVAudioSession for ongoing call: \(error.localizedDescription)")
+    }
+  }
+
+  // MARK: - Call-audio contract
+
+  // Idempotent and keyed by callId. A repeat start for the active call only
+  // re-applies routing; the session/observer are set up once.
+  private func startCallAudioSession(callId: String?, video: Bool, preferredRoute: String?) {
+    callAudioIsVideo = video
+    if isOngoingCallAudioActive && callAudioActiveId == callId {
+      applyAudioRoute(routeType: preferredRoute ?? defaultRouteType(video: video), routeId: nil)
+      publishAudioRoutes()
+      return
+    }
+    callAudioActiveId = callId
+    startOngoingCallAudioSession()
+    registerRouteChangeObserver()
+    applyAudioRoute(routeType: preferredRoute ?? defaultRouteType(video: video), routeId: nil)
+    publishAudioRoutes()
+  }
+
+  // Ignores an End whose callId is not the active call (stale/out-of-order).
+  private func endCallAudioSession(callId: String?) {
+    if !isOngoingCallAudioActive || (callId != nil && callId != callAudioActiveId) { return }
+    callAudioActiveId = nil
+    if let observer = callAudioRouteObserver {
+      NotificationCenter.default.removeObserver(observer)
+      callAudioRouteObserver = nil
+    }
+    stopOngoingCallAudioSession()
+  }
+
+  private func registerRouteChangeObserver() {
+    if callAudioRouteObserver != nil { return }
+    callAudioRouteObserver = NotificationCenter.default.addObserver(
+      forName: AVAudioSession.routeChangeNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      self?.publishAudioRoutes()
+    }
+  }
+
+  private func defaultRouteType(video: Bool) -> String {
+    // Voice: BT/wired if connected, else receiver. Video: BT/wired else speaker.
+    if let connected = connectedHeadsetType() { return connected }
+    return video ? "speaker" : "phone"
+  }
+
+  private func connectedHeadsetType() -> String? {
+    let inputs = AVAudioSession.sharedInstance().availableInputs ?? []
+    for input in inputs {
+      switch routeType(for: input.portType) {
+      case "bluetooth": return "bluetooth"
+      case "wired": return "wired"
+      default: continue
+      }
+    }
+    return nil
+  }
+
+  private func applyAudioRoute(routeType: String?, routeId: String?) {
+    let session = AVAudioSession.sharedInstance()
+    let type = routeType ?? routeId ?? defaultRouteType(video: callAudioIsVideo)
+    do {
+      switch type {
+      case "speaker":
+        try session.overrideOutputAudioPort(.speaker)
+      case "bluetooth", "wired":
+        try session.overrideOutputAudioPort(.none)
+        if let input = (session.availableInputs ?? []).first(where: {
+          let rt = self.routeType(for: $0.portType)
+          return rt == type && ($0.uid == routeId || routeId == nil)
+        }) {
+          try session.setPreferredInput(input)
+        }
+      default: // phone / receiver
+        try session.overrideOutputAudioPort(.none)
+        try session.setPreferredInput(nil)
+      }
+    } catch {
+      NSLog("[AppDelegate] applyAudioRoute(\(type)) failed: \(error.localizedDescription)")
+    }
+  }
+
+  private func publishAudioRoutes() {
+    let session = AVAudioSession.sharedInstance()
+    var routes: [[String: String]] = []
+    var seen = Set<String>()
+    // Fixed outputs always offered by the UI.
+    routes.append(["id": "phone", "type": "phone", "label": "Phone"])
+    routes.append(["id": "speaker", "type": "speaker", "label": "Speaker"])
+    for input in session.availableInputs ?? [] {
+      let type = routeType(for: input.portType)
+      if type == "bluetooth" || type == "wired" {
+        if seen.insert(input.uid).inserted {
+          routes.append(["id": input.uid, "type": type, "label": input.portName])
+        }
+      }
+    }
+    // Selected = current output port.
+    var selected = "phone"
+    if let output = session.currentRoute.outputs.first {
+      let type = routeType(for: output.portType)
+      selected = (type == "bluetooth" || type == "wired") ? output.uid : type
+    }
+    let snapshot: [String: Any] = ["selectedRouteId": selected, "routes": routes]
+    circleConnectChannel?.invokeMethod("onAudioRoutesChanged", arguments: snapshot)
+  }
+
+  private func routeType(for port: AVAudioSession.Port) -> String {
+    switch port {
+    case .bluetoothHFP, .bluetoothA2DP, .bluetoothLE:
+      return "bluetooth"
+    case .headphones, .headsetMic, .usbAudio, .carAudio:
+      return "wired"
+    case .builtInSpeaker:
+      return "speaker"
+    case .builtInReceiver, .builtInMic:
+      return "phone"
+    default:
+      return "output"
     }
   }
 

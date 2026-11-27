@@ -16,6 +16,7 @@ import 'call_lifecycle_tracker.dart';
 import 'circle_connect_device_key_store.dart';
 import 'field_tracker_integration.dart';
 import 'grid_chat_message_notification.dart';
+import 'message_banner.dart';
 import 'grid_unread_counts_service.dart';
 import 'incoming_call_service.dart';
 import 'json_http.dart';
@@ -2014,6 +2015,19 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         data,
         appResumed: resumed,
         activeConversationId: _activeConversationId,
+        // While foreground, show the app-owned banner (guaranteed dwell,
+        // tappable) instead of the OEM-controlled system heads-up. Falls back
+        // to the heads-up if no overlay is mounted yet.
+        foregroundBanner: (message) => MessageBanner.instance.show(
+          title: GridChatMessageNotifications.notificationTitle(message),
+          body: GridChatMessageNotifications.formatNotificationBody(message),
+          onTap: () => unawaited(
+            IncomingCallService.instance.openChatFromNotification(
+              conversationId: message.conversationId,
+              url: targetUrl ?? '',
+            ),
+          ),
+        ),
       );
 
       // If GRID Chat is open, also forward the message into the webview so it

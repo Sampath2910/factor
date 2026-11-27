@@ -291,11 +291,17 @@ class GridChatMessageNotifications {
     );
   }
 
+  /// [foregroundBanner] is given the message when the app is resumed and the
+  /// message is about to be shown; if it returns true it has displayed an
+  /// app-owned banner and the duplicate system heads-up is skipped. If it
+  /// returns false (e.g. no overlay yet), the system heads-up is posted as a
+  /// fallback.
   Future<void> present(
     FlutterLocalNotificationsPlugin plugin,
     Map<String, dynamic> data, {
     required bool appResumed,
     String? activeConversationId,
+    bool Function(GridChatMessage message)? foregroundBanner,
   }) {
     return _serialized(() async {
       final message = GridChatMessage.parse(data);
@@ -366,8 +372,15 @@ class GridChatMessageNotifications {
       final channelId = (rawChannel != null && rawChannel.trim().isNotEmpty)
           ? rawChannel.trim().toLowerCase()
           : (message.isGroup ? 'group_messages' : 'messages');
-      await _show(plugin, message, lines, locked: locked, channelId: channelId);
-      chatTrace('posted', message.conversationId, message.messageId);
+      final shownAsBanner =
+          appResumed && (foregroundBanner?.call(message) ?? false);
+      if (shownAsBanner) {
+        chatTrace('banner', message.conversationId, message.messageId);
+      } else {
+        await _show(plugin, message, lines,
+            locked: locked, channelId: channelId);
+        chatTrace('posted', message.conversationId, message.messageId);
+      }
     });
   }
 
