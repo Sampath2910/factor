@@ -104,7 +104,6 @@ class _BannerWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Positioned(
       top: 0,
       left: 0,
@@ -121,7 +120,10 @@ class _BannerWidget extends StatelessWidget {
             child: Material(
               elevation: 6,
               borderRadius: BorderRadius.circular(14),
-              color: theme.colorScheme.surface,
+              // Fixed dark surface, independent of the Circle Connect route
+              // theme, so the explicit white/grey text stays legible in both
+              // light and dark (per Circle Connect contrast fix).
+              color: const Color(0xFF1E293B),
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
                 onTap: onTap,
@@ -141,8 +143,11 @@ class _BannerWidget extends StatelessWidget {
                               data.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
                             ),
                             if (data.body.isNotEmpty) ...[
                               const SizedBox(height: 2),
@@ -150,7 +155,10 @@ class _BannerWidget extends StatelessWidget {
                                 data.body,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium,
+                                style: const TextStyle(
+                                  color: Color(0xFFCBD5E1),
+                                  fontSize: 13,
+                                ),
                               ),
                             ],
                           ],
