@@ -932,6 +932,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   /// worker registered and the offline app shell is cached. Diagnostic only.
   bool _professionalSpaceShellReady = false;
 
+  /// Guards a single auto-reload after the iOS WKWebView content process is
+  /// terminated (webContentProcessTerminated). Reset on a successful page load.
+  bool _contentProcessReloadAttempted = false;
+
   /// Last known connectivity, kept current by [_connectivitySub] and
   /// [_isOnline]. Lets [onPageStarted] inject the offline marker synchronously
   /// (as early as webview_flutter allows) instead of after an async check,
@@ -1696,6 +1700,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               _loading = false;
               _error = null;
             });
+            _contentProcessReloadAttempted = false; // recovered; allow future reload
             _gridHandshakeRetries = 0; // intended page loaded; reset handshake guard
             if (_isCircleConnect) _ccFirstLoadAt ??= DateTime.now();
             IncomingCallService.instance.onCircleConnectReadinessChanged();
@@ -1752,6 +1757,21 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
                 '[GridInAppWebView] Ignoring benign navigation abort: '
                 '${error.errorCode} (${error.description})',
               );
+              return;
+            }
+            // iOS WKWebView renderer killed (memory pressure etc). desc/url are
+            // empty after termination, so _handleLoadFailure would show a
+            // misleading "could not connect ()" screen. Correct recovery is to
+            // reload the content process once.
+            if (error.errorType ==
+                    WebResourceErrorType.webContentProcessTerminated &&
+                !_contentProcessReloadAttempted) {
+              _contentProcessReloadAttempted = true;
+              debugPrint(
+                '[GridInAppWebView] WKWebView content process terminated — reloading once',
+              );
+              unawaited(_controller.reload());
+              _completeNavigation();
               return;
             }
             debugPrint(
@@ -5071,7 +5091,12 @@ Error: $error
     if (isReady) {
       _liftCover('gridReady');
       if (_isEffectiveVisible) {
-        _dispatchWebViewVisibility(true, force: true);
+        // NOT forced: the de-dup guard in _dispatchWebViewVisibility must stop a
+        // gridReady -> efactor-webview-visible -> gridReady feedback loop. With
+        // force:true every gridReady re-fired the event; the web re-emitted
+        // gridReady, storming the WKWebView content process until iOS killed it
+        // (webContentProcessTerminated) — surfacing as "Unable to Load".
+        _dispatchWebViewVisibility(true);
       }
     }
   }
