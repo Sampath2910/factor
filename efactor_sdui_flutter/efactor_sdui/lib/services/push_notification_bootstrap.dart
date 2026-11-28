@@ -16,13 +16,23 @@ import 'call_lifecycle_tracker.dart';
 import 'circle_connect_device_key_store.dart';
 import 'field_tracker_integration.dart';
 import 'grid_chat_message_notification.dart';
+import 'message_banner.dart';
 import 'grid_unread_counts_service.dart';
 import 'incoming_call_service.dart';
 import 'json_http.dart';
 import 'ongoing_call_service.dart';
+import 'professional_space_notification.dart';
 import '../auth_sdui/auth_secure_storage.dart';
 import '../grid_sdui/grid_in_app_webview_page.dart';
 import '../grid_sdui/grid_live_location_service.dart';
+
+export 'professional_space_notification.dart'
+    show
+        ProfessionalSpaceMessageLine,
+        ProfessionalSpaceNotifications,
+        ProfessionalSpacePushSpec,
+        isSafeEfactorUrl,
+        kGridActivityChannel;
 
 /// Call notification channel configured with system default ringtone and USAGE_NOTIFICATION_RINGTONE.
 const AndroidNotificationChannel kCallsChannel = AndroidNotificationChannel(
@@ -47,17 +57,6 @@ const AndroidNotificationChannel kMessagesChannel = AndroidNotificationChannel(
   enableLights: true,
 );
 
-/// Notification channel for Professional Space (GRID) social activity, posts, comments, connections.
-const AndroidNotificationChannel kGridActivityChannel =
-    AndroidNotificationChannel(
-  'grid_activity',
-  'Professional Space',
-  description:
-      'Notifications for posts, comments, connections, and activity in Professional Space',
-  importance: Importance.high,
-  playSound: true,
-  enableVibration: true,
-);
 
 /// Circle Connect Notification Channel Groups
 const AndroidNotificationChannelGroup kGroupGridChatMessages =
@@ -249,15 +248,6 @@ String resolveCircleConnectChannelId(String? rawChannel,
   return fallback;
 }
 
-/// Safely validates that a target URL belongs to the efactor.tech domain.
-bool isSafeEfactorUrl(String url) {
-  final clean = url.trim();
-  if (clean.isEmpty) return false;
-  final uri = Uri.tryParse(clean);
-  if (uri == null) return false;
-  final host = uri.host.toLowerCase();
-  return host == 'efactor.tech' || host.endsWith('.efactor.tech');
-}
 
 /// Rewrites relative `/...` notification URLs to absolute efactor.tech URLs,
 /// in place. A relative URL has an empty host, so [isSafeEfactorUrl] would
@@ -975,85 +965,18 @@ Future<void> showMissedCallNotificationOnPlugin(
   );
 }
 
-/// Posts Professional Space (GRID) social activity notification on grid_activity channel.
+/// Posts Professional Space (GRID) social activity or messaging notification
+/// on the `grid_activity` channel with stacked `MessagingStyleInformation`.
 Future<void> showProfessionalSpaceNotification(
   FlutterLocalNotificationsPlugin plugin, {
   required Map<String, dynamic> data,
   RemoteNotification? notification,
-}) async {
-  final rawTitle = (notification?.title ??
-          data['title'] ??
-          data['actor_name'] ??
-          'Professional Space')
-      .toString()
-      .trim();
-  final title = rawTitle.isNotEmpty ? rawTitle : 'Professional Space';
-  final rawBody = (notification?.body ??
-          data['body'] ??
-          data['text'] ??
-          data['message'] ??
-          '')
-      .toString()
-      .trim();
-  final body = rawBody;
-  final targetUrl =
-      (data['target_url'] ?? data['targetUrl'] ?? data['url'] ?? '')
-          .toString()
-          .trim();
-  final postId = (data['post_id'] ?? data['postId'] ?? '').toString().trim();
-  final rawTag = (data['tag'] ??
-          (postId.isNotEmpty ? 'grid_post_$postId' : 'grid_activity'))
-      .toString()
-      .trim();
-  final tag = rawTag.isNotEmpty ? rawTag : 'grid_activity';
-  final notifId = tag.hashCode.abs();
-
-  final avatarUrl = (data['actor_avatar'] ?? '').toString().trim();
-  ByteArrayAndroidBitmap? largeIconBitmap;
-  if (avatarUrl.isNotEmpty && isSafeEfactorUrl(avatarUrl)) {
-    try {
-      final res = await http
-          .get(Uri.parse(avatarUrl))
-          .timeout(const Duration(seconds: 3));
-      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
-        largeIconBitmap = ByteArrayAndroidBitmap(res.bodyBytes);
-      }
-    } catch (_) {}
-  }
-
-  final payloadMap = <String, dynamic>{
-    'type': 'PROFESSIONAL_SPACE_EVENT',
-    'target_url': targetUrl,
-    'url': targetUrl,
-    ...data,
-  };
-
-  final androidDetails = AndroidNotificationDetails(
-    kGridActivityChannel.id,
-    kGridActivityChannel.name,
-    channelDescription: kGridActivityChannel.description,
-    importance: Importance.high,
-    priority: Priority.high,
-    icon: 'ic_notification',
-    largeIcon: largeIconBitmap,
-    tag: tag,
-    playSound: true,
-    enableVibration: true,
-    // Strictly NO action buttons (no reply, mark as read, mute)
-  );
-
-  const iosDetails = DarwinNotificationDetails(
-    presentAlert: true,
-    presentBadge: true,
-    presentSound: true,
-  );
-
-  await plugin.show(
-    notifId,
-    title,
-    body,
-    NotificationDetails(android: androidDetails, iOS: iosDetails),
-    payload: jsonEncode(payloadMap),
+}) {
+  return ProfessionalSpaceNotifications.instance.present(
+    plugin,
+    data: data,
+    notificationTitle: notification?.title,
+    notificationBody: notification?.body,
   );
 }
 
@@ -1348,10 +1271,12 @@ Future<void> handleMarkAsReadFromNotification(Map<String, dynamic> data) async {
         'https://efactor.tech/${targetUrl.replaceAll(RegExp(r'^/+'), '')}';
   }
 
-  // 1. Immediately cancel all notifications for this conversation
+  // 1. Immediately cancel all notifications for this conversation and clear
+  // the in-page unread badge in the open Circle Connect WebView (if any).
   if (convId.isNotEmpty) {
     unawaited(
         PushNotificationBootstrap.instance.clearChatNotifications(convId));
+    unawaited(GridInAppWebViewPage.notifyGridChatMarkAsRead(convId));
   }
 
   // 2. Perform authenticated background Mark as Read via CircleConnectDeviceKeyStore
@@ -2014,6 +1939,52 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         data,
         appResumed: resumed,
         activeConversationId: _activeConversationId,
+        // While foreground, show the app-owned banner (guaranteed dwell,
+        // tappable) instead of the OEM-controlled system heads-up. Falls back
+        // to the heads-up if no overlay is mounted yet.
+        // Action callbacks reuse the same device-key services as the system
+        // notification's Reply/Mark/Mute buttons (encrypted, offline-queued,
+        // 403-aware). Reply/mark/mute never navigate the WebView; only a body
+        // tap opens the chat.
+        foregroundBanner: (message) => MessageBanner.instance.show(
+          title: GridChatMessageNotifications.notificationTitle(message),
+          body: GridChatMessageNotifications.formatNotificationBody(message),
+          onTap: () => unawaited(
+            IncomingCallService.instance.openChatFromNotification(
+              conversationId: message.conversationId,
+              url: targetUrl ?? '',
+            ),
+          ),
+          onReply: message.messageId.isEmpty
+              ? null
+              : (text) async {
+                  final result =
+                      await CircleConnectDeviceKeyStore.instance.sendReply(
+                    conversationId: message.conversationId,
+                    messageId: message.messageId,
+                    text: text,
+                    targetUrl: targetUrl,
+                  );
+                  if (result.statusCode == 403) {
+                    await showReplyErrorNotification(
+                      _local,
+                      conversationId: message.conversationId,
+                      errorMessage: result.errorMessage ??
+                          'Action not allowed or contact blocked.',
+                    );
+                  }
+                },
+          onMarkRead: () =>
+              handleMarkAsReadFromNotification(<String, dynamic>{
+            'conversation_id': message.conversationId,
+            'message_id': message.messageId,
+            'url': targetUrl ?? '',
+          }),
+          onMute: () => CircleConnectDeviceKeyStore.instance.muteChat(
+            conversationId: message.conversationId,
+            targetUrl: targetUrl,
+          ),
+        ),
       );
 
       // If GRID Chat is open, also forward the message into the webview so it
@@ -2271,6 +2242,7 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         if (type == 'PROFESSIONAL_SPACE_EVENT' ||
             isProfessionalSpacePush(data) ||
             targetUrl.isNotEmpty) {
+          unawaited(ProfessionalSpaceNotifications.instance.clearForData(data));
           final effectiveUrl = targetUrl.isNotEmpty
               ? targetUrl
               : (data['url'] ?? '').toString().trim();
@@ -2346,6 +2318,9 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
         (type == 'PROFESSIONAL_SPACE_EVENT' ||
             isProfessionalSpacePush(data) ||
             targetUrl.isNotEmpty)) {
+      if (type == 'PROFESSIONAL_SPACE_EVENT' || isProfessionalSpacePush(data)) {
+        unawaited(ProfessionalSpaceNotifications.instance.clearForData(data));
+      }
       final effectiveUrl = targetUrl.isNotEmpty
           ? targetUrl
           : (data['url'] ?? '').toString().trim();
@@ -2497,13 +2472,16 @@ Notification: ${message.notification?.title} | ${message.notification?.body}
 
   /// Clears Professional Space (GRID) social activity notifications from the system tray.
   Future<void> clearGridActivityNotifications() async {
+    await ProfessionalSpaceNotifications.instance.clearAll();
     try {
       final active = await _local.getActiveNotifications();
       for (final notification in active) {
         final id = notification.id;
         if (id == null) continue;
+        final tag = notification.tag ?? '';
         if (notification.channelId == kGridActivityChannel.id ||
-            notification.tag == 'grid_activity') {
+            tag == 'grid_activity' ||
+            tag.startsWith('grid_')) {
           await _local.cancel(id, tag: notification.tag);
         }
       }

@@ -368,9 +368,20 @@ class DynamicHomeSduiPageState extends State<DynamicHomeSduiPage>
     final renderer = HomeSduiRenderer(next);
 
     final oldState = _state;
+    // Keep the user on the section they were using across a live schema
+    // refresh. A fresh HomeSduiState defaults to the schema's initialRouteId,
+    // which would otherwise snap the IndexedStack shell back to Home and eject
+    // the user from Circle Connect / another tab when the backend schema hash
+    // changes mid-session. No-op on first load (oldState == null) or if the
+    // route no longer exists in the new schema.
+    final previousRouteId = oldState?.activeRouteId;
     _state = next;
     _renderer = renderer;
     _homeRenderEpoch++;
+
+    if (previousRouteId != null && previousRouteId.isNotEmpty) {
+      next.restoreActiveRoute(previousRouteId);
+    }
 
     oldState?.dispose();
 

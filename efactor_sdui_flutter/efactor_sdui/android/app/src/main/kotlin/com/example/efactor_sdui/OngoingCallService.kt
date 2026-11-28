@@ -8,7 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
@@ -47,7 +46,6 @@ class OngoingCallService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
-    private var callAudioModeActive = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -179,7 +177,9 @@ class OngoingCallService : Service() {
             .build()
 
         promoteToForeground(notification, isVideo)
-        setCallAudioMode(inCall = true)
+        // Audio focus/mode/routing are owned solely by CallAudioController
+        // (startCallAudio/endCallAudio). This service keeps only the foreground
+        // service, ongoing-call notification, PiP and background lifecycle.
     }
 
     /**
@@ -210,21 +210,6 @@ class OngoingCallService : Service() {
         Log.i(TAG, "Foreground service type=microphone")
     }
 
-    private fun setCallAudioMode(inCall: Boolean) {
-        try {
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-            audioManager.mode = if (inCall) {
-                AudioManager.MODE_IN_COMMUNICATION
-            } else {
-                AudioManager.MODE_NORMAL
-            }
-            callAudioModeActive = inCall
-            Log.i(TAG, "AudioManager mode=${if (inCall) "MODE_IN_COMMUNICATION" else "MODE_NORMAL"}")
-        } catch (e: Exception) {
-            Log.w(TAG, "Audio mode change failed: ${e.message}")
-        }
-    }
-
     private fun stopOngoingCallForeground() {
         Log.i(TAG, "Stopping OngoingCallService for activeCallId=$activeCallId")
         isCallActive = false
@@ -246,10 +231,6 @@ class OngoingCallService : Service() {
             wifiLock = null
         } catch (e: Exception) {
             Log.w(TAG, "Error releasing wifiLock: ${e.message}")
-        }
-
-        if (callAudioModeActive) {
-            setCallAudioMode(inCall = false)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

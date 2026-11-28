@@ -14,6 +14,8 @@ import 'grid_sdui/grid_in_app_webview_page.dart';
 import 'grid_sdui/grid_offline_outbox_service.dart';
 import 'device_sdui/device_ui_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 
 import 'services/app_cache_manager.dart';
 import 'services/call_permission_helper.dart';
@@ -28,6 +30,16 @@ import 'services/user_location_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Use Android's system Photo Picker (ACTION_PICK_IMAGES) for image_picker
+  // instead of the ACTION_GET_CONTENT fallback, which opened the DocumentsUI
+  // file manager on some devices (e.g. iQOO/Vivo, Android 14). Applies to the
+  // openGallery bridge and the image/video <input type=file> path.
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    final imagePickerImpl = ImagePickerPlatform.instance;
+    if (imagePickerImpl is ImagePickerAndroid) {
+      imagePickerImpl.useAndroidPhotoPicker = true;
+    }
+  }
   // Bound image memory cache to prevent unbounded RAM growth during scrolling:
   // both a byte ceiling (100 MB) and an object-count ceiling. The default count
   // limit is 1000 live images, which can fragment the heap on lower-memory

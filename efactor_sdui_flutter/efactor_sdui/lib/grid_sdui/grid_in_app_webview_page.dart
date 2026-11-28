@@ -9,6 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -32,8 +33,14 @@ import 'grid_live_location_service.dart';
 import 'grid_media_cache_service.dart';
 import 'grid_offline_shell_service.dart';
 import 'grid_offline_outbox_service.dart';
+import 'grid_schema_repository.dart';
 import 'grid_shell_pool.dart';
 import 'grid_web_snapshot.dart';
+
+/// Enables WebView contents debugging (Android DevTools socket / iOS
+/// `isInspectable`) for non-public builds. Off by default; turn on with
+/// `--dart-define=WEBVIEW_DEBUG=true` in a staging/test build.
+const bool kWebViewInspectable = bool.fromEnvironment('WEBVIEW_DEBUG');
 
 /// Full-screen in-app WebView for Grid schema `openIn: inAppWebView`.
 ///
@@ -586,6 +593,26 @@ class GridInAppWebViewPage extends StatefulWidget {
     }
   }
 
+  /// Clears the in-page unread badge for [conversationId] after a Mark-as-read
+  /// without reloading the WebView (Circle Connect notification banner spec §4).
+  static Future<bool> notifyGridChatMarkAsRead(String conversationId) async {
+    final id = conversationId.trim();
+    if (id.isEmpty) return false;
+    final controller = _activeState?._controller ?? _lastCircleConnectController;
+    if (controller == null) return false;
+    try {
+      await controller.runJavaScript(
+        'try{window.dispatchEvent(new CustomEvent("gridChatMarkAsRead",'
+        '{detail:{conversation_id:${jsonEncode(id)}}}));}'
+        'catch(e){console.error("gridChatMarkAsRead error",e);}',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[GridInAppWebView] notifyGridChatMarkAsRead error: $e');
+      return false;
+    }
+  }
+
   static bool _answerInjectInFlight = false;
 
   /// Runs gridChatCallAction once. Returns false when the function is not
@@ -906,6 +933,16 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   /// worker registered and the offline app shell is cached. Diagnostic only.
   bool _professionalSpaceShellReady = false;
 
+  /// Guards a single auto-reload after the iOS WKWebView content process is
+  /// terminated (webContentProcessTerminated). Reset on a successful page load.
+  bool _contentProcessReloadAttempted = false;
+
+  /// Authenticated Circle Connect URL (with grid_sso) resolved at first load
+  /// when a notification opens a bare /grid-chat URL. Null until resolved;
+  /// [_effectiveUri] falls back to the plain widget.uri when unset. Circle
+  /// Connect only — Professional Space never sets this.
+  Uri? _authenticatedCcUri;
+
   /// Last known connectivity, kept current by [_connectivitySub] and
   /// [_isOnline]. Lets [onPageStarted] inject the offline marker synchronously
   /// (as early as webview_flutter allows) instead of after an async check,
@@ -917,6 +954,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   StreamSubscription<OfflineOutboxAction>? _outboxSyncedSub;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<Map<String, dynamic>>? _audioRoutesSub;
   bool _isPopping = false;
   // Bounds the first-tap SSO-handshake retry (see onNavigationRequest) so a
   // server that keeps redirecting to Grid home can't loop forever; after this
@@ -999,7 +1037,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     return true;
   }
 
-  Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
+  Uri get _effectiveUri =>
+      _authenticatedCcUri ?? GridInAppWebViewPage.normalizeUri(widget.uri);
 
   void _completeNavigation() {
     final pending = _navigationCompleter;
@@ -1061,6 +1100,10 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     _initController();
     if (_isCircleConnect) {
       GridInAppWebViewPage._lastCircleConnectController = _controller;
+      // Native owns OS audio focus + physical routing; forward each published
+      // route snapshot to the web client so its call-audio UI stays in sync.
+      _audioRoutesSub =
+          OngoingCallService.instance.routesChanged.listen(_dispatchAudioRoutes);
     }
     // Professional Space cold open: show the lightweight cover from the first
     // frame; lifted on gridReady / onPageFinished / safety timeout. Set the
@@ -1224,6 +1267,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     _outboxSyncedSub?.cancel();
     _connectivitySub?.cancel();
     _tokenRefreshSub?.cancel();
+    _audioRoutesSub?.cancel();
     if (!_showingSnapshot && _error == null) {
       unawaited(_persistSnapshot());
     }
@@ -1232,6 +1276,25 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     }
     IncomingCallService.instance.onCircleConnectReadinessChanged();
     super.dispose();
+  }
+
+  /// Dispatches a native audio-route snapshot to the web client as
+  /// `circleConnectAudioRoutesChanged`. [snapshot] is {selectedRouteId, routes}.
+  void _dispatchAudioRoutes(Map<String, dynamic> snapshot) {
+    if (!mounted) return;
+    final detail = jsonEncode(snapshot);
+    final js = '''
+(function() {
+  try {
+    window.dispatchEvent(new CustomEvent('circleConnectAudioRoutesChanged', {
+      detail: $detail
+    }));
+  } catch (e) {}
+})()
+''';
+    unawaited(_controller.runJavaScript(js).catchError((Object e) {
+      debugPrint('[GridInAppWebView] audio routes dispatch failed: $e');
+    }));
   }
 
   void _initController() {
@@ -1645,6 +1708,7 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               _loading = false;
               _error = null;
             });
+            _contentProcessReloadAttempted = false; // recovered; allow future reload
             _gridHandshakeRetries = 0; // intended page loaded; reset handshake guard
             if (_isCircleConnect) _ccFirstLoadAt ??= DateTime.now();
             IncomingCallService.instance.onCircleConnectReadinessChanged();
@@ -1703,6 +1767,21 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
               );
               return;
             }
+            // iOS WKWebView renderer killed (memory pressure etc). desc/url are
+            // empty after termination, so _handleLoadFailure would show a
+            // misleading "could not connect ()" screen. Correct recovery is to
+            // reload the content process once.
+            if (error.errorType ==
+                    WebResourceErrorType.webContentProcessTerminated &&
+                !_contentProcessReloadAttempted) {
+              _contentProcessReloadAttempted = true;
+              debugPrint(
+                '[GridInAppWebView] WKWebView content process terminated — reloading once',
+              );
+              unawaited(_controller.reload());
+              _completeNavigation();
+              return;
+            }
             debugPrint(
               '[GridInAppWebView] Main frame error (${error.errorCode}): triggering fallback / snapshot recovery',
             );
@@ -1717,12 +1796,15 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     if (_controller.platform is WebKitWebViewController) {
       final webKitController = _controller.platform as WebKitWebViewController;
       webKitController.setAllowsBackForwardNavigationGestures(false);
+      if (kWebViewInspectable) webKitController.setInspectable(true);
     }
 
     // Configure Android-specific WebRTC and hardware media permissions
     if (_controller.platform is AndroidWebViewController) {
       final androidController =
           _controller.platform as AndroidWebViewController;
+
+      if (kWebViewInspectable) AndroidWebViewController.enableDebugging(true);
 
       // Allow autoplay/inline media playback without requiring a user tap gesture
       androidController.setMediaPlaybackRequiresUserGesture(false);
@@ -2786,17 +2868,19 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
         if (pending != null && pending.needsJs) {
           final conversationId = pending.conversationId;
           final compose = pending.compose;
-          unawaited(() async {
-            final delivered = await GridInAppWebViewPage.openChat(
-              conversationId: conversationId,
-              compose: compose,
-            );
-            if (delivered) {
-              await GridChatMessageNotifications.instance.clearPendingOpen(
-                reason: 'delivered',
-              );
-            }
-          }());
+          // Consume the pending open once, before dispatching. chatUiReady
+          // fires again on every page reload (resume/focus); clearing only on
+          // delivered==true left a stale pending that replayed as the
+          // list->chat->list bounce. The cold-start path already navigates to
+          // the conversation URL, so a rare lost JS dispatch costs nothing.
+          unawaited(
+            GridChatMessageNotifications.instance
+                .clearPendingOpen(reason: 'consumed'),
+          );
+          unawaited(GridInAppWebViewPage.openChat(
+            conversationId: conversationId,
+            compose: compose,
+          ));
         }
       } else if (action == 'callUiReady') {
         _webCallUiReady = true;
@@ -2840,6 +2924,29 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
           setState(() => _isConnectingCall = false);
         }
         unawaited(OngoingCallService.instance.stopCall(callId));
+      } else if (action == 'startCallAudio') {
+        unawaited(OngoingCallService.instance.startCallAudio(
+          callId: data['callId']?.toString() ?? '',
+          video: data['video'] == true,
+          preferredRoute: data['preferredRoute']?.toString(),
+          focus: data['focus']?.toString(),
+        ));
+      } else if (action == 'getCallAudioRoutes') {
+        unawaited(OngoingCallService.instance.getCallAudioRoutes());
+      } else if (action == 'setCallAudioRoute') {
+        unawaited(OngoingCallService.instance.setCallAudioRoute(
+          routeId: data['routeId']?.toString() ?? '',
+          routeType: data['routeType']?.toString(),
+          deviceName: data['deviceName']?.toString(),
+        ));
+      } else if (action == 'callMediaTypeChanged') {
+        unawaited(OngoingCallService.instance.callMediaTypeChanged(
+          callId: data['callId']?.toString() ?? '',
+          video: data['video'] == true,
+        ));
+      } else if (action == 'endCallAudio') {
+        unawaited(OngoingCallService.instance
+            .endCallAudio(data['callId']?.toString() ?? ''));
       } else if (action == 'stopRinging' ||
           action == 'callConnected' ||
           action == 'callActive') {
@@ -3999,14 +4106,33 @@ Error: $error
     FileSelectorParams params,
   ) async {
     try {
-      final picker = ImagePicker();
       final accept = params.acceptTypes.map((e) => e.toLowerCase()).toList();
+      final multiple = params.mode == FileSelectorMode.openMultiple;
 
-      final allowsVideo = accept.any((t) => t.contains('video') || t == '*/*');
-      final allowsImage = accept.isEmpty ||
-          accept.any((t) => t.contains('image') || t == '*/*');
+      final wantsAudio = accept.any((t) => t.contains('audio'));
+      final wantsImage = accept.any((t) => t.contains('image'));
+      final wantsVideo = accept.any((t) => t.contains('video'));
+      final wantsAny = accept.isEmpty || accept.any((t) => t == '*/*');
 
-      if (params.mode == FileSelectorMode.openMultiple) {
+      // Audio-only input -> native audio file picker (not the photo gallery,
+      // which is where an audio input used to fall through to).
+      if (wantsAudio && !wantsImage && !wantsVideo) {
+        return _pickWithFilePicker(FileType.audio, multiple);
+      }
+
+      // Explicit non-media types (documents, application/*, text/*, ...) ->
+      // generic file picker. */* and empty stay on the media path below.
+      if (!wantsImage && !wantsVideo && !wantsAny && accept.isNotEmpty) {
+        return _pickWithFilePicker(FileType.any, multiple);
+      }
+
+      // Image / video (or unspecified) -> ImagePicker, which now uses the
+      // Android system Photo Picker (see useAndroidPhotoPicker in main.dart).
+      final picker = ImagePicker();
+      final allowsImage = wantsImage || wantsAny;
+      final allowsVideo = wantsVideo || wantsAny;
+
+      if (multiple) {
         final picked = await picker.pickMultipleMedia();
         return picked.map((f) => Uri.file(f.path).toString()).toList();
       }
@@ -4035,6 +4161,21 @@ Error: $error
       debugPrint('[GridInAppWebView] File selection failed: $e');
     }
     return <String>[];
+  }
+
+  Future<List<String>> _pickWithFilePicker(
+    FileType type,
+    bool multiple,
+  ) async {
+    final result = await FilePicker.pickFiles(
+      type: type,
+      allowMultiple: multiple,
+    );
+    if (result == null) return <String>[];
+    return result.files
+        .where((f) => f.path != null)
+        .map((f) => Uri.file(f.path!).toString())
+        .toList();
   }
 
   void _safeExitToGrid() {
@@ -4583,6 +4724,37 @@ Error: $error
         await Permission.microphone.request();
       }
     }
+    // Circle Connect notification opens arrive with a bare /grid-chat URL (no
+    // grid_sso), which reaches the web unauthenticated and shows the login page
+    // (the session cookie is never established). Resolve the authenticated URL
+    // the same way the in-app open does, so the grid_sso handshake sets the
+    // session cookie before the first load. Scoped to Circle Connect; Professional
+    // Space and already-authenticated URLs (which carry grid_sso) are untouched.
+    if (_isCircleConnect &&
+        !widget.uri.queryParameters.containsKey('grid_sso') &&
+        _authenticatedCcUri == null) {
+      try {
+        final repo = GridSchemaRepository(
+          accessToken: widget.accessToken?.trim() ?? '',
+          userId: widget.userId,
+        );
+        final resolved = await repo
+            .resolveAuthenticatedUri(
+              GridInAppWebViewPage.normalizeUri(widget.uri),
+            )
+            .timeout(const Duration(seconds: 8));
+        if (mounted && resolved.queryParameters.containsKey('grid_sso')) {
+          _authenticatedCcUri = resolved;
+          debugPrint(
+            '[GridInAppWebView] Resolved authenticated Circle Connect URL for '
+            'notification open (grid_sso applied).',
+          );
+        }
+      } catch (e) {
+        debugPrint('[GridInAppWebView] CC auth URL resolve failed: $e');
+      }
+    }
+
     final online = await _isOnline();
     final token = widget.accessToken?.trim() ?? '';
     final headers = <String, String>{
@@ -4958,7 +5130,12 @@ Error: $error
     if (isReady) {
       _liftCover('gridReady');
       if (_isEffectiveVisible) {
-        _dispatchWebViewVisibility(true, force: true);
+        // NOT forced: the de-dup guard in _dispatchWebViewVisibility must stop a
+        // gridReady -> efactor-webview-visible -> gridReady feedback loop. With
+        // force:true every gridReady re-fired the event; the web re-emitted
+        // gridReady, storming the WKWebView content process until iOS killed it
+        // (webContentProcessTerminated) — surfacing as "Unable to Load".
+        _dispatchWebViewVisibility(true);
       }
     }
   }

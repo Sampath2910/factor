@@ -928,6 +928,20 @@ class HomeSduiState extends ChangeNotifier {
     await loadRouteData();
   }
 
+  /// Restores the active route after a live schema rebuild, without navigate's
+  /// side effects (history, host actions, auth redirect). A fresh HomeSduiState
+  /// defaults to the schema's initialRouteId; this keeps the user on the
+  /// section they were already using. No-op if the route is absent in the new
+  /// schema, so a removed route falls back to the default. Caller runs
+  /// loadRouteData() afterwards.
+  void restoreActiveRoute(String routeId) {
+    if (routeId.isEmpty || routeId == _activeRouteId || route(routeId) == null) {
+      return;
+    }
+    _activeRouteId = routeId;
+    writeState('navigation.activeRouteId', routeId, notify: false);
+  }
+
   Future<bool> back() async {
     final history = readState('navigation.history');
     if (history is List && history.isNotEmpty) {
