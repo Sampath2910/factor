@@ -652,7 +652,11 @@ class GridSchemaRepository {
     // Always preserve deep-link return destination so server SSO hook
     // redirects directly to this feature and never falls back to /dashboard
     if (!params.containsKey('redirect_url')) {
-      params['redirect_url'] = targetUri.path;
+      // Keep the full deep-link (e.g. ?conversation_id=…) so the post-SSO
+      // redirect lands back on the exact chat, not the bare chats list.
+      // targetUri.query is the original query (grid_sso lives in params, not here).
+      params['redirect_url'] =
+          targetUri.hasQuery ? '${targetUri.path}?${targetUri.query}' : targetUri.path;
     }
     if (!params.containsKey('target')) {
       params['target'] = path.contains('grid-chat') ? 'chat' : 'grid';

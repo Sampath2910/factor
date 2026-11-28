@@ -33,6 +33,7 @@ import 'grid_live_location_service.dart';
 import 'grid_media_cache_service.dart';
 import 'grid_offline_shell_service.dart';
 import 'grid_offline_outbox_service.dart';
+import 'grid_schema_repository.dart';
 import 'grid_shell_pool.dart';
 import 'grid_web_snapshot.dart';
 
@@ -936,6 +937,12 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
   /// terminated (webContentProcessTerminated). Reset on a successful page load.
   bool _contentProcessReloadAttempted = false;
 
+  /// Authenticated Circle Connect URL (with grid_sso) resolved at first load
+  /// when a notification opens a bare /grid-chat URL. Null until resolved;
+  /// [_effectiveUri] falls back to the plain widget.uri when unset. Circle
+  /// Connect only — Professional Space never sets this.
+  Uri? _authenticatedCcUri;
+
   /// Last known connectivity, kept current by [_connectivitySub] and
   /// [_isOnline]. Lets [onPageStarted] inject the offline marker synchronously
   /// (as early as webview_flutter allows) instead of after an async check,
@@ -1030,7 +1037,8 @@ class _GridInAppWebViewPageState extends State<GridInAppWebViewPage>
     return true;
   }
 
-  Uri get _effectiveUri => GridInAppWebViewPage.normalizeUri(widget.uri);
+  Uri get _effectiveUri =>
+      _authenticatedCcUri ?? GridInAppWebViewPage.normalizeUri(widget.uri);
 
   void _completeNavigation() {
     final pending = _navigationCompleter;
@@ -4716,6 +4724,37 @@ Error: $error
         await Permission.microphone.request();
       }
     }
+    // Circle Connect notification opens arrive with a bare /grid-chat URL (no
+    // grid_sso), which reaches the web unauthenticated and shows the login page
+    // (the session cookie is never established). Resolve the authenticated URL
+    // the same way the in-app open does, so the grid_sso handshake sets the
+    // session cookie before the first load. Scoped to Circle Connect; Professional
+    // Space and already-authenticated URLs (which carry grid_sso) are untouched.
+    if (_isCircleConnect &&
+        !widget.uri.queryParameters.containsKey('grid_sso') &&
+        _authenticatedCcUri == null) {
+      try {
+        final repo = GridSchemaRepository(
+          accessToken: widget.accessToken?.trim() ?? '',
+          userId: widget.userId,
+        );
+        final resolved = await repo
+            .resolveAuthenticatedUri(
+              GridInAppWebViewPage.normalizeUri(widget.uri),
+            )
+            .timeout(const Duration(seconds: 8));
+        if (mounted && resolved.queryParameters.containsKey('grid_sso')) {
+          _authenticatedCcUri = resolved;
+          debugPrint(
+            '[GridInAppWebView] Resolved authenticated Circle Connect URL for '
+            'notification open (grid_sso applied).',
+          );
+        }
+      } catch (e) {
+        debugPrint('[GridInAppWebView] CC auth URL resolve failed: $e');
+      }
+    }
+
     final online = await _isOnline();
     final token = widget.accessToken?.trim() ?? '';
     final headers = <String, String>{
